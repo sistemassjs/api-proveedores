@@ -192,11 +192,27 @@ class ConstanciaFiscalHybridService
       $regimenes[] = [
         'clave' => $clave,
         'nombre' => $nombre,
-        'fecha_alta' => $m[2] ?? null
+        'fecha_alta' => $this->normalizeFechaAlta($m[2] ?? null),
       ];
     }
 
     return $regimenes;
+  }
+
+  private function normalizeFechaAlta(?string $fecha): ?string
+  {
+    if ($fecha === null || trim($fecha) === '') {
+      return null;
+    }
+    $raw = trim($fecha);
+    foreach (['d/m/Y', 'Y-m-d', 'd-m-Y'] as $format) {
+      $dt = \DateTime::createFromFormat('!'.$format, $raw);
+      if ($dt instanceof \DateTime) {
+        return $dt->format('Y-m-d');
+      }
+    }
+
+    return $raw;
   }
 
   private function normalizarNombreRegimen(string $nombre): string
@@ -233,10 +249,27 @@ class ConstanciaFiscalHybridService
   private function mapClaveRegimen(string $nombre): ?string
   {
     $map = [
+      'General de Ley Personas Morales' => '601',
+      'Personas Morales con Fines no Lucrativos' => '603',
       'Sueldos y Salarios' => '605',
-      'Actividades Empresariales y Profesales' => '612',
       'Arrendamiento' => '606',
+      'Enajenación o Adquisición de Bienes' => '607',
+      'Demás ingresos' => '608',
+      'Residentes en el Extranjero' => '610',
+      'Dividendos' => '611',
+      'Actividades Empresariales y Profesionales' => '612',
+      'Actividades Empresariales y Profesales' => '612',
+      'intereses' => '614',
+      'premios' => '615',
+      'Sin obligaciones fiscales' => '616',
+      'Sociedades Cooperativas' => '620',
+      'Incorporación Fiscal' => '621',
       'RIF' => '621',
+      'Agrícolas, Ganaderas, Silvícolas y Pesqueras' => '622',
+      'Grupos de Sociedades' => '623',
+      'Coordinados' => '624',
+      'Plataformas Tecnológicas' => '625',
+      'Simplificado de Confianza' => '626',
       'RESICO' => '626',
     ];
 

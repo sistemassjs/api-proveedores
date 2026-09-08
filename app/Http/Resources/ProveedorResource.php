@@ -54,6 +54,24 @@ class ProveedorResource extends JsonResource
             'tipo_persona' => $this->tipo_persona,
             'regimen_fiscal_clave' => $this->regimen_fiscal_clave,
             'regimen_fiscal_nombre' => self::upper($this->regimen_fiscal_nombre),
+            'regimenes_fiscales' => (function () {
+                if (! $this->relationLoaded('regimenesFiscales')) {
+                    $this->resource->loadMissing('regimenesFiscales');
+                }
+
+                return $this->regimenesFiscales
+                    ->map(fn ($r) => [
+                        'id' => $r->id,
+                        'clave' => $r->clave,
+                        // Sin upper: el front necesita coincidir con el catálogo del select
+                        'nombre' => $r->nombre,
+                        'fecha_alta' => optional($r->fecha_alta)?->format('Y-m-d'),
+                        'fecha_fin' => optional($r->fecha_fin)?->format('Y-m-d'),
+                        'es_principal' => (bool) $r->es_principal,
+                        'origen' => $r->origen,
+                    ])
+                    ->values();
+            })(),
 
             'direccion' => self::upper($this->direccion_empresa),
 

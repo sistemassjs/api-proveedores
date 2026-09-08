@@ -140,6 +140,7 @@ class Proveedor extends BaseModel
             'sucursales',
             'productos',
             'cuentasBancarias',
+            'regimenesFiscales',
             'empresasConstrucc',
             'solicitudesPago',
         ];
@@ -433,6 +434,16 @@ class Proveedor extends BaseModel
     public function cuentasBancarias(): HasMany
     {
         return $this->hasMany(CuentaBancaria::class);
+    }
+
+    /**
+     * Regímenes fiscales de la constancia (1:N).
+     */
+    public function regimenesFiscales(): HasMany
+    {
+        return $this->hasMany(ProveedorRegimenFiscal::class)
+            ->orderByDesc('es_principal')
+            ->orderBy('clave');
     }
 
     public function perfilPublico(): \Illuminate\Database\Eloquent\Relations\HasOne

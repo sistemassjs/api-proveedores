@@ -16,6 +16,7 @@ use App\Models\User;
 // use App\Services\ConstanciaFiscalService;
 use App\Services\Proveedor\ConstanciaFiscalHybridService;
 use App\Services\Proveedor\ProveedorPerfilCompletadoService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -190,6 +191,8 @@ class ProveedorController extends Controller
      */
     public function show(Request $request, Proveedor $proveedor)
     {
+        $proveedor->loadMissing(Proveedor::eagerLodable());
+
         return $this->success(new ProveedorResource($proveedor));
     }
 
@@ -222,11 +225,123 @@ class ProveedorController extends Controller
         $validated = $request->validated();
         // El flag de pruebas solo lo gestiona admin (AdminProveedorController).
         unset($validated['es_cuenta_de_pruebas']);
+
+        $regimenes = $validated['regimenes_fiscales'] ?? null;
+        unset($validated['regimenes_fiscales']);
+
         $proveedor->update($validated);
+
+        if (is_array($regimenes)) {
+            $this->syncRegimenesFiscales($proveedor, $regimenes);
+        }
+
         $proveedor = $proveedor->fresh(Proveedor::eagerLodable());
         $this->perfilCompletadoService->sincronizarBandera($proveedor);
 
         return $this->success(new ProveedorResource($proveedor), 'Empresa actualizada con éxito.', 200);
+    }
+
+    /**
+     * Reemplaza los regímenes fiscales 1:N y espeja el principal en columnas legacy.
+     *
+     * @param  array<int, array<string, mixed>>  $regimenes
+     */
+    private function syncRegimenesFiscales(Proveedor $proveedor, array $regimenes): void
+    {
+        $normalizados = [];
+        foreach ($regimenes as $item) {
+            $clave = trim((string) ($item['clave'] ?? ''));
+            $nombre = trim((string) ($item['nombre'] ?? ''));
+            if ($nombre === '' || strcasecmp($nombre, 'Seleccione una opción') === 0) {
+                continue;
+            }
+            // Conservar clave '000' solo si no hay clave SAT; no descartar el régimen.
+            $normalizados[] = [
+                'clave' => $clave === '' ? '000' : $clave,
+                'nombre' => $nombre,
+                'fecha_alta' => $this->normalizeFechaMexicana($item['fecha_alta'] ?? null),
+                'fecha_fin' => $this->normalizeFechaMexicana($item['fecha_fin'] ?? null),
+                'es_principal' => (bool) ($item['es_principal'] ?? false),
+                'origen' => $item['origen'] ?? 'manual',
+            ];
+        }
+
+        // Deduplicar por clave+nombre (última gana). Permite varios con clave desconocida.
+        $byKey = [];
+        foreach ($normalizados as $row) {
+            $byKey[$row['clave'].'|'.mb_strtolower($row['nombre'])] = $row;
+        }
+        $normalizados = array_values($byKey);
+
+        if (count($normalizados) === 0) {
+            $proveedor->regimenesFiscales()->delete();
+            $proveedor->update([
+                'regimen_fiscal_clave' => null,
+                'regimen_fiscal_nombre' => null,
+            ]);
+
+            return;
+        }
+
+        $hasPrincipal = collect($normalizados)->contains(fn ($r) => ! empty($r['es_principal']));
+        if (! $hasPrincipal) {
+            $normalizados[0]['es_principal'] = true;
+        } else {
+            // Solo uno principal
+            $seen = false;
+            foreach ($normalizados as $i => $row) {
+                if ($row['es_principal']) {
+                    if ($seen) {
+                        $normalizados[$i]['es_principal'] = false;
+                    }
+                    $seen = true;
+                }
+            }
+        }
+
+        $proveedor->regimenesFiscales()->delete();
+        foreach ($normalizados as $row) {
+            $proveedor->regimenesFiscales()->create($row);
+        }
+
+        $principal = collect($normalizados)->firstWhere('es_principal', true) ?? $normalizados[0];
+        $proveedor->update([
+            'regimen_fiscal_clave' => ($principal['clave'] === '' || $principal['clave'] === '000')
+                ? null
+                : $principal['clave'],
+            'regimen_fiscal_nombre' => $principal['nombre'],
+        ]);
+    }
+
+    /**
+     * Normaliza fechas SAT (dd/mm/yyyy) a Y-m-d para columnas date.
+     */
+    private function normalizeFechaMexicana(mixed $fecha): ?string
+    {
+        if ($fecha === null) {
+            return null;
+        }
+        $raw = trim((string) $fecha);
+        if ($raw === '') {
+            return null;
+        }
+
+        foreach (['d/m/Y', 'Y-m-d', 'd-m-Y', 'Y/m/d'] as $format) {
+            try {
+                $dt = Carbon::createFromFormat($format, $raw);
+                if ($dt instanceof Carbon) {
+                    return $dt->format('Y-m-d');
+                }
+            } catch (\Throwable) {
+                // probar siguiente formato
+            }
+        }
+
+        try {
+            return Carbon::parse($raw)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -358,6 +473,33 @@ class ProveedorController extends Controller
 
                     $datosFiscales['regimen_fiscal_nombre'] = $regimenSeleccionado['nombre'] ?? null;
                     $datosFiscales['regimen_fiscal_clave'] = $regimenSeleccionado['clave'] ?? null;
+
+                    // Persistir todos los regímenes detectados (1:N)
+                    $payloadRegimenes = [];
+                    foreach ($regimenes as $idx => $regimen) {
+                        $clave = trim((string) ($regimen['clave'] ?? ''));
+                        $nombre = trim((string) ($regimen['nombre'] ?? ''));
+                        if ($clave === '' && $nombre === '') {
+                            continue;
+                        }
+                        $payloadRegimenes[] = [
+                            'clave' => $clave !== '' ? $clave : '000',
+                            'nombre' => $nombre !== '' ? $nombre : 'Régimen fiscal',
+                            'fecha_alta' => $regimen['fecha_alta'] ?? null,
+                            'es_principal' => $idx === 0,
+                            'origen' => 'constancia',
+                        ];
+                    }
+                    if (! empty($payloadRegimenes)) {
+                        try {
+                            $this->syncRegimenesFiscales($proveedor, $payloadRegimenes);
+                        } catch (\Throwable $syncError) {
+                            Log::warning('No se pudieron persistir regímenes de la constancia', [
+                                'proveedor_id' => $proveedor->id,
+                                'error' => $syncError->getMessage(),
+                            ]);
+                        }
+                    }
                 }
 
                 // Mapear campos para la tabla de proveedores
@@ -381,7 +523,10 @@ class ProveedorController extends Controller
 
         return $this->success([
             'proveedor' => new ProveedorResource(
-                tap($proveedor->fresh(), fn (Proveedor $fresh) => $this->perfilCompletadoService->sincronizarBandera($fresh))
+                tap(
+                    $proveedor->fresh(Proveedor::eagerLodable()),
+                    fn (Proveedor $fresh) => $this->perfilCompletadoService->sincronizarBandera($fresh)
+                )
             ),
             'extraccion_datos' => $datosExtraccion['datos'],
             'extraccion_meta' => [
