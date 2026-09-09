@@ -11,13 +11,13 @@ use Illuminate\Http\JsonResponse;
 class ApiStatusController extends Controller
 {
     /** Versión de la API (actualizar a mano en cada release). */
-    public const VERSION = '1.0.3';
+    public const VERSION = '1.0.4';
 
     public function __invoke(): JsonResponse
     {
         return $this->success([
             'name' => config('app.name'),
-            'service' => 'api-proveedores',
+            'service' => 'api-gestion',
             'version' => self::VERSION,
         ], 'API operativa.');
     }
