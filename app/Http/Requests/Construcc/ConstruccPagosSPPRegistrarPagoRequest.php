@@ -30,7 +30,7 @@ class ConstruccPagosSPPRegistrarPagoRequest extends FormRequest
        * Cuentas bancarias de la empresa de construcción; para consolidación de cierres contable
        */
       'cuenta_bancaria_empresa_construcc_id' => ['nullable', 'numeric'],
-      'cuenta_destino_id' => ['required', 'integer'],
+      'cuenta_destino_id' => ['nullable', 'integer'],
 
       'monto_total' => ['required', 'numeric', 'min:0.01'],
 

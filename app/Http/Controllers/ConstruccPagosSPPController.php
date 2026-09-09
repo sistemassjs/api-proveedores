@@ -634,10 +634,13 @@ class ConstruccPagosSPPController extends Controller
                 }
             }
 
-            $cuentaBancaria = CuentaBancaria::findOrFail($validated['cuenta_destino_id']);
-            $numeroPago = $cuentaBancaria->obtenerNumeroPago();
-            $campo = preg_replace('/\D+/', '', (string) $numeroPago);
-            $ultimos4 = substr($campo, -4);
+            $ultimos4 = null;
+            if (! empty($validated['cuenta_destino_id'])) {
+                $cuentaBancaria = CuentaBancaria::findOrFail($validated['cuenta_destino_id']);
+                $numeroPago = $cuentaBancaria->obtenerNumeroPago();
+                $campo = preg_replace('/\D+/', '', (string) $numeroPago);
+                $ultimos4 = substr($campo, -4);
+            }
 
             $pago = PagoSPP::create([
                 'comprobante_pago' => $comprobantePath,
