@@ -12,6 +12,41 @@ class ConstruccPagosSPPRegistrarPagoRequest extends FormRequest
     return true;
   }
 
+  /**
+   * OCR de comprobantes a veces entrega montos negativos; se normalizan a positivo
+   * antes de aplicar las reglas (min:0.01).
+   */
+  protected function prepareForValidation(): void
+  {
+    $data = [];
+
+    if ($this->has('monto_total') && is_numeric($this->input('monto_total'))) {
+      $data['monto_total'] = abs((float) $this->input('monto_total'));
+    }
+
+    if ($this->has('info_comprobante.monto') && is_numeric($this->input('info_comprobante.monto'))) {
+      $info = $this->input('info_comprobante', []);
+      $info['monto'] = abs((float) $info['monto']);
+      $data['info_comprobante'] = $info;
+    }
+
+    if (is_array($this->input('solicitudes'))) {
+      $data['solicitudes'] = collect($this->input('solicitudes'))
+        ->map(function ($solicitud) {
+          if (isset($solicitud['monto_pago']) && is_numeric($solicitud['monto_pago'])) {
+            $solicitud['monto_pago'] = abs((float) $solicitud['monto_pago']);
+          }
+
+          return $solicitud;
+        })
+        ->all();
+    }
+
+    if (! empty($data)) {
+      $this->merge($data);
+    }
+  }
+
   public function rules(): array
   {
     $NIVEL_USUARIO_CONSTRUCC_DG_ADMIN = 0; // Rol DA
