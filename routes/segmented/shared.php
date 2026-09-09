@@ -13,6 +13,7 @@ use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\TipoEmpresaController;
 use App\Http\Controllers\UnidadMedidaController;
+use App\Http\Controllers\Catalogo\CatalogoPublicoItemController;
 
 /*
 |--------------------------------------------------------------------------
@@ -65,6 +66,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{producto}/disponibilidad', [ProductoBusquedaController::class, 'verificarDisponibilidad'])->middleware(['audit']);
     });
 
+    /**
+     * CATÁLOGO PÚBLICO (lectura; importado por admin)
+     */
+    Route::prefix('catalogo-publico')->group(function () {
+        Route::get('/', [CatalogoPublicoItemController::class, 'index'])->middleware(['audit']);
+        Route::get('empresas', [CatalogoPublicoItemController::class, 'empresas'])->middleware(['audit']);
+        Route::get('facets', [CatalogoPublicoItemController::class, 'facets'])->middleware(['audit']);
+        Route::get('{catalogoPublicoItem}', [CatalogoPublicoItemController::class, 'show'])->middleware(['audit']);
+    });
+
 
     /**
      * DASHBOARD BÁSICO
@@ -77,8 +88,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('device-tokens')->group(function () {
         Route::post('/', [DeviceTokenController::class, 'store'])->middleware(['audit']);
         Route::get('/', [DeviceTokenController::class, 'index'])->middleware(['audit']);
+        Route::post('/deactivate-current', [DeviceTokenController::class, 'deactivateCurrent'])->middleware(['audit']);
         Route::delete('/{tokenId}', [DeviceTokenController::class, 'deactivate'])->middleware(['audit']);
         Route::post('/cleanup', [DeviceTokenController::class, 'cleanup'])->middleware(['audit']);
         Route::post('/test', [DeviceTokenController::class, 'testNotification'])->middleware(['audit']);
+    });
+
+    /**
+     * Estado de perfil empresa (lectura): usuarios con relación al proveedor (no solo GERENTE).
+     * Registrado aquí para que aplique antes que el grupo exclusivo de gerente.php.
+     */
+    Route::prefix('proveedores')->group(function () {
+        Route::get('{proveedor}/perfil-completado', [ProveedorController::class, 'validarPerfilCompletado'])
+            ->middleware(['proveedor.access', 'audit']);
     });
 });

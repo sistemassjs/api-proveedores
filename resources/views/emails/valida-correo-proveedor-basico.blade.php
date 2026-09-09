@@ -22,8 +22,9 @@
             background-color: #ffffff;
         }
         .header {
-            background: linear-gradient(135deg, #FFC107 0%, #FFD54F 100%);
-            padding: 40px 20px;
+            background: transparent;
+            padding: 0;
+            margin: 0;
             text-align: center;
         }
         .logo {
@@ -137,10 +138,8 @@
 </head>
 <body>
     <div class="email-container">
-        <!-- Header con logo -->
         <div class="header">
-            @include('emails.partials.logo-app')
-            <h1 class="header-title">¡Bienvenido a SJS Construcciones!</h1>
+            @include('emails.partials.app-header', ['title' => '¡Bienvenido!'])
         </div>
 
         <!-- Contenido principal -->
@@ -153,9 +152,9 @@
             
             <p class="message">
                 @if($nombreEmpresa)
-                Gracias por registrar <strong>{{ $nombreEmpresa }}</strong> en nuestra plataforma de proveedores.
+                Gracias por registrar <strong>{{ $nombreEmpresa }}</strong> en {{ config('app.name') }}.
                 @else
-                Gracias por registrarte en nuestra plataforma de proveedores.
+                Gracias por registrarte en {{ config('app.name') }}.
                 @endif
                 Estamos encantados de tenerte como parte de nuestra red de colaboradores.
             </p>
@@ -188,23 +187,10 @@
                 </ul>
             </div>
 
-            <!-- Nota de seguridad -->
-            <div class="security-note">
-                <p>
-                    <strong>⚠️ Nota importante:</strong> Si no solicitaste este registro, 
-                    puedes ignorar este correo de forma segura. Este enlace expirará en 7 días.
-                </p>
-            </div>
         </div>
 
-        <!-- Footer -->
         <div class="footer">
-            <p class="footer-text">
-                © {{ date('Y') }} SJS Construcciones. Todos los derechos reservados.
-            </p>
-            <p class="footer-text">
-                ¿Necesitas ayuda? <a href="mailto:soporte@sjsconstrucciones.com" class="footer-link">Contáctanos</a>
-            </p>
+            @include('emails.partials.app-footer')
         </div>
     </div>
 </body>

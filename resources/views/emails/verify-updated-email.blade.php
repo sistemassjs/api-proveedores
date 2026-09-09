@@ -18,8 +18,9 @@
             background-color: #ffffff;
         }
         .header {
-            background: linear-gradient(135deg, #FFC107 0%, #FFD54F 100%);
-            padding: 36px 20px;
+            background: transparent;
+            padding: 0;
+            margin: 0;
             text-align: center;
         }
         .logo {
@@ -88,8 +89,7 @@
 <body>
     <div class="email-container">
         <div class="header">
-            @include('emails.partials.logo-app')
-            <h1 class="header-title">Valida tu correo</h1>
+            @include('emails.partials.app-header', ['title' => 'Valida tu correo'])
         </div>
 
         <div class="content">
@@ -115,7 +115,7 @@
         </div>
 
         <div class="footer">
-            <p class="footer-text">© {{ date('Y') }} SJS Construcciones. Todos los derechos reservados.</p>
+            @include('emails.partials.app-footer')
         </div>
     </div>
 </body>

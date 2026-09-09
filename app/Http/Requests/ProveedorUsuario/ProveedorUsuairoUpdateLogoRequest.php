@@ -11,27 +11,31 @@ class ProveedorUsuairoUpdateLogoRequest extends FormRequest
         return true;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function rules(): array
     {
         return [
             'logo' => [
                 'required',
                 'image',
-                'mimes:jpeg,png,jpg',
-                'max:2048', // tamaño máximo en KB (2MB)
-                // 'dimensions:min_width=200,min_height=200,max_width=1000,max_height=1000,ratio=1/1',
+                'mimes:jpeg,png,jpg,webp',
+                'max:2048',
             ],
         ];
     }
 
-    public function messages()
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
     {
         return [
             'logo.required' => 'El logo es requerido.',
             'logo.image' => 'El archivo debe ser una imagen válida.',
-            'logo.mimes' => 'La imagen debe estar en formato JPG o PNG.',
+            'logo.mimes' => 'La imagen debe estar en formato JPG, PNG o WEBP.',
             'logo.max' => 'La imagen no debe pesar más de 2MB.',
-            'logo.dimensions' => 'La imagen debe tener entre 200x200px y 1000x1000px, y ser cuadrada (relación 1:1).',
         ];
     }
 }

@@ -166,6 +166,11 @@ trait NotificationStyleTrait
                 ],
             ],
             'usuario' => [
+                'nuevo_usuario' => [
+                    'color' => 'tertiary',
+                    'icon' => 'person-add-outline',
+                    'style_class' => 'new-user-notification',
+                ],
                 'email_verificado' => [
                     'color' => 'success',
                     'icon' => 'checkmark-circle-outline',

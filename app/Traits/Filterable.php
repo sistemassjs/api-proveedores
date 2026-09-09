@@ -21,7 +21,7 @@ trait Filterable
         foreach ($filters as $filter => $value) {
             Log::debug("Recibiendo filtro: $filter = $value");
 
-            if (!isset(static::$filters[$filter]) || is_null($value)) {
+            if (! isset(static::$filters[$filter]) || $value === null || $value === '') {
                 continue;
             }
 

@@ -28,9 +28,9 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #FFC107 0%, #FFD54F 100%);
-            color: #000000;
-            padding: 30px 20px;
+            background: transparent;
+            padding: 0;
+            margin: 0;
             text-align: center;
         }
         
@@ -181,8 +181,8 @@
         }
         
         .footer {
-            background-color: #343a40;
-            color: #ffffff;
+            background-color: #f1f5f9;
+            color: #475569;
             padding: 20px;
             text-align: center;
             font-size: 12px;
@@ -222,9 +222,7 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            @include('emails.partials.logo-app')
-            <h1>🏭 Nueva Cotización Solicitada</h1>
-            <p>Sistema de Gestión de Proveedores</p>
+            @include('emails.partials.app-header', ['title' => 'Nueva cotización solicitada'])
         </div>
         
         <!-- Content -->
@@ -253,11 +251,11 @@
                 <div class="details-grid">
                     <div class="detail-item">
                         <span class="detail-label">📅 Fecha:</span>
-                        <span class="detail-value">{{ $cotizacion->fecha_cotizacion->format('d/m/Y') }}</span>
+                        <span class="detail-value">{{ $cotizacion->fecha_cotizacion->copy()->locale('es')->timezone('America/Mexico_City')->translatedFormat('j \\d\\e F \\d\\e Y') }} {{ $cotizacion->fecha_cotizacion->copy()->timezone('America/Mexico_City')->format('h:i') }} {{ $cotizacion->fecha_cotizacion->copy()->timezone('America/Mexico_City')->format('A') === 'AM' ? 'a.m.' : 'p.m.' }}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">⏰ Vence:</span>
-                        <span class="detail-value">{{ $cotizacion->fecha_vencimiento->format('d/m/Y') }}</span>
+                        <span class="detail-value">{{ $cotizacion->fecha_vencimiento->copy()->locale('es')->timezone('America/Mexico_City')->translatedFormat('j \\d\\e F \\d\\e Y') }} {{ $cotizacion->fecha_vencimiento->copy()->timezone('America/Mexico_City')->format('h:i') }} {{ $cotizacion->fecha_vencimiento->copy()->timezone('America/Mexico_City')->format('A') === 'AM' ? 'a.m.' : 'p.m.' }}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">📦 Productos:</span>
@@ -293,23 +291,18 @@
             
             <div class="footer-text">
                 <p><strong>¡Importante!</strong> Esta cotización tiene fecha de vencimiento 
-                {{ $cotizacion->fecha_vencimiento->format('d/m/Y') }}. Te recomendamos responder 
+                {{ $cotizacion->fecha_vencimiento->copy()->locale('es')->timezone('America/Mexico_City')->translatedFormat('j \\d\\e F \\d\\e Y') }} {{ $cotizacion->fecha_vencimiento->copy()->timezone('America/Mexico_City')->format('h:i') }} {{ $cotizacion->fecha_vencimiento->copy()->timezone('America/Mexico_City')->format('A') === 'AM' ? 'a.m.' : 'p.m.' }}. Te recomendamos responder 
                 antes de esa fecha.</p>
                 
                 <p style="margin-top: 15px;">
-                    ¡Gracias por ser parte de nuestro sistema de proveedores! 
+                    ¡Gracias por ser parte de {{ config('app.name') }}! 
                     Tu participación es fundamental para el éxito de nuestros proyectos.
                 </p>
             </div>
         </div>
         
         <!-- Footer -->
-        <div class="footer">
-            <p>
-                © {{ date('Y') }} {{ config('app.name', 'Sistema de Proveedores') }} - 
-                Este es un mensaje automático, por favor no responder directamente.
-            </p>
-        </div>
+        <div class="footer">@include('emails.partials.app-footer')</div>
     </div>
 </body>
 </html>

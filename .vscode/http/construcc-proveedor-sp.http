@@ -988,6 +988,7 @@ Content-Type: application/json
 # 4 - SI (Superintendente) → Solo verifica
 # 5 - PC (Programación y Control) → Auto-aprueba SPP → estado: AUTORIZADA
 # 6 - RO (Residente de Obra) → Requiere aprobación → estado: PENDIENTE
+# 7 - Requiere aprobación → estado: PENDIENTE
 
 # VALIDACIONES IMPORTANTES:
 # - tipo_alta = 2: Solo proveedores de construcción

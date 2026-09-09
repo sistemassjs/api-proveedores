@@ -2,19 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\EstadoCuentaBancaria;
 use App\Exceptions\Api\Crud\ResourceNotFoundException;
 use App\Http\Requests\Proveedor\ProveedorStoreRequest;
 use App\Http\Requests\Proveedor\ProveedorUpdateConstanciaFiscalRequest;
 use App\Http\Requests\Proveedor\ProveedorUpdateLogoRequest;
 use App\Http\Requests\Proveedor\ProveedorUpdateRequest;
-use App\Services\ConstanciaFiscalService;
 use App\Http\Resources\Admin\AdminProveedorAcordeonResource;
 use App\Http\Resources\ProveedorResource;
 use App\Http\Resources\ProveedorValidacionPerfilCompletoResource;
 use App\Http\Resources\UserResource;
 use App\Models\Proveedor;
 use App\Models\User;
+// use App\Services\ConstanciaFiscalService;
+use App\Services\Proveedor\ConstanciaFiscalHybridService;
+use App\Services\Proveedor\ProveedorPerfilCompletadoService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +24,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ProveedorController extends Controller
 {
+    public function __construct(
+        private readonly ProveedorPerfilCompletadoService $perfilCompletadoService,
+    ) {
+    }
+
     /**
      * @OA\Post(
      *     path="/api/proveedor/logo",
@@ -80,7 +87,17 @@ class ProveedorController extends Controller
             // Actualizar proveedor con el path relativo
             $proveedor->update(['logo' => $path]);
         } catch (\Throwable $e) {
-            throw new \Exception('Error al subir el logo: ' . $e->getMessage());
+            Log::error('Error al actualizar logo del proveedor', [
+                'proveedor_id' => $proveedor->id,
+                'user_id' => $user?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error(
+                'No se pudo actualizar el logo en este momento. Intenta nuevamente.',
+                null,
+                Response::HTTP_INTERNAL_SERVER_ERROR
+            );
         }
 
         // Recargar modelos con relaciones
@@ -110,7 +127,7 @@ class ProveedorController extends Controller
         }
         $proveedor = $user->proveedorPrincipal();
         if (! $proveedor) {
-            throw new ResourceNotFoundException('Proveedor no encontrado.');
+            throw new ResourceNotFoundException('Empresa no registrada en GestionPlus.');
         }
 
         return $this->success(new ProveedorResource($proveedor->load(Proveedor::eagerLodable())));
@@ -174,6 +191,8 @@ class ProveedorController extends Controller
      */
     public function show(Request $request, Proveedor $proveedor)
     {
+        $proveedor->loadMissing(Proveedor::eagerLodable());
+
         return $this->success(new ProveedorResource($proveedor));
     }
 
@@ -204,10 +223,125 @@ class ProveedorController extends Controller
     public function update(ProveedorUpdateRequest $request, Proveedor $proveedor)
     {
         $validated = $request->validated();
-        $proveedor->update($validated);
-        $proveedor = $proveedor->fresh(Proveedor::eagerLodable());
+        // El flag de pruebas solo lo gestiona admin (AdminProveedorController).
+        unset($validated['es_cuenta_de_pruebas']);
 
-        return $this->success(new ProveedorResource($proveedor), 'Proveedor actualizado con éxito.', 200);
+        $regimenes = $validated['regimenes_fiscales'] ?? null;
+        unset($validated['regimenes_fiscales']);
+
+        $proveedor->update($validated);
+
+        if (is_array($regimenes)) {
+            $this->syncRegimenesFiscales($proveedor, $regimenes);
+        }
+
+        $proveedor = $proveedor->fresh(Proveedor::eagerLodable());
+        $this->perfilCompletadoService->sincronizarBandera($proveedor);
+
+        return $this->success(new ProveedorResource($proveedor), 'Empresa actualizada con éxito.', 200);
+    }
+
+    /**
+     * Reemplaza los regímenes fiscales 1:N y espeja el principal en columnas legacy.
+     *
+     * @param  array<int, array<string, mixed>>  $regimenes
+     */
+    private function syncRegimenesFiscales(Proveedor $proveedor, array $regimenes): void
+    {
+        $normalizados = [];
+        foreach ($regimenes as $item) {
+            $clave = trim((string) ($item['clave'] ?? ''));
+            $nombre = trim((string) ($item['nombre'] ?? ''));
+            if ($nombre === '' || strcasecmp($nombre, 'Seleccione una opción') === 0) {
+                continue;
+            }
+            // Conservar clave '000' solo si no hay clave SAT; no descartar el régimen.
+            $normalizados[] = [
+                'clave' => $clave === '' ? '000' : $clave,
+                'nombre' => $nombre,
+                'fecha_alta' => $this->normalizeFechaMexicana($item['fecha_alta'] ?? null),
+                'fecha_fin' => $this->normalizeFechaMexicana($item['fecha_fin'] ?? null),
+                'es_principal' => (bool) ($item['es_principal'] ?? false),
+                'origen' => $item['origen'] ?? 'manual',
+            ];
+        }
+
+        // Deduplicar por clave+nombre (última gana). Permite varios con clave desconocida.
+        $byKey = [];
+        foreach ($normalizados as $row) {
+            $byKey[$row['clave'].'|'.mb_strtolower($row['nombre'])] = $row;
+        }
+        $normalizados = array_values($byKey);
+
+        if (count($normalizados) === 0) {
+            $proveedor->regimenesFiscales()->delete();
+            $proveedor->update([
+                'regimen_fiscal_clave' => null,
+                'regimen_fiscal_nombre' => null,
+            ]);
+
+            return;
+        }
+
+        $hasPrincipal = collect($normalizados)->contains(fn ($r) => ! empty($r['es_principal']));
+        if (! $hasPrincipal) {
+            $normalizados[0]['es_principal'] = true;
+        } else {
+            // Solo uno principal
+            $seen = false;
+            foreach ($normalizados as $i => $row) {
+                if ($row['es_principal']) {
+                    if ($seen) {
+                        $normalizados[$i]['es_principal'] = false;
+                    }
+                    $seen = true;
+                }
+            }
+        }
+
+        $proveedor->regimenesFiscales()->delete();
+        foreach ($normalizados as $row) {
+            $proveedor->regimenesFiscales()->create($row);
+        }
+
+        $principal = collect($normalizados)->firstWhere('es_principal', true) ?? $normalizados[0];
+        $proveedor->update([
+            'regimen_fiscal_clave' => ($principal['clave'] === '' || $principal['clave'] === '000')
+                ? null
+                : $principal['clave'],
+            'regimen_fiscal_nombre' => $principal['nombre'],
+        ]);
+    }
+
+    /**
+     * Normaliza fechas SAT (dd/mm/yyyy) a Y-m-d para columnas date.
+     */
+    private function normalizeFechaMexicana(mixed $fecha): ?string
+    {
+        if ($fecha === null) {
+            return null;
+        }
+        $raw = trim((string) $fecha);
+        if ($raw === '') {
+            return null;
+        }
+
+        foreach (['d/m/Y', 'Y-m-d', 'd-m-Y', 'Y/m/d'] as $format) {
+            try {
+                $dt = Carbon::createFromFormat($format, $raw);
+                if ($dt instanceof Carbon) {
+                    return $dt->format('Y-m-d');
+                }
+            } catch (\Throwable) {
+                // probar siguiente formato
+            }
+        }
+
+        try {
+            return Carbon::parse($raw)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -231,7 +365,7 @@ class ProveedorController extends Controller
     {
         $proveedor = Proveedor::find($id);
         if (! $proveedor) {
-            throw new ResourceNotFoundException('Proveedor no encontrado.');
+            throw new ResourceNotFoundException('Empresa no registrada en GestionPlus.');
         }
         $proveedor->update([['estatus' => 'baja']]);
 
@@ -261,7 +395,7 @@ class ProveedorController extends Controller
 
         return $this->success(
             AdminProveedorAcordeonResource::collection($proveedores),
-            'Listado de proveedores con sus categorías, subcategorías y contador de productos.'
+            'Listado de empresas con sus categorías, subcategorías y contador de productos.'
         );
     }
 
@@ -271,7 +405,7 @@ class ProveedorController extends Controller
     public function updateConstanciaFiscal(
         ProveedorUpdateConstanciaFiscalRequest $request,
         Proveedor $proveedor,
-        ConstanciaFiscalService $constanciaService
+        ConstanciaFiscalHybridService $constanciaFiscalService
     ) {
         $validated = $request->validated();
         $user = $request->user();
@@ -279,7 +413,7 @@ class ProveedorController extends Controller
         // Verificar acceso
         if ($user->proveedorPrincipal()?->id !== $proveedor->id) {
             return response()->json([
-                'message' => 'No tienes permisos para subir este documento.',
+                'message' => 'No tienes permisos para subir esta constancia fiscal.',
             ], Response::HTTP_FORBIDDEN);
         }
 
@@ -310,30 +444,62 @@ class ProveedorController extends Controller
             $fullPath = Storage::disk('public')->path($path);
             Log::info('Intentando extraer datos fiscales de: ' . $fullPath);
 
-            $datosFiscales = $constanciaService->extraerDatosFiscales($fullPath);
+            $datosFiscales = $constanciaFiscalService->extraerDatos($fullPath);
+            Log::info('Datos fiscales extraídos:', ['datos' => $datosFiscales]);
 
-            $tieneIdentificacion = $datosFiscales && (
-                ! empty($datosFiscales['rfc'])
-                || ! empty($datosFiscales['razon_social'])
-                || ! empty($datosFiscales['nombre_completo'])
-                || ! empty($datosFiscales['denominacion_razon_social'])
-            );
+            if ($datosFiscales) {
 
-            if ($tieneIdentificacion) {
-                Log::info('Datos fiscales extraídos exitosamente:', ['datos' => $datosFiscales]);
+                // La constancia puede traer varios regímenes.
+                // Para compatibilidad con campos legacy (singulares), usar el mejor candidato:
+                // 1) Primer régimen con clave
+                // 2) Si ninguno tiene clave, primer régimen con nombre
+                if (!empty($datosFiscales['regimenes']) && is_array($datosFiscales['regimenes'])) {
+                    $regimenes = array_values(array_filter(
+                        $datosFiscales['regimenes'],
+                        fn($r) => is_array($r) && (!empty($r['nombre']) || !empty($r['clave']))
+                    ));
 
-                // Procesar regímenes para agregar claves
-                if (!empty($datosFiscales['regimenes'])) {
-                    foreach ($datosFiscales['regimenes'] as &$regimen) {
-                        $regimen['clave'] = $constanciaService->obtenerClaveRegimen($regimen['nombre']);
+                    $regimenSeleccionado = null;
+                    foreach ($regimenes as $regimen) {
+                        if (!empty($regimen['clave'])) {
+                            $regimenSeleccionado = $regimen;
+                            break;
+                        }
                     }
-                    unset($regimen);
-                }
 
-                // Para compatibilidad con el sistema actual, extraer el primer régimen
-                if (!empty($datosFiscales['regimenes']) && count($datosFiscales['regimenes']) > 0) {
-                    $datosFiscales['regimen_fiscal_nombre'] = $datosFiscales['regimenes'][0]['nombre'];
-                    $datosFiscales['regimen_fiscal_clave'] = $datosFiscales['regimenes'][0]['clave'];
+                    if (!$regimenSeleccionado && !empty($regimenes)) {
+                        $regimenSeleccionado = $regimenes[0];
+                    }
+
+                    $datosFiscales['regimen_fiscal_nombre'] = $regimenSeleccionado['nombre'] ?? null;
+                    $datosFiscales['regimen_fiscal_clave'] = $regimenSeleccionado['clave'] ?? null;
+
+                    // Persistir todos los regímenes detectados (1:N)
+                    $payloadRegimenes = [];
+                    foreach ($regimenes as $idx => $regimen) {
+                        $clave = trim((string) ($regimen['clave'] ?? ''));
+                        $nombre = trim((string) ($regimen['nombre'] ?? ''));
+                        if ($clave === '' && $nombre === '') {
+                            continue;
+                        }
+                        $payloadRegimenes[] = [
+                            'clave' => $clave !== '' ? $clave : '000',
+                            'nombre' => $nombre !== '' ? $nombre : 'Régimen fiscal',
+                            'fecha_alta' => $regimen['fecha_alta'] ?? null,
+                            'es_principal' => $idx === 0,
+                            'origen' => 'constancia',
+                        ];
+                    }
+                    if (! empty($payloadRegimenes)) {
+                        try {
+                            $this->syncRegimenesFiscales($proveedor, $payloadRegimenes);
+                        } catch (\Throwable $syncError) {
+                            Log::warning('No se pudieron persistir regímenes de la constancia', [
+                                'proveedor_id' => $proveedor->id,
+                                'error' => $syncError->getMessage(),
+                            ]);
+                        }
+                    }
                 }
 
                 // Mapear campos para la tabla de proveedores
@@ -356,14 +522,19 @@ class ProveedorController extends Controller
         }
 
         return $this->success([
-            'proveedor' => new ProveedorResource($proveedor->fresh()),
+            'proveedor' => new ProveedorResource(
+                tap(
+                    $proveedor->fresh(Proveedor::eagerLodable()),
+                    fn (Proveedor $fresh) => $this->perfilCompletadoService->sincronizarBandera($fresh)
+                )
+            ),
             'extraccion_datos' => $datosExtraccion['datos'],
             'extraccion_meta' => [
                 'exito' => $datosExtraccion['exito'],
                 'mensaje' => $datosExtraccion['mensaje'] ?: (
                     $datosExtraccion['exito']
-                        ? 'Datos fiscales extraídos correctamente.'
-                        : 'No se pudieron extraer datos del documento. Puedes completarlos manualmente.'
+                    ? 'Datos fiscales extraídos correctamente desde la constancia fiscal.'
+                    : 'No se pudieron extraer datos de la constancia fiscal. Puedes completarlos manualmente.'
                 ),
             ],
         ], 'Constancia fiscal actualizada con éxito.', 200);
@@ -379,13 +550,13 @@ class ProveedorController extends Controller
         // Validar acceso
         if ($user->proveedorPrincipal()?->id !== $proveedor->id) {
             return response()->json([
-                'message' => 'No tienes permisos para acceder a este documento.',
+                'message' => 'No tienes permisos para acceder a esta constancia fiscal.',
             ], Response::HTTP_FORBIDDEN);
         }
 
         if (! $proveedor->constancia_fiscal || ! Storage::disk('public')->exists($proveedor->constancia_fiscal)) {
             return response()->json([
-                'message' => 'La constancia fiscal no está disponible.',
+                'message' => 'La constancia fiscal no está disponible en GestionPlus.',
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -405,201 +576,10 @@ class ProveedorController extends Controller
      */
     public function puedeGenerarSP(Request $request, Proveedor $proveedor)
     {
-        // Verificar primero si es proveedor de SP
-        if (! $proveedor->is_proveedor_sp) {
-            $responseData = [
-                'puede_generar_sp' => false,
-                'detalle' => [
-                    'perfil_empresa_completo' => false,
-                    'tiene_cuenta_bancaria' => false,
-                    'tiene_constancia_fiscal' => false,
-                    'tiene_logo' => false,
-                    'tiene_informacion_general_y_datos_fiscales' => false,
-                    'datos_faltantes' => ['El proveedor no está habilitado para generar Solicitudes de Pago'],
-                ],
-            ];
-
-            return $this->success(new ProveedorValidacionPerfilCompletoResource($responseData));
-        }
-
-        // Si ya tiene el perfil marcado como completo, validar rápidamente
-        if ($proveedor->perfil_empresa_completo) {
-            // Cargar solo las relaciones necesarias para verificar cuenta bancaria
-            // $proveedor->load(['cuentasBancarias']);
-            // $proveedor->cuentasBancarias;
-            $tieneCuentaBancaria = $proveedor->cuentasBancarias->where('estatus', EstadoCuentaBancaria::ACTIVA)->count() > 0;
-
-            // Validaciones mínimas para confirmar que sigue siendo válido
-            $tieneLogo = ! empty($proveedor->logo);
-            $tieneConstanciaFiscal = ! empty($proveedor->constancia_fiscal);
-
-            // Si las validaciones básicas pasan, no necesitamos hacer validaciones detalladas
-            if ($tieneCuentaBancaria && $tieneLogo && $tieneConstanciaFiscal) {
-                $responseData = [
-                    'puede_generar_sp' => true,
-                    'detalle' => [
-                        'perfil_empresa_completo' => true,
-                        'tiene_cuenta_bancaria' => true,
-                        'tiene_constancia_fiscal' => true,
-                        'tiene_logo' => true,
-                        'tiene_informacion_general_y_datos_fiscales' => true,
-                        'datos_faltantes' => [],
-                    ],
-                ];
-
-                return $this->success(new ProveedorValidacionPerfilCompletoResource($responseData));
-            }
-        }
-
-        // Si llegamos aquí, necesitamos hacer validaciones completas
-        // Cargar relaciones necesarias
-        $proveedor->load(['cuentasBancarias']);
-
-        // Validar información general y datos fiscales
-        $tieneInformacionGeneral = $this->validarInformacionGeneral($proveedor);
-        $tieneDatosFiscales = $this->validarDatosFiscales($proveedor);
-        $tieneInformacionGeneralYDatosFiscales = $tieneInformacionGeneral && $tieneDatosFiscales;
-
-        // Validar datos de contacto
-        // $tieneDatosContacto = $this->validarDatosContacto($proveedor);
-
-        // Validar logo
-        $tieneLogo = ! empty($proveedor->logo);
-
-        // Validar cuenta bancaria
-        $tieneCuentaBancaria = $proveedor->cuentasBancarias->where('estatus', EstadoCuentaBancaria::ACTIVA)->count() > 0;
-
-        // Validar constancia fiscal
-        $tieneConstanciaFiscal = ! empty($proveedor->constancia_fiscal);
-
-        // Calcular si el perfil está completo
-        $perfilEmpresaCompleto = $tieneInformacionGeneralYDatosFiscales &&
-            // $tieneDatosContacto &&
-            $tieneLogo &&
-            $tieneCuentaBancaria &&
-            $tieneConstanciaFiscal;
-
-        // Calcular datos faltantes
-        $datosFaltantes = [];
-        if (! $tieneInformacionGeneralYDatosFiscales) {
-            if (! $tieneInformacionGeneral) {
-                $datosFaltantes[] = 'Información general de la empresa';
-            }
-            if (! $tieneDatosFiscales) {
-                $datosFaltantes[] = 'Datos fiscales';
-            }
-        }
-        // if (!$tieneDatosContacto) {
-        //     $datosFaltantes[] = 'Datos de contacto';
-        // }
-        if (! $tieneLogo) {
-            $datosFaltantes[] = 'Logo de la empresa';
-        }
-        if (! $tieneCuentaBancaria) {
-            $datosFaltantes[] = 'Al menos una cuenta bancaria activa';
-        }
-        if (! $tieneConstanciaFiscal) {
-            $datosFaltantes[] = 'Constancia de situación fiscal';
-        }
-
-        // Actualizar el campo perfil_empresa_completo en el modelo si ha cambiado
-        if ($proveedor->perfil_empresa_completo !== $perfilEmpresaCompleto) {
-            $proveedor->update(['perfil_empresa_completo' => $perfilEmpresaCompleto]);
-        }
-
-        // Puede generar SP si es proveedor de SP y el perfil está completo
-        $puedeGenerarSP = $perfilEmpresaCompleto;
-
-        $responseData = [
-            'puede_generar_sp' => $puedeGenerarSP,
-            'detalle' => [
-                'perfil_empresa_completo' => $perfilEmpresaCompleto,
-                'tiene_cuenta_bancaria' => $tieneCuentaBancaria,
-                'tiene_constancia_fiscal' => $tieneConstanciaFiscal,
-                'tiene_logo' => $tieneLogo,
-                'tiene_informacion_general_y_datos_fiscales' => $tieneInformacionGeneralYDatosFiscales,
-                'datos_faltantes' => $datosFaltantes,
-            ],
-        ];
+        $this->perfilCompletadoService->sincronizarBandera($proveedor);
+        $responseData = $this->perfilCompletadoService->evaluarPuedeGenerarSP($proveedor->fresh());
 
         return $this->success(new ProveedorValidacionPerfilCompletoResource($responseData));
-    }
-
-    /**
-     * Valida la información general del proveedor.
-     */
-    private function validarInformacionGeneral(Proveedor $proveedor): bool
-    {
-        $camposRequeridos = [
-            // 'nombre_propietario',
-            'nombre_comercial',
-            // 'descripcion_giro_empresa',
-            // 'pagina_web',
-            'email',
-            // 'telefono',
-            // 'nombre_de_quien_registra',
-            // 'tipos_empresa_id',
-            // 'direccion_empresa',
-            // 'estado',
-            // 'municipio',
-            // 'codigo_postal'
-        ];
-
-        foreach ($camposRequeridos as $campo) {
-            if (empty($proveedor->$campo)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Valida los datos fiscales del proveedor.
-     */
-    private function validarDatosFiscales(Proveedor $proveedor): bool
-    {
-        $camposFiscales = [
-            'razon_social',
-            'rfc',
-            // 'regimen_fiscal_clave',
-            // 'regimen_fiscal_nombre',
-            // 'calle',
-            // 'numero_exterior',
-            // 'colonia',
-            // 'ciudad',
-            // 'codigo_postal',
-            // 'pais',
-        ];
-
-        foreach ($camposFiscales as $campo) {
-            if (empty($proveedor->$campo)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Valida los datos de contacto del proveedor.
-     */
-    private function validarDatosContacto(Proveedor $proveedor): bool
-    {
-        $camposContacto = [
-            'contacto_nombre',
-            'contacto_cargo',
-            'contacto_telefono',
-            'contacto_correo',
-        ];
-
-        foreach ($camposContacto as $campo) {
-            if (empty($proveedor->$campo)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -609,35 +589,95 @@ class ProveedorController extends Controller
      */
     public function validarPerfilCompletado(Request $request, Proveedor $proveedor)
     {
-        // Cargar relaciones necesarias
-        $proveedor->load(['cuentasBancarias']);
-
-        // Validar información general
-        $generales = $this->validarInformacionGeneral($proveedor);
-        // el logo no se considerra para perfiul completado
-        // && !empty($proveedor->logo);
-
-        // Validar datos fiscales (incluyendo constancia fiscal)
-        $fiscales = $this->validarDatosFiscales($proveedor);
-        // la constancia no se considerra para perfiul completado
-        //&& !empty($proveedor->constancia_fiscal);
-
-        // Validar datos bancarios (al menos una cuenta bancaria activa)
-        $bancarios = $proveedor->cuentasBancarias->where('estatus', EstadoCuentaBancaria::ACTIVA)->count() > 0;
-
-        // El perfil está completado solo cuando todas las secciones están completas
-        $perfilEmpresaCompletado = $generales && $fiscales && $bancarios;
-
-        // Actualizar el campo perfil_empresa_completo en el modelo si ha cambiado
-        if ($proveedor->perfil_empresa_completo !== $perfilEmpresaCompletado) {
-            $proveedor->update(['perfil_empresa_completo' => $perfilEmpresaCompletado]);
-        }
+        $evaluacion = $this->perfilCompletadoService->evaluar($proveedor);
+        $this->perfilCompletadoService->sincronizarBandera($proveedor);
 
         return $this->success([
-            'fiscales' => $fiscales,
-            'bancarios' => $bancarios,
-            'generales' => $generales,
-            'perfil_empresa_completado' => $perfilEmpresaCompletado,
+            'fiscales' => $evaluacion['fiscales'],
+            'bancarios' => $evaluacion['bancarios'],
+            'generales' => $evaluacion['generales'],
+            'perfil_empresa_completado' => $evaluacion['perfil_empresa_completado'],
         ]);
+    }
+
+
+    /**
+     * Verificar rfc existe en la tabla proveedores
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verificarRfcExistente(Request $request, Proveedor $proveedor)
+    {
+        $request->validate([
+            'rfc' => ['required', 'string'],
+        ]);
+
+        // Verificar si el correo existe en la tabla users
+        $existe = Proveedor::where('rfc', $request->rfc)->where('id', '!=', $proveedor->id)->exists();
+
+        return $this->success([
+            'existe' => $existe,
+            'rfc' => $request->rfc,
+        ], $existe ? 'El RFC ya está registrado en GestionPlus.' : 'El RFC está disponible en GestionPlus.', 200);
+    }
+
+    /**
+     * Verificar rfc existe en la tabla proveedores
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verificarRfcExistenteExcluyendoProveedor(Request $request, Proveedor $proveedor)
+    {
+        $request->validate([
+            'rfc' => ['required', 'string'],
+        ]);
+
+        // Verificar si el correo existe en la tabla users
+        $existe = Proveedor::where('rfc', $request->rfc)->where('id', '!=', $proveedor->id)->exists();
+
+        return $this->success([
+            'existe' => $existe,
+            'rfc' => $request->rfc,
+        ], $existe ? 'El RFC ya está registrado en GestionPlus.' : 'El RFC está disponible en GestionPlus.', 200);
+    }
+
+    public function verificarRazonSocialExistenteExcluyendoProveedor(Request $request, Proveedor $proveedor)
+    {
+        $request->validate([
+            'razon_social' => ['required', 'string'],
+        ]);
+
+        // Verificar si el correo existe en la tabla users
+        $existe = Proveedor::where('razon_social', $request->razon_social)->where('id', '!=', $proveedor->id)->exists();
+
+        return $this->success([
+            'existe' => $existe,
+            'razon_social' => $request->razon_social,
+        ], $existe ? 'La razón social ya está registrada en GestionPlus.' : 'La razón social está disponible en GestionPlus.', 200);
+    }
+
+
+    /**
+     * Verificar telefono existe en la tabla users
+     * Excluyendo el proveedor especificado
+     * @param Request $request
+     * @param Proveedor $proveedor
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verificarTelefonoExistenteExcluyendoProveedor(Request $request, Proveedor $proveedor)
+    {
+        $request->validate([
+            'telefono' => ['required', 'string'],
+        ]);
+
+        // Verificar si el telefono existe en la tabla users
+        $existe = User::where('telefono', $request->telefono)->where('id', '!=', $proveedor->id)->exists();
+
+        return $this->success([
+            'existe' => $existe,
+            'telefono' => $request->telefono,
+        ], $existe ? 'El teléfono ya está registrado en GestionPlus.' : 'El teléfono está disponible en GestionPlus.', 200);
     }
 }

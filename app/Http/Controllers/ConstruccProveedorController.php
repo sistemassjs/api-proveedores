@@ -251,7 +251,6 @@ class ConstruccProveedorController extends Controller
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
                 'perfil_empresa_completo' => false,
-                'cambiar_pass_default' => false,
                 'user_construcc_alta' => $data['usuario_id'],
                 'empresa_construcc_alta' => $data['empresa_construcc_id'],
                 'estatus' => EstadoUsuario::REGISTRADO->value,
@@ -494,7 +493,7 @@ class ConstruccProveedorController extends Controller
             // Validar datos de autorizaciรณn
             $request->validate([
                 'usuario_id' => 'required|integer',
-                'nivel_id' => 'required|integer|min:0|max:6',
+                'nivel_id' => 'required|integer|min:0|max:7',
                 'motivo_baja' => 'nullable|string|max:500',
             ]);
 

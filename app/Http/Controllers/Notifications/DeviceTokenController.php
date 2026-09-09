@@ -82,6 +82,8 @@ class DeviceTokenController extends Controller
                     'is_active' => true,
                 ]);
 
+                $this->deactivateStaleSiblingTokens((int) $user->id, $existingToken);
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Token actualizado correctamente',
@@ -105,6 +107,8 @@ class DeviceTokenController extends Controller
                     'last_used_at' => now(),
                     'is_active' => true,
                 ]);
+
+                $this->deactivateStaleSiblingTokens((int) $user->id, $deviceToken);
 
                 return response()->json([
                     'success' => true,
@@ -187,6 +191,51 @@ class DeviceTokenController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error obteniendo tokens',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Desactiva el token FCM del dispositivo actual (cierre de sesión).
+     */
+    public function deactivateCurrent(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            if (! $user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado',
+                ], 401);
+            }
+
+            $token = $request->input('token');
+
+            if (! is_string($token) || trim($token) === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de dispositivo requerido',
+                ], 422);
+            }
+
+            $updated = UserDeviceToken::query()
+                ->where('user_id', $user->id)
+                ->where('token', $token)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Token de dispositivo desactivado',
+                'data' => [
+                    'deactivated' => $updated > 0,
+                ],
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error desactivando token',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -314,5 +363,46 @@ class DeviceTokenController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Desactiva hermanos obsoletos del mismo usuario/plataforma sin adivinar dispositivos activos.
+     *
+     * Criterios (evidencia temporal + identidad de dispositivo):
+     * 1) Mismo device_id distinto al token actual → token rotado en ese dispositivo.
+     * 2) Misma plataforma, distinto device_id y sin uso reciente (≥ 30 días) → sesión abandonada.
+     *
+     * No toca tokens recientes de otros device_id (permite multi-dispositivo real).
+     */
+    private function deactivateStaleSiblingTokens(int $userId, UserDeviceToken $current): void
+    {
+        $staleBefore = now()->subDays(30);
+
+        // 1) Rotación en el mismo device_id
+        if (! empty($current->device_id)) {
+            UserDeviceToken::query()
+                ->where('user_id', $userId)
+                ->where('id', '!=', $current->id)
+                ->where('device_id', $current->device_id)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+        }
+
+        // 2) Otras sesiones de la misma plataforma sin uso reciente
+        UserDeviceToken::query()
+            ->where('user_id', $userId)
+            ->where('id', '!=', $current->id)
+            ->where('platform', $current->platform)
+            ->where('is_active', true)
+            ->where(function ($q) use ($staleBefore) {
+                $q->where(function ($inner) use ($staleBefore) {
+                    $inner->whereNotNull('last_used_at')
+                        ->where('last_used_at', '<', $staleBefore);
+                })->orWhere(function ($inner) use ($staleBefore) {
+                    $inner->whereNull('last_used_at')
+                        ->where('updated_at', '<', $staleBefore);
+                });
+            })
+            ->update(['is_active' => false]);
     }
 }

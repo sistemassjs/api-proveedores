@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 
 class FileUploadController extends Controller
@@ -50,7 +51,7 @@ class FileUploadController extends Controller
         foreach ($request->file('archivos') as $archivo) {
             $nombre = uniqid().'.'.$archivo->getClientOriginalExtension();
             $path = $archivo->storeAs('uploads', $nombre, 'public');
-            $urls[] = asset("storage/$path");
+            $urls[] = PublicStorageUrl::make($path);
         }
 
         return $this->success(

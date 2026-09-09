@@ -308,10 +308,9 @@ respaldo_*.zip
 /storage/framework/views/*
 !/storage/framework/views/.gitkeep
 routes/segmented/construcc.php
-docs/
 storage/logs/*.*
 /public/uploads/*
 !/public/uploads/.gitkeep
-/public/storage/*
-!/public/storage/.gitkeep
+# public/storage debe ser SOLO el symlink de `php artisan storage:link`.
+# No versionar carpeta ni .gitkeep ahí (rompe el link en cada deploy/pull).
 postman.json

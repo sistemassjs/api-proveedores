@@ -22,10 +22,10 @@
   }
 
   .header {
-   background: linear-gradient(135deg, #ff9800, #ffc107);
-   color: #ffffff;
+   background: transparent;
+   padding: 0;
+   margin: 0;
    text-align: center;
-   padding: 30px 20px;
   }
 
   .logo {
@@ -81,8 +81,8 @@
   }
 
   .footer {
-   background-color: #343a40;
-   color: #ffffff;
+   background-color: #f1f5f9;
+   color: #475569;
    text-align: center;
    padding: 15px;
    font-size: 12px;
@@ -94,35 +94,22 @@
 
  <div class="email-container">
   <div class="header">
-   @include('emails.partials.logo-app')
-      <h1>Factura pendiente</h1>
-      <p>Sistema de Gestion de Proveedores</p>
+   @include('emails.partials.app-header', ['title' => 'Factura pendiente'])
   </div>
 
   <div class="content">
    <p>Hola <strong>{{ $notifiable->name }}</strong>,</p>
 
    <div class="alert-box">
-    La solicitud de pago <strong>#{{ $solicitudPagoFolio }}</strong> ya fue pagada,
-    pero aún falta la factura correspondiente (CFDI).
+    La solicitud de pago ya fue pagada, pero aún falta la factura correspondiente (CFDI).
    </div>
 
-   <div class="details">
-    <div class="detail-item">
-     <span class="detail-label">Folio:</span> #{{ $solicitudPagoFolio }}
-    </div>
-    <div class="detail-item">
-     <span class="detail-label">Proveedor ID:</span> {{ $proveedorId }}
-    </div>
-    @if($monto)
-    <div class="detail-item">
-     <span class="detail-label">Monto:</span> ${{ number_format($monto, 2) }}
-    </div>
-    @endif
-    <div class="detail-item">
-     <span class="detail-label">Fecha:</span> {{ now()->format('d/m/Y') }}
-    </div>
-   </div>
+   @include('emails.partials.spp-summary', [
+    'sppFolio' => $solicitudPagoFolio,
+    'sppEstado' => 'Factura pendiente',
+    'sppMonto' => $monto ?? null,
+    'sppFecha' => now(),
+   ])
 
    <p>
     Para completar el proceso, emite y sube el CFDI conforme a los datos fiscales indicados en el sistema.
@@ -139,9 +126,7 @@
    </p>
   </div>
 
-  <div class="footer">
-   © {{ date('Y') }} {{ config('app.name') }} · Mensaje automático
-  </div>
+  <div class="footer">@include('emails.partials.app-footer')</div>
  </div>
 
 </body>

@@ -32,7 +32,13 @@ class CuentaBancariaStoreRequest extends FormRequest
             'titular_cuenta' => ['required', 'string', 'min:2', 'max:100'],
             'banco_clave' => ['required', 'string', 'min:3', 'max:10'],
             'banco_nombre' => ['required', 'string', 'min:3', 'max:50'],
-            'cuenta' => ['required_if:clabe,*', 'nullable', 'string', 'regex:/^\d{10,12}$/'],
+            // Nota: longitud de cuenta libre (sin rango fijo); solo dígitos.
+            'cuenta' => [
+                'required_if:clabe,*',
+                'nullable',
+                'string',
+                'regex:/^\d+$/',
+            ],
             'clabe' => ['nullable', 'string', 'size:18', 'regex:/^\d+$/'],
             'tarjeta' => ['nullable', 'string', 'size:16', 'regex:/^\d+$/'],
             'referencia' => ['nullable', 'string', 'max:50'],
@@ -75,7 +81,7 @@ class CuentaBancariaStoreRequest extends FormRequest
             'banco_nombre.max' => 'El nombre del banco no puede exceder :max caracteres.',
 
             'cuenta.required_if' => 'El número de cuenta es obligatorio cuando se ingresa CLABE.',
-            'cuenta.regex' => 'La cuenta debe tener entre 10 y 12 dígitos numéricos.',
+            'cuenta.regex' => 'La cuenta debe contener solo números.',
 
             'clabe.size' => 'La CLABE debe tener exactamente 18 dígitos.',
             'clabe.regex' => 'La CLABE debe contener solo números.',

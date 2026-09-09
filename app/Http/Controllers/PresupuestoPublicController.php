@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\Presupuesto\PresupuestoPublicResource;
 use App\Models\Presupuesto;
+use App\Models\User;
 use App\Notifications\Presupuesto\PresupuestoAceptadoNotification;
 use App\Notifications\Presupuesto\PresupuestoRechazadoNotification;
 use App\Support\PresupuestoPdf;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Validator;
 
 class PresupuestoPublicController extends Controller
@@ -32,9 +34,12 @@ class PresupuestoPublicController extends Controller
             return $this->error('Presupuesto no encontrado o enlace inválido.', null, 404);
         }
 
+        $presupuesto->load(Presupuesto::eagerLodable());
         $presupuesto->asegurarTokenPublico();
 
-        return $this->success(new PresupuestoPublicResource($presupuesto));
+        return $this->success(
+            new PresupuestoPublicResource($presupuesto->fresh(Presupuesto::eagerLodable()))
+        );
     }
 
     /**
@@ -64,7 +69,7 @@ class PresupuestoPublicController extends Controller
     public function aceptar(string $token): JsonResponse
     {
         $presupuesto = Presupuesto::query()
-            ->with('proveedor')
+            ->with(['proveedor', 'user'])
             ->where('token_publico', $token)
             ->first();
 
@@ -80,23 +85,12 @@ class PresupuestoPublicController extends Controller
             );
         }
 
+        $estadoAnterior = $presupuesto->estado;
         $presupuesto->estado = Presupuesto::ESTADO_ACEPTADO;
         $presupuesto->save();
+        $presupuesto->registrarCambioEstado($estadoAnterior, auth()->id());
 
-        $proveedor = $presupuesto->proveedor;
-        if ($proveedor) {
-            $usuarios = $proveedor->usuariosActivos()->get();
-            foreach ($usuarios as $user) {
-                $user->notify(new PresupuestoAceptadoNotification($presupuesto));
-            }
-            $primeraNotif = $usuarios->isNotEmpty()
-                ? $usuarios->first()->notifications()
-                    ->where('type', PresupuestoAceptadoNotification::class)
-                    ->latest()
-                    ->first()
-                : null;
-            $presupuesto->addNotification($primeraNotif?->id);
-        }
+        $this->notificarCreadorUnaSolaVez($presupuesto, new PresupuestoAceptadoNotification($presupuesto), PresupuestoAceptadoNotification::class);
 
         return $this->success(
             new PresupuestoPublicResource($presupuesto->fresh(Presupuesto::eagerLodable())),
@@ -110,7 +104,7 @@ class PresupuestoPublicController extends Controller
     public function rechazar(Request $request, string $token): JsonResponse
     {
         $presupuesto = Presupuesto::query()
-            ->with('proveedor')
+            ->with(['proveedor', 'user'])
             ->where('token_publico', $token)
             ->first();
 
@@ -135,30 +129,84 @@ class PresupuestoPublicController extends Controller
         }
 
         $motivo = $request->input('motivo');
-        $presupuesto->estado = Presupuesto::ESTADO_RECHAZADO;
-        if ($motivo) {
-            $presupuesto->motivo_rechazo = trim($motivo);
+        $motivoTrim = is_string($motivo) ? trim($motivo) : '';
+        $estadoAnterior = $presupuesto->estado;
+        $presupuesto->estado = $motivoTrim !== ''
+            ? Presupuesto::ESTADO_RECHAZADO_CON_OBSERVACION
+            : Presupuesto::ESTADO_RECHAZADO;
+        if ($motivoTrim !== '') {
+            $presupuesto->motivo_rechazo = $motivoTrim;
         }
         $presupuesto->save();
+        $presupuesto->registrarCambioEstado(
+            $estadoAnterior,
+            $request->user()?->id,
+            null,
+            $motivoTrim !== '' ? $motivoTrim : null
+        );
 
-        $proveedor = $presupuesto->proveedor;
-        if ($proveedor) {
-            $usuarios = $proveedor->usuariosActivos()->get();
-            foreach ($usuarios as $user) {
-                $user->notify(new PresupuestoRechazadoNotification($presupuesto, $motivo));
-            }
-            $primeraNotif = $usuarios->isNotEmpty()
-                ? $usuarios->first()->notifications()
-                    ->where('type', PresupuestoRechazadoNotification::class)
-                    ->latest()
-                    ->first()
-                : null;
-            $presupuesto->addNotification($primeraNotif?->id);
-        }
+        $this->notificarCreadorUnaSolaVez($presupuesto, new PresupuestoRechazadoNotification($presupuesto, $motivo), PresupuestoRechazadoNotification::class);
 
         return $this->success(
             new PresupuestoPublicResource($presupuesto->fresh(Presupuesto::eagerLodable())),
             'Presupuesto rechazado.'
         );
+    }
+
+    private function notificarCreadorUnaSolaVez(Presupuesto $presupuesto, Notification $notification, string $notificationClass): void
+    {
+        $destinatario = $this->resolverUsuarioNotificarEmisorPresupuesto($presupuesto);
+        if (! $destinatario) {
+            return;
+        }
+
+        $yaExiste = $destinatario->notifications()
+            ->where('type', $notificationClass)
+            ->where('data->presupuesto_id', (int) $presupuesto->id)
+            ->where('created_at', '>=', now()->subMinutes(5))
+            ->exists();
+
+        if ($yaExiste) {
+            return;
+        }
+
+        $destinatario->notify($notification);
+
+        $notif = $destinatario->notifications()
+            ->where('type', $notificationClass)
+            ->where('data->presupuesto_id', (int) $presupuesto->id)
+            ->latest()
+            ->first();
+
+        $presupuesto->addNotification($notif?->id);
+    }
+
+    /**
+     * Usuario al que notificar en el proveedor emisor: creador del presupuesto si aplica;
+     * si no hay user_id (registros viejos), un único usuario activo con acceso al proveedor.
+     */
+    private function resolverUsuarioNotificarEmisorPresupuesto(Presupuesto $presupuesto): ?User
+    {
+        $presupuesto->loadMissing(['user', 'proveedor']);
+
+        $creador = $presupuesto->user;
+        if (
+            $creador
+            && method_exists($creador, 'tieneAccesoAProveedor')
+            && $creador->tieneAccesoAProveedor((int) $presupuesto->proveedor_id)
+        ) {
+            return $creador;
+        }
+
+        $proveedor = $presupuesto->proveedor;
+        if (! $proveedor) {
+            return null;
+        }
+
+        return $proveedor->usuariosActivos()->get()->unique('id')->first(function ($u) use ($presupuesto) {
+            return $u instanceof User
+                && method_exists($u, 'tieneAccesoAProveedor')
+                && $u->tieneAccesoAProveedor((int) $presupuesto->proveedor_id);
+        });
     }
 }

@@ -25,6 +25,7 @@ class UserProveedor extends Pivot
         'fecha_asignacion',
         'fecha_desasignacion',
         'observaciones',
+        'estado',
     ];
 
     protected $casts = [

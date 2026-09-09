@@ -9,14 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 /**
  * @OA\Schema(
  *     schema="ProveedorUpdateRequest",
- *     sometimes={
- *         "nombre_comercial",
- *         "email",
- *         "telefono",
- *         "razon_social",
- *         "rfc"
- *     },
- *     description="Campos requeridos: Nombre comercial, Email, Teléfono, Razón Social y RFC. Además se requiere al menos 1 cuenta bancaria registrada."
+ *     description="Actualización parcial de empresa. En panel admin ningún campo es obligatorio."
  * )
  */
 class ProveedorUpdateRequest extends FormRequest
@@ -26,54 +19,165 @@ class ProveedorUpdateRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->isAdminGestionRequest()) {
+            return;
+        }
+
+        $nullableKeys = [
+            'nombre_comercial',
+            'email',
+            'telefono',
+            'pagina_web',
+            'direccion_empresa',
+            'descripcion_giro_empresa',
+            'nombre_propietario',
+            'nombre_de_quien_registra',
+            'razon_social',
+            'rfc',
+            'regimen_fiscal_clave',
+            'regimen_fiscal_nombre',
+            'calle',
+            'numero_exterior',
+            'numero_interior',
+            'colonia',
+            'estado',
+            'ciudad',
+            'codigo_postal',
+            'pais',
+            'contacto_nombre',
+            'contacto_cargo',
+            'contacto_telefono',
+            'contacto_correo',
+            'notas',
+            'tipos_empresa_otro',
+        ];
+
+        $payload = [];
+        foreach ($nullableKeys as $key) {
+            if ($this->exists($key) && $this->input($key) === '') {
+                $payload[$key] = null;
+            }
+        }
+
+        if ($payload !== []) {
+            $this->merge($payload);
+        }
+    }
+
+    public function validated($key = null, $default = null)
+    {
+        $data = parent::validated();
+
+        if ($this->has('telefono')) {
+            if (is_array($this->input('telefono'))) {
+                $data['telefono'] = $this->input('telefono.telefono');
+                $data['telefono_codigo_pais'] = $this->input('telefono.codigo');
+            } else {
+                $data['telefono'] = $this->input('telefono');
+            }
+        }
+
+        return $data;
+    }
+
     public function rules(): array
     {
-        return [
-            // -------- DATOS GENERALES (REQUERIDOS) --------
-            'nombre_comercial' => ['sometimes', 'string', 'max:255'],
-            'email' => ['sometimes', 'email', 'max:255'],
-            'telefono' => ['sometimes', 'string', 'max:15'],
+        $proveedor = $this->route('proveedor');
+        $admin = $this->isAdminGestionRequest();
 
-            // -------- DATOS GENERALES (OPCIONALES) --------
+        $rules = [
+            // -------- DATOS GENERALES --------
+            'nombre_comercial' => [$admin ? 'nullable' : 'sometimes', 'string', 'max:255'],
+            'email' => [$admin ? 'nullable' : 'sometimes', 'email', 'max:255'],
+            'telefono' => ['sometimes', 'nullable'],
+            'telefono.codigo' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'telefono.telefono' => ['sometimes', 'nullable', 'string', 'max:20'],
+
             'pagina_web' => ['nullable', 'string', 'max:255'],
             'direccion_empresa' => ['nullable', 'string', 'max:255'],
             'descripcion_giro_empresa' => ['nullable', 'string', 'max:255'],
             'nombre_propietario' => ['nullable', 'string', 'max:255'],
             'nombre_de_quien_registra' => ['nullable', 'string', 'max:255'],
 
-            // -------- DATOS FISCALES (REQUERIDOS) --------
-            'razon_social' => [
-                'sometimes',
+            // -------- DATOS FISCALES --------
+            'razon_social' => array_values(array_filter([
+                $admin ? 'nullable' : 'sometimes',
                 'string',
-                'min:3',
+                $admin ? null : 'min:3',
                 'max:255',
-                Rule::unique('proveedores', 'razon_social')->ignore($this->route('proveedor')),
-            ],
+                Rule::unique('proveedores', 'razon_social')->ignore($proveedor?->id),
+            ])),
 
-            'rfc' => [
-                'sometimes',
+            'rfc' => array_values(array_filter([
+                $admin ? 'nullable' : 'sometimes',
                 'string',
-                'regex:/^[A-ZÑ&]{3,4}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[A-Z0-9]{3}$/',
-                Rule::unique('proveedores', 'rfc')->ignore($this->route('proveedor')),
-            ],
+                $admin ? null : 'regex:/^[A-ZÑ&]{3,4}\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])[A-Z0-9]{3}$/',
+                Rule::unique('proveedores', 'rfc')->ignore($proveedor?->id),
+            ])),
 
-            'regimen_fiscal_clave' => ['sometimes', 'string', 'max:10'],
-            'regimen_fiscal_nombre' => ['sometimes', 'string', 'max:255'],
-            'calle' => ['sometimes', 'string', 'max:255'],
+            'regimen_fiscal_clave' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'regimen_fiscal_nombre' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'regimenes_fiscales' => ['sometimes', 'nullable', 'array'],
+            'regimenes_fiscales.*.id' => ['nullable', 'integer'],
+            'regimenes_fiscales.*.clave' => ['required_with:regimenes_fiscales', 'string', 'max:10'],
+            'regimenes_fiscales.*.nombre' => ['required_with:regimenes_fiscales', 'string', 'max:255'],
+            'regimenes_fiscales.*.fecha_alta' => ['nullable', 'date'],
+            'regimenes_fiscales.*.fecha_fin' => ['nullable', 'date'],
+            'regimenes_fiscales.*.es_principal' => ['sometimes', 'boolean'],
+            'regimenes_fiscales.*.origen' => ['nullable', 'string', 'max:30'],
+            'calle' => ['sometimes', 'nullable', 'string', 'max:255'],
             'numero_exterior' => ['nullable', 'string', 'max:20'],
             'numero_interior' => ['nullable', 'string', 'max:20'],
-            'colonia' => ['sometimes', 'string', 'max:255'],
-            'estado' => ['sometimes', 'string', 'max:255'],
-            'ciudad' => ['sometimes', 'string', 'max:255'],
-            'codigo_postal' => ['sometimes', 'string', 'regex:/^[0-9]{5}$/'],
-            'pais' => ['sometimes', 'string', 'max:255'],
+            'colonia' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'estado' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'ciudad' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'codigo_postal' => ['sometimes', 'nullable', 'string', 'regex:/^[0-9]{5}$/'],
+            'pais' => ['sometimes', 'nullable', 'string', 'max:255'],
 
             // -------- CONTACTO --------
             'contacto_nombre' => ['nullable', 'string', 'max:150'],
             'contacto_cargo' => ['nullable', 'string', 'max:60'],
             'contacto_telefono' => ['nullable', 'string', 'max:15'],
             'contacto_correo' => ['nullable', 'email', 'max:60'],
+
+            // -------- ESTADO (gestión administrativa) --------
+            'estatus' => ['sometimes', Rule::in(EstadoUsuario::values())],
+            'notas' => ['nullable', 'string'],
+            'is_proveedor_sp' => ['sometimes', 'boolean'],
+            'is_proveedor_catalogo' => ['sometimes', 'boolean'],
+            'tipos_empresa_id' => ['sometimes', 'nullable', 'integer', 'exists:tipos_empresa,id'],
+            'tipos_empresa_otro' => ['nullable', 'string', 'max:255'],
         ];
+
+        if ($admin) {
+            $rules['es_cuenta_de_pruebas'] = ['sometimes', 'boolean'];
+            // En admin RFC/código postal: validar formato solo si viene valor
+            $rules['rfc'] = [
+                'nullable',
+                'string',
+                'max:13',
+                Rule::unique('proveedores', 'rfc')->ignore($proveedor?->id),
+            ];
+            $rules['codigo_postal'] = ['nullable', 'string', 'max:10'];
+            $rules['razon_social'] = [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('proveedores', 'razon_social')->ignore($proveedor?->id),
+            ];
+            $rules['nombre_comercial'] = ['nullable', 'string', 'max:255'];
+            $rules['email'] = ['nullable', 'email', 'max:255'];
+        }
+
+        return $rules;
+    }
+
+    private function isAdminGestionRequest(): bool
+    {
+        return $this->routeIs('admin.*')
+            || str_contains($this->path(), 'admin/');
     }
 
     public function messages()

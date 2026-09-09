@@ -1,11 +1,11 @@
 <?php
 
 return [
-    'name' => env('APP_NAME', 'Sistema Proveedores'),
+    'name' => env('APP_NAME', 'GestionPlus'),
     'env' => env('APP_ENV', 'production'),
     'debug' => env('APP_DEBUG', false),
     'url' => env('APP_URL', 'http://localhost'),
-    'frontend_url' => env('APP_FRONTEND_URL', 'http://localhost:4200'),
+    'frontend_url' => env('APP_FRONTEND_URL', 'http://localhost:4300'),
     'timezone' => env('APP_TIMEZONE', 'America/Mazatlan'),
     'locale' => env('APP_LOCALE', 'es'),
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),

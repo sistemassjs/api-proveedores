@@ -80,9 +80,8 @@ class ProveedorProductoController extends Controller
     public function updateLogo(ProductoUpdateLogoRequest $request, Proveedor $proveedor, $productoId)
     {
         $producto = Producto::findOrFail($productoId);
-        if ($producto->imagen_principal) {
-            $rutaAnterior = str_replace(asset('storage').'/', '', $producto->imagen_principal);
-            Storage::disk('public')->delete($rutaAnterior);
+        if ($producto->imagen_principal && ! preg_match('/^https?:\/\//', $producto->imagen_principal)) {
+            Storage::disk('public')->delete($producto->imagen_principal);
         }
 
         $file = $request->file('logo');

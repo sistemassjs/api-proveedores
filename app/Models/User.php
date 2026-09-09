@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EstadoUsuario;
 use App\Traits\AutoSwaggerSchema;
 use App\Traits\Filterable;
 use App\Traits\HasRoles;
@@ -18,7 +19,18 @@ class User extends Authenticatable
     use AutoSwaggerSchema, Filterable;
     use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
-    protected $fillable = ['name', 'email', 'telefono', 'foto_perfil_url', 'password', 'role_id', 'status'];
+    protected $fillable = [
+        'name',
+        'email',
+        'telefono_codigo_pais',
+        'telefono',
+        'foto_perfil_url',
+        'password',
+        'cambiar_pass_default',
+        'role_id',
+        'status',
+        'es_cuenta_de_pruebas',
+    ];
 
     protected $hidden = ['password', 'remember_token'];
 
@@ -27,6 +39,14 @@ class User extends Authenticatable
         'nombre' => 'Nombre',
         'email' => 'Email',
         'role' => 'Role',
+        'search' => 'Search',
+        'role_id' => 'RoleId',
+        'proveedor_id' => 'ProveedorId',
+        'grupo_activos' => 'GrupoActivos',
+        'grupo_inactivos' => 'GrupoInactivos',
+        'grupo_pendientes' => 'GrupoPendientes',
+        'grupo_registro_completados' => 'GrupoRegistroCompletados',
+        'oauth_provider' => 'OauthProvider',
     ];
 
     protected function casts(): array
@@ -34,14 +54,16 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'status' => 'boolean',
+            'status' => 'string',
+            'cambiar_pass_default' => 'boolean',
+            'es_cuenta_de_pruebas' => 'boolean',
         ];
     }
 
     // Filtro específico para 'name'
     public function filterByNombre($query, $value)
     {
-        return $query->where('nombre', 'like', "%$value%");
+        return $query->where('name', 'like', "%$value%");
     }
 
     // Filtro específico para 'email'
@@ -54,7 +76,94 @@ class User extends Authenticatable
     public function filterByRole($query, $value)
     {
         return $query->whereHas('role', function ($q) use ($value) {
-            $q->where('name', 'like', "%$value%");
+            $q->where('nombre', 'like', "%$value%");
+        });
+    }
+
+    public function filterBySearch($query, $value)
+    {
+        return $query->where(function ($q) use ($value) {
+            $q->where('name', 'like', "%$value%")
+                ->orWhere('email', 'like', "%$value%")
+                ->orWhere('telefono', 'like', "%$value%");
+        });
+    }
+
+    public function filterByRoleId($query, $value)
+    {
+        if ($value === null || $value === '') {
+            return $query;
+        }
+
+        return $query->where('role_id', (int) $value);
+    }
+
+    public function filterByOauthProvider($query, $value)
+    {
+        $provider = strtolower(trim((string) $value));
+        if ($provider === '') {
+            return $query;
+        }
+
+        return $query->whereHas('oauthAccounts', function ($q) use ($provider) {
+            $q->where('provider', $provider);
+        });
+    }
+
+    public function filterByProveedorId($query, $value)
+    {
+        if ($value === null || $value === '') {
+            return $query;
+        }
+
+        $id = (int) $value;
+
+        return $query->whereHas('proveedores', function ($q) use ($id) {
+            $q->where('proveedores.id', $id);
+        });
+    }
+
+    /** Segmento listado admin: cuentas activas (status = true). */
+    public function filterByGrupoActivos($query, $value)
+    {
+        if ($value === null || $value === '' || $value === '0' || $value === false) {
+            return $query;
+        }
+
+        return $query->where('status', true);
+    }
+
+    /** Segmento listado admin: cuentas inactivas (status = false). */
+    public function filterByGrupoInactivos($query, $value)
+    {
+        if ($value === null || $value === '' || $value === '0' || $value === false) {
+            return $query;
+        }
+
+        return $query->where('status', false);
+    }
+
+    /** Segmento listado admin: correo sin verificar. */
+    public function filterByGrupoPendientes($query, $value)
+    {
+        if ($value === null || $value === '' || $value === '0' || $value === false) {
+            return $query;
+        }
+
+        return $query->whereNull('email_verified_at');
+    }
+
+    /** Segmento listado admin: relación activa con estado registro_completado en user_proveedor. */
+    public function filterByGrupoRegistroCompletados($query, $value)
+    {
+        if ($value === null || $value === '' || $value === '0' || $value === false) {
+            return $query;
+        }
+
+        $estado = EstadoUsuario::REGISTRO_COMPLETADO->value;
+
+        return $query->whereHas('userProveedores', function ($q) use ($estado) {
+            $q->where('activo', true)->where('estado', $estado);
         });
     }
 
@@ -99,6 +208,7 @@ class User extends Authenticatable
         return [
             'role',
             'proveedores',
+            'oauthAccounts',
         ];
     }
 
@@ -110,6 +220,14 @@ class User extends Authenticatable
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    /**
+     * Cuentas OAuth vinculadas (Google, etc.). Ver docs/context/platform-auth-socialite.md
+     */
+    public function oauthAccounts(): HasMany
+    {
+        return $this->hasMany(OauthAccount::class);
     }
 
     /**
@@ -133,7 +251,7 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Proveedor::class, 'user_proveedor')
             ->using(UserProveedor::class)
-            ->withPivot('tipo_relacion', 'activo', 'fecha_asignacion', 'fecha_desasignacion', 'observaciones')
+            ->withPivot('tipo_relacion', 'activo', 'estado', 'fecha_asignacion', 'fecha_desasignacion', 'observaciones')
             ->withTimestamps();
     }
 
@@ -264,5 +382,81 @@ class User extends Authenticatable
         // validar que el email sea un email valido, no solo que no sea null
         $emailIsValid = filter_var($this->email, FILTER_VALIDATE_EMAIL) !== false;
         return $this->email !== null && !$emailIsValid;
+    }
+
+
+    /**
+     * Obtiene los usuarios con rol de ADMINISTRADOR y status activo (true)
+     * Esto es útil para enviar notificaciones o asignar tareas a los administradores activos del sistema
+     * 
+     */
+    public function scopeAdministradoresActivos($query)
+    {
+        $roleId = Role::where('nombre', 'ADMINISTRADOR')->value('id');
+
+        return $query
+            ->where('role_id', $roleId);
+    }
+
+    /**
+     * Usuarios que sí deben contar en totales / altas de métricas de plataforma.
+     * Excluye roles internos (config), es_cuenta_de_pruebas y vínculos a empresas de pruebas.
+     *
+     * @see docs/context/platform-shared.md
+     */
+    public function scopeParaMetricasPlataforma($query)
+    {
+        $rolesExcluidos = config('metricas_plataforma.roles_excluidos', []);
+
+        return $query
+            ->where('es_cuenta_de_pruebas', false)
+            ->where(function ($q) use ($rolesExcluidos) {
+                $q->whereNull('role_id')
+                    ->orWhereDoesntHave('role', function ($roleQuery) use ($rolesExcluidos) {
+                        $roleQuery->whereIn('nombre', $rolesExcluidos);
+                    });
+            })
+            ->whereDoesntHave('proveedores', function ($proveedorQuery) {
+                $proveedorQuery->withoutGlobalScopes()
+                    ->where('es_cuenta_de_pruebas', true);
+            });
+    }
+
+    /**
+     * Complemento de paraMetricasPlataforma: usuarios a excluir de KPIs.
+     */
+    public function scopeExcluidosDeMetricasPlataforma($query)
+    {
+        $rolesExcluidos = config('metricas_plataforma.roles_excluidos', []);
+
+        return $query->where(function ($q) use ($rolesExcluidos) {
+            $q->where('es_cuenta_de_pruebas', true)
+                ->orWhereHas('role', function ($roleQuery) use ($rolesExcluidos) {
+                    $roleQuery->whereIn('nombre', $rolesExcluidos);
+                })
+                ->orWhereHas('proveedores', function ($proveedorQuery) {
+                    $proveedorQuery->withoutGlobalScopes()
+                        ->where('es_cuenta_de_pruebas', true);
+                });
+        });
+    }
+
+    /**
+     * Usuarios de producto para el listado admin (registrados).
+     * Solo GERENTE / SUPERVISOR / VENTAS / AUXILIAR / CLIENTE.
+     */
+    public function scopeParaListadoAdminUsuarios($query)
+    {
+        $roles = config('metricas_plataforma.roles_listado_usuarios_admin', [
+            'GERENTE',
+            'SUPERVISOR',
+            'VENTAS',
+            'AUXILIAR',
+            'CLIENTE',
+        ]);
+
+        return $query->whereHas('role', function ($roleQuery) use ($roles) {
+            $roleQuery->whereIn('nombre', $roles);
+        });
     }
 }

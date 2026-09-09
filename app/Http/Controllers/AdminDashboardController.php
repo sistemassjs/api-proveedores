@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Enums\UserRoleEnumerate;
 use App\Models\Categoria;
 use App\Models\Marca;
+use App\Models\PagoSPP;
 use App\Models\Pedido;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\Role;
+use App\Models\SolicitudPago;
 use App\Models\Sucursal;
 use App\Models\TipoEmpresa;
 use App\Models\UnidadMedida;
@@ -79,6 +81,70 @@ class AdminDashboardController extends Controller
                 'status' => 'ERROR',
                 'message' => 'Error al obtener métricas: '.$e->getMessage(),
                 'data' => null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene métricas SPP y presupuesto por proveedor.
+     */
+    public function getMetricasSppPorProveedor(Request $request)
+    {
+        try {
+            $limite = max(1, (int) $request->input('limit', 50));
+
+            $proveedores = Proveedor::query()
+                ->select(['id', 'nombre_comercial', 'razon_social', 'rfc'])
+                ->withCount([
+                    'solicitudesPago as spp_total',
+                    'solicitudesPago as spp_pagadas' => fn ($q) => $q->where('estado_solicitud', 'pagado'),
+                ])
+                ->withSum('solicitudesPago as spp_monto_total', 'monto_total')
+                ->withSum('solicitudesPago as spp_monto_abonado', 'monto_abonado')
+                ->withSum('pagosSPP as pagos_spp_monto_total', 'monto_total')
+                ->orderByDesc('spp_monto_total')
+                ->limit($limite)
+                ->get()
+                ->map(function (Proveedor $proveedor) {
+                    $montoTotal = (float) ($proveedor->spp_monto_total ?? 0);
+                    $montoAbonado = (float) ($proveedor->spp_monto_abonado ?? 0);
+                    $montoPagosSpp = (float) ($proveedor->pagos_spp_monto_total ?? 0);
+                    $saldo = max(0, $montoTotal - $montoAbonado);
+
+                    return [
+                        'proveedor_id' => $proveedor->id,
+                        'nombre_comercial' => $proveedor->nombre_comercial,
+                        'razon_social' => $proveedor->razon_social,
+                        'rfc' => $proveedor->rfc,
+                        'spp_total' => (int) ($proveedor->spp_total ?? 0),
+                        'spp_pagadas' => (int) ($proveedor->spp_pagadas ?? 0),
+                        'spp_pendientes' => max(0, (int) ($proveedor->spp_total ?? 0) - (int) ($proveedor->spp_pagadas ?? 0)),
+                        'monto_spp_total' => round($montoTotal, 2),
+                        'monto_spp_abonado' => round($montoAbonado, 2),
+                        'saldo_pendiente' => round($saldo, 2),
+                        'monto_pagos_spp' => round($montoPagosSpp, 2),
+                        'avance_pago_porcentaje' => $montoTotal > 0 ? round(($montoAbonado / $montoTotal) * 100, 2) : 0,
+                    ];
+                });
+
+            $resumen = [
+                'proveedores_con_spp' => $proveedores->where('spp_total', '>', 0)->count(),
+                'spp_total' => SolicitudPago::query()->count(),
+                'spp_pagadas' => SolicitudPago::query()->where('estado_solicitud', 'pagado')->count(),
+                'monto_spp_total' => round((float) SolicitudPago::query()->sum('monto_total'), 2),
+                'monto_pagado_total' => round((float) SolicitudPago::query()->sum('monto_abonado'), 2),
+                'monto_pagos_spp_total' => round((float) PagoSPP::query()->sum('monto_total'), 2),
+            ];
+
+            $resumen['saldo_pendiente_total'] = round(max(0, $resumen['monto_spp_total'] - $resumen['monto_pagado_total']), 2);
+
+            return $this->success([
+                'resumen' => $resumen,
+                'proveedores' => $proveedores->values(),
+            ], 'Métricas SPP por proveedor obtenidas correctamente.');
+        } catch (\Throwable $e) {
+            return $this->error('Error al obtener métricas SPP por proveedor.', [
+                'exception' => $e->getMessage(),
             ], 500);
         }
     }

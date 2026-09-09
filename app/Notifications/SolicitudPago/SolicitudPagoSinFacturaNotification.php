@@ -9,6 +9,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 
 class SolicitudPagoSinFacturaNotification extends Notification implements ShouldBroadcastNow
 {
@@ -87,6 +88,7 @@ class SolicitudPagoSinFacturaNotification extends Notification implements Should
         'notifiable' => $notifiable,
         'solicitudPagoFolio' => $this->solicitudPagoFolio,
         'urlSolicitud' => $frontendUrl . '/pages/proveedor/sp/subir-factura/' . $this->solicitudPagoId,
+        'logoAppDataUri' => $this->resolverLogoProveedorBase64(),
       ]);
   }
 
@@ -143,5 +145,50 @@ class SolicitudPagoSinFacturaNotification extends Notification implements Should
   protected function getNotificationSubtipo(): string
   {
     return 'sin_factura';
+  }
+
+  private function resolverLogoProveedorBase64(): ?string
+  {
+    $logo = SolicitudPago::query()
+      ->with('proveedor:id,logo')
+      ->find($this->solicitudPagoId)?->proveedor?->logo;
+
+    if (!is_string($logo) || trim($logo) === '') {
+      return null;
+    }
+    if (str_starts_with($logo, 'data:image')) {
+      return $logo;
+    }
+    if (filter_var($logo, FILTER_VALIDATE_URL)) {
+      return null;
+    }
+
+    $logoPath = null;
+    if (str_starts_with($logo, '/') || str_starts_with($logo, 'storage/')) {
+      $logoPath = public_path($logo);
+    } elseif (Storage::disk('public')->exists($logo)) {
+      $logoPath = Storage::disk('public')->path($logo);
+    } else {
+      $logoPath = public_path('storage/' . $logo);
+    }
+
+    if (!$logoPath || !is_readable($logoPath)) {
+      return null;
+    }
+
+    $binary = @file_get_contents($logoPath);
+    if ($binary === false || $binary === '') {
+      return null;
+    }
+
+    $extension = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+    $mime = match ($extension) {
+      'jpg', 'jpeg' => 'image/jpeg',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      default => 'image/png',
+    };
+
+    return 'data:' . $mime . ';base64,' . base64_encode($binary);
   }
 }

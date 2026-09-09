@@ -1,16 +1,5 @@
-# 📦 Módulo Pagos SPP - Construcción
+# Archivo historico (no contexto IA)
 
-Colección completa para gestión de pagos de solicitudes de pago (SPP) en el módulo de construcción.
+Documentacion de implementaciones pasadas. **No** forma parte del contexto operativo.
 
-## 🚀 Navegación
-Usa el menú lateral para navegar entre los módulos como en Postman.
-
----
-
-## 🔐 Autenticación
-Todos los endpoints requieren el header:
-
-```
-X-API-KEY: {{apiKey}}
-Authorization: Bearer {{token}}
-```
+Contexto activo: `docs/context/`

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Enums\EstadoUsuario;
@@ -23,6 +24,7 @@ class Proveedor extends BaseModel
         'nombre_comercial',
         'pagina_web',
         'email',
+        'telefono_codigo_pais',
         'telefono',
         'celular',
         'estatus',
@@ -49,10 +51,11 @@ class Proveedor extends BaseModel
         'principal',
         'calificacion',
         'categoria',
+        // default values
         'is_proveedor_sp',
         'is_proveedor_catalogo',
-        'cambiar_pass_default',
         'perfil_empresa_completo',
+        'es_cuenta_de_pruebas',
 
         // Información fiscal (al final)
         'rfc',
@@ -75,17 +78,33 @@ class Proveedor extends BaseModel
         'user_construcc_alta',
         'empresa_construcc_alta',
         'consecutivo_presupuesto_siguiente',
+        'token_completar_registro',
+        'token_completar_registro_generado_at',
+        'registro_completado_at',
+    ];
+
+    protected $attributes = [
+        'is_proveedor_sp' => true,
+        'is_proveedor_catalogo' => false,
+        'perfil_empresa_completo' => false,
+        'es_cuenta_de_pruebas' => false,
+        'tipo_alta' => 1, // Por defecto se asume que el alta es por Proveedor, no por UserConstrucc
+        'consecutivo_presupuesto_siguiente' => 1, // Iniciar el consecutivo de presupuestos en 1
+        'calificacion' => 0, // Calificación inicial en 0
     ];
 
     protected $casts = [
         'fecha_registro' => 'datetime',
         'is_proveedor_sp' => 'boolean',
         'is_proveedor_catalogo' => 'boolean',
-        'cambiar_pass_default' => 'boolean',
         'perfil_empresa_completo' => 'boolean',
+        'es_cuenta_de_pruebas' => 'boolean',
+        'tipo_alta' => 'integer',
         'user_construcc_alta' => 'integer',
         'empresa_construcc_alta' => 'integer',
         'consecutivo_presupuesto_siguiente' => 'integer',
+        'token_completar_registro_generado_at' => 'datetime',
+        'registro_completado_at' => 'datetime',
     ];
 
     protected static $filters = [
@@ -96,7 +115,10 @@ class Proveedor extends BaseModel
         'estado' => 'estado',
         'municipio' => 'municipio',
         'fecha_registro' => 'fecha_registro',
-        'estatus' => 'estatus',
+        'estatus' => 'Estatus',
+        'grupo_operativos' => 'GrupoOperativos',
+        'tipo_alta' => 'TipoAlta',
+        'cuentas_pruebas' => 'CuentasPruebas',
         'notas' => 'notas',
         'email' => 'email',
         'descripcion_giro_empresa' => 'descripcion_giro_empresa',
@@ -105,7 +127,9 @@ class Proveedor extends BaseModel
         // 👇 Nuevo filtro
         'empresas_construcc' => 'EmpresasConstrucc',
         'search' => 'Search',
+        'oauth_provider' => 'OauthProvider',
     ];
+
 
     public static function eagerLodable(): array
     {
@@ -116,6 +140,7 @@ class Proveedor extends BaseModel
             'sucursales',
             'productos',
             'cuentasBancarias',
+            'regimenesFiscales',
             'empresasConstrucc',
             'solicitudesPago',
         ];
@@ -160,7 +185,108 @@ class Proveedor extends BaseModel
 
     public function scopeFilterByEstatus($query, $value)
     {
+        return $this->filterByEstatus($query, $value);
+    }
+
+    /**
+     * Filtro por estatus (listado admin).
+     */
+    public function filterByEstatus($query, $value)
+    {
+        if ($value === null || $value === '') {
+            return $query;
+        }
+
         return $query->where('estatus', $value);
+    }
+
+    /**
+     * Listado admin: segmento «Operativos» (excluye bloqueados y suspendidos).
+     */
+    public function scopeFilterByGrupoOperativos($query, $value)
+    {
+        return $this->filterByGrupoOperativos($query, $value);
+    }
+
+    public function filterByGrupoOperativos($query, $value)
+    {
+        if ($value === null || $value === '' || $value === '0' || $value === false) {
+            return $query;
+        }
+
+        return $query->whereNotIn('estatus', ['bloqueado', 'suspendido']);
+    }
+
+    /**
+     * 1 = alta proveedor (incluye null). 2 = alta usuario construcción.
+     */
+    public function scopeFilterByTipoAlta($query, $value)
+    {
+        return $this->filterByTipoAlta($query, $value);
+    }
+
+    public function filterByTipoAlta($query, $value)
+    {
+        if ($value === null || $value === '') {
+            return $query;
+        }
+
+        $tipo = (int) $value;
+
+        if ($tipo === 1) {
+            return $query->where(function ($q) {
+                $q->where('tipo_alta', 1)->orWhereNull('tipo_alta');
+            });
+        }
+
+        return $query->where('tipo_alta', $tipo);
+    }
+
+    /**
+     * Listado admin: productivas (default) / solo pruebas / todas.
+     * Valores: excluir|0 · solo|1 · todas|all
+     */
+    public function scopeFilterByCuentasPruebas($query, $value)
+    {
+        return $this->filterByCuentasPruebas($query, $value);
+    }
+
+    public function filterByCuentasPruebas($query, $value)
+    {
+        $v = is_string($value) ? strtolower(trim($value)) : $value;
+
+        if ($v === null || $v === '' || $v === 'excluir' || $v === '0' || $v === false) {
+            return $query->where('es_cuenta_de_pruebas', false);
+        }
+
+        if ($v === 'solo' || $v === '1' || $v === true) {
+            return $query->where('es_cuenta_de_pruebas', true);
+        }
+
+        if ($v === 'todas' || $v === 'all') {
+            return $query;
+        }
+
+        return $query->where('es_cuenta_de_pruebas', false);
+    }
+
+    /**
+     * Empresas cuyo usuario PRINCIPAL activo tiene OAuth (ej. google).
+     */
+    public function filterByOauthProvider($query, $value)
+    {
+        $provider = strtolower(trim((string) $value));
+        if ($provider === '') {
+            return $query;
+        }
+
+        return $query->whereHas('users', function ($q) use ($provider) {
+            $q->where('user_proveedor.tipo_relacion', 'PRINCIPAL')
+                ->where('user_proveedor.activo', true)
+                ->whereHas('oauthAccounts', function ($oq) use ($provider) {
+                    $oq->where('provider', $provider);
+                });
+        });
     }
 
     public function scopeFilterByNotas($query, $value)
@@ -287,6 +413,7 @@ class Proveedor extends BaseModel
     {
         return $query->where(function ($q) use ($value) {
             $q->where('nombre_comercial', 'like', "%$value%")
+                ->orWhere('nombre_propietario', 'like', "%$value%")
                 ->orWhere('razon_social', 'like', "%$value%")
                 ->orWhere('rfc', 'like', "%$value%")
                 ->orWhere('direccion_fiscal', 'like', "%$value%")
@@ -307,6 +434,21 @@ class Proveedor extends BaseModel
     public function cuentasBancarias(): HasMany
     {
         return $this->hasMany(CuentaBancaria::class);
+    }
+
+    /**
+     * Regímenes fiscales de la constancia (1:N).
+     */
+    public function regimenesFiscales(): HasMany
+    {
+        return $this->hasMany(ProveedorRegimenFiscal::class)
+            ->orderByDesc('es_principal')
+            ->orderBy('clave');
+    }
+
+    public function perfilPublico(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ProveedorPerfilPublico::class);
     }
 
     public function scopeCuentasActivas($query)
@@ -342,6 +484,44 @@ class Proveedor extends BaseModel
         return $this->belongsToMany(EmpresaConstrucc::class, 'empresa_construcc_proveedor')
             ->withPivot('usuario_construcc_id', 'usuario_construcc_nombre')
             ->withTimestamps();
+    }
+
+    /**
+     * Empresa constructora que registró el alta cuando tipo_alta = 2 (UserConstrucc).
+     */
+    public function empresaConstruccAlta(): BelongsTo
+    {
+        return $this->belongsTo(EmpresaConstrucc::class, 'empresa_construcc_alta');
+    }
+
+    /**
+     * Nombre del usuario construcción que dio de alta al proveedor (pivot empresa–proveedor).
+     */
+    public function nombreUsuarioConstruccAlta(): ?string
+    {
+        if (!$this->user_construcc_alta || !$this->relationLoaded('empresasConstrucc')) {
+            return null;
+        }
+
+        foreach ($this->empresasConstrucc as $empresa) {
+            if ($this->empresa_construcc_alta && (int) $empresa->id !== (int) $this->empresa_construcc_alta) {
+                continue;
+            }
+            if ((int) ($empresa->pivot->usuario_construcc_id ?? 0) === (int) $this->user_construcc_alta) {
+                $nombre = $empresa->pivot->usuario_construcc_nombre ?? null;
+
+                return $nombre !== null && $nombre !== '' ? $nombre : null;
+            }
+        }
+
+        return null;
+    }
+
+    // ================== PRESUPUESTOS ==================
+
+    public function presupuestos(): HasMany
+    {
+        return $this->hasMany(Presupuesto::class);
     }
 
     // ================== SOLICITUDES DE PAGO ==================
@@ -391,6 +571,24 @@ class Proveedor extends BaseModel
 
 
     /**
+     * Consultas de listado/gestión en rutas administradoras (incluye suspendidos y bloqueados).
+     */
+    public static function queryParaAdmin(): Builder
+    {
+        return static::withoutGlobalScope('solo_activos');
+    }
+
+    /**
+     * Empresas que sí cuentan en totales de métricas de plataforma.
+     *
+     * @see docs/context/platform-shared.md
+     */
+    public function scopeParaMetricasPlataforma($query)
+    {
+        return $query->where('es_cuenta_de_pruebas', false);
+    }
+
+    /**
      * Boot del modelo.
      *
      * Se ejecuta automáticamente cuando el modelo es inicializado por Eloquent.
@@ -426,7 +624,10 @@ class Proveedor extends BaseModel
     protected static function booted(): void
     {
         static::addGlobalScope('solo_activos', function (Builder $builder) {
-            $builder->where('estatus', '!=', EstadoUsuario::BLOQUEADO->value);
+            $builder->whereNotIn('estatus', [
+                EstadoUsuario::SUSPENDIDO->value,
+                EstadoUsuario::BLOQUEADO->value,
+            ]);
         });
     }
 }

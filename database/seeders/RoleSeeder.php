@@ -132,7 +132,12 @@ class RoleSeeder extends Seeder
                     // 'requisiciones.update',
                     'dashboard.cliente'
                 ]
-            ]
+            ],
+            [
+                'nombre' => 'ventas_purificadora_colibri',
+                'descripcion' => 'Ventas y gestión de pedidos Purificadora Colibrí',
+                'permissions' => [],
+            ],
         ];
 
         foreach ($roles as $roleData) {

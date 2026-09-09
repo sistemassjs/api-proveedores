@@ -28,9 +28,9 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #3880ff 0%, #5a95ff 100%);
-            color: #ffffff;
-            padding: 30px 20px;
+            background: transparent;
+            padding: 0;
+            margin: 0;
             text-align: center;
         }
 
@@ -207,8 +207,8 @@
         }
         
         .footer {
-            background-color: #343a40;
-            color: #ffffff;
+            background-color: #f1f5f9;
+            color: #475569;
             padding: 20px;
             text-align: center;
             font-size: 12px;
@@ -246,9 +246,7 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            @include('emails.partials.logo-app')
-            <h1>Nueva Asociación con Empresa</h1>
-            <p>¡Tu red de proveedores está creciendo!</p>
+            @include('emails.partials.app-header', ['title' => 'Nueva asociación con empresa', 'subtitle' => 'Tu red de proveedores está creciendo'])
         </div>
         
         <!-- Content -->
@@ -284,7 +282,7 @@
                     <li class="detail-item">
                         <span class="detail-icon">📅</span>
                         <span class="detail-label">Fecha:</span>
-                        <span class="detail-value">{{ now()->format('d/m/Y H:i') }}</span>
+                        <span class="detail-value">{{ now()->locale('es')->timezone('America/Mexico_City')->translatedFormat('j \\d\\e F \\d\\e Y') }} {{ now()->timezone('America/Mexico_City')->format('h:i') }} {{ now()->timezone('America/Mexico_City')->format('A') === 'AM' ? 'a.m.' : 'p.m.' }}</span>
                     </li>
                 </ul>
             </div>
@@ -318,10 +316,7 @@
         </div>
         
         <!-- Footer -->
-        <div class="footer">
-            <p>&copy; {{ date('Y') }} Sistema de Proveedores. Todos los derechos reservados.</p>
-            <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
-        </div>
+        <div class="footer">@include('emails.partials.app-footer')</div>
     </div>
 </body>
 </html>

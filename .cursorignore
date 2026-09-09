@@ -2,7 +2,7 @@
 vendor/
 node_modules/
 
-# Cache y compilación
+# Cache y compilaciÃ³n
 bootstrap/cache/
 storage/
 public/build/
@@ -28,7 +28,7 @@ storage/exports/
 storage/reports/
 storage/api-docs/
 
-# Documentación generada
+# DocumentaciÃ³n generada
 public/docs/
 coverage/
 
@@ -52,5 +52,6 @@ _ide_helper_models.php
 Thumbs.db
 
 # custom ignore
-docs/
+
+# Archivo historico (no es contexto operativo)
 .docs/

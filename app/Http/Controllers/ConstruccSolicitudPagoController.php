@@ -18,7 +18,6 @@ use App\Enums\EstadoCuentaBancaria;
 use App\Notifications\SolicitudPago\SolicitudPagoPagadaNotification;
 use App\Notifications\SolicitudPago\SolicitudPagoRechazadaNotification;
 use App\Notifications\SolicitudPago\SolicitudPagoRechazadaSinAutorizacionNotification;
-use App\Notifications\SolicitudPago\SolicitudPagoFacturaSubidaNotification;
 use App\Notifications\ProveedorEmpresa\ProveedorAsociadoAEmpresaNotification;
 use App\Services\InterApiService;
 use App\Traits\ApiResponse;
@@ -30,6 +29,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use App\Http\Requests\Construcc\SolicitudPagoUpdateConprobantePagoRequest;
+use App\Models\PagoSolicitudPago;
 use App\Notifications\SolicitudPago\SolicitudPagoComprobanteActualizadoNotification;
 use Carbon\Carbon;
 
@@ -82,29 +82,23 @@ class ConstruccSolicitudPagoController extends Controller
         $order = $request->input('order', 'desc');
         $perPage = $request->input('per_page', 10000);
 
-
         $usuarioNivel = $request->input('usuario_nivel');
         $usuarioIdFiltro = $request->input('usuario_id');
 
+        $query = SolicitudPago::query()
+            ->with(array_merge(
+                SolicitudPago::eagerLodable(),
+                ['pagos']
+            ))
+            ->where('verificada', true)
+            // ->whereHas('pagos') // 👈 CLAVE: elimina pagos vacíos
+            ->filter($filters);
+
         if ((int) $usuarioNivel === 6) {
-            $query = SolicitudPago::query()
-                ->with(SolicitudPago::eagerLodable())
-                ->where('verificada', true)
-                ->filter($filters)
-                ->where('usuario_id', (int) $usuarioIdFiltro)
-                ->orderBy($sortBy, $order);
-        } else {
-            $query = SolicitudPago::query()
-                ->with(SolicitudPago::eagerLodable())
-                ->where('verificada', true)
-                ->filter($filters)
-                ->orderBy($sortBy, $order);
+            $query->where('usuario_id', (int) $usuarioIdFiltro);
         }
 
-        // Aquí debería limitar por la empresa del usuario ConstruccApp
-        // if ($request->user()->empresa_construcc_id) {
-        //     $query->where('empresa_construcc_id', $request->user()->empresa_construcc_id);
-        // }
+        $query->orderBy($sortBy, $order);
 
         $paginator = $query->paginate($perPage);
 
@@ -113,6 +107,78 @@ class ConstruccSolicitudPagoController extends Controller
                 ConstruccSolicitudPagoResource::collection($paginator)->collection
             )
         );
+    }
+
+    /**
+     * Listado paginado segmentado por estado de solicitud ( autorizada, pendientes (pendientes sin pagos), rechazadas (del ultimo mes), abonadas (pendiientes con cpagos),todas)
+     * 
+     * parametros: usuario_nivel, usuario_id, empresa_construcc_id
+     * 
+     * si el nivel es RO: 6, solo se listan las SPP del usuario
+     * para las pagadas son las ultimas 20
+     */
+    public function pendientes(Request $request): JsonResponse
+    {
+        // $filters = $request->only(SolicitudPago::getFilters());
+
+        $usuarioNivel = (int) $request->input('usuario_nivel');
+        $usuarioIdFiltro = (int) $request->input('usuario_id');
+        $empresaConstruccId = $request->input('empresa_construcc_id');
+
+        // 🔹 Constantes de nivel (evita números mágicos)
+        $NIVEL_RO = 6;
+
+        // 🔹 Base query única
+        $baseQuery = SolicitudPago::query()
+            ->with(SolicitudPago::eagerLodable())
+            ->where('verificada', true);
+        // ->filter($filters);
+
+        // 🔥 Filtro por nivel de usuario
+        if ($usuarioNivel === $NIVEL_RO) {
+            $baseQuery->where('usuario_id', $usuarioIdFiltro);
+        }
+
+        // 🔥 Filtro por empresa
+        if (!empty($empresaConstruccId)) {
+            $baseQuery->where('empresa_construcc_id', $empresaConstruccId);
+        }
+
+        // 🔥 Definición de segmentos
+        $segmentDefs = [
+            'autorizadas' => fn($q) =>
+            $q->where('estado_solicitud', EstadoSP::AUTORIZADA->value),
+
+            'pendientes' => fn($q) =>
+            $q->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+                ->whereDoesntHave('pagos'),
+
+            'pagadas' => fn($q) =>
+            $q->where('estado_solicitud', EstadoSP::PAGADO->value)
+                ->where('updated_at', '>=', now()->subMonth())
+                ->latest('updated_at')
+                ->limit(20),
+
+            'abonadas' => fn($q) =>
+            $q->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+                ->whereHas('pagos', function ($q) {
+                    $q->whereIn('estado_pago', [
+                        PagoSolicitudPago::ESTADO_APLICADO,
+                        PagoSolicitudPago::ESTADO_PARCIAL,
+                        PagoSolicitudPago::ESTADO_COMPLETADO,
+                    ]);
+                }),
+        ];
+
+        // 🔥 Ejecutar segmentos
+        $data = [];
+        foreach ($segmentDefs as $key => $callback) {
+            $data[$key] = ConstruccSolicitudPagoResource::collection(
+                $callback(clone $baseQuery)->get()
+            );
+        }
+
+        return $this->success($data);
     }
 
     /**
@@ -272,32 +338,172 @@ class ConstruccSolicitudPagoController extends Controller
         );
     }
 
-
     /**
-     * Listado de solicitudes de pago no verificadas
-     * Solo muestra las SP que aún no han sido verificadas por el usuario construcción
+     * Listado segmentado de solicitudes NO verificadas
      */
     public function indexNoVerificadas(Request $request): JsonResponse
     {
-        $filters = $request->only(SolicitudPago::getFilters());
-        $sortBy = $request->input('sort_by', 'created_at');
-        $order = $request->input('order', 'desc');
-        $perPage = $request->input('per_page', 10000);
+        $usuarioId = (int) $request->input('usuario_id');
+        $usuarioNivel = (int) $request->input('usuario_nivel');
+        $empresaId = $request->input('empresa_construcc_id');
 
-        $query = SolicitudPago::query()
+        $NIVEL_RO = 6;
+
+        /**
+         * 🔹 BASE QUERY
+         */
+        $baseQuery = SolicitudPago::query()
             ->with(SolicitudPago::eagerLodable())
-            ->where('verificada', false)
-            ->filter($filters)
-            ->orderBy($sortBy, $order);
+            ->where('verificada', false);
 
-        $paginator = $query->paginate($perPage);
+        // 🔥 Filtro por empresa
+        if (!empty($empresaId)) {
+            $baseQuery->where('empresa_construcc_id', $empresaId);
+        }
 
-        return $this->paginated(
-            $paginator->setCollection(
-                ConstruccSolicitudPagoResource::collection($paginator)->collection
-            )
-        );
+        /**
+         * 🔥 SEGMENTOS
+         */
+        $segmentDefs = [
+
+            // 🔹 Mis SP (solo del usuario)
+            'mis_sp' => fn($q) =>
+            $q->where('usuario_id', $usuarioId),
+
+            // 🔹 SP por validar (de otros usuarios)
+            'por_validar' => fn($q) =>
+            $q->when($usuarioNivel !== $NIVEL_RO, function ($q) use ($usuarioId) {
+                $q->where('usuario_id', '!=', $usuarioId);
+            }),
+
+            // 🔹 Rechazadas (últimas 10)
+            'rechazadas' => fn($q) =>
+            $q->where('estado_solicitud', EstadoSP::RECHAZADA->value)
+                ->latest('fecha_rechazo')
+                ->limit(10),
+        ];
+
+        /**
+         * 🔥 EJECUCIÓN
+         */
+        $data = [];
+
+        foreach ($segmentDefs as $key => $callback) {
+            $data[$key] = ConstruccSolicitudPagoResource::collection(
+                $callback(clone $baseQuery)->get()
+            );
+        }
+
+        return $this->success($data);
     }
+
+
+    /**
+     * Listado segmentado de solicitudes NO verificadas
+     */
+    public function indexNoVerificadasParaRO(Request $request): JsonResponse
+    {
+        $usuarioId = (int) $request->input('usuario_id');
+        $empresaId = $request->input('empresa_construcc_id');
+
+        /**
+         * 🔹 BASE QUERY
+         */
+        $baseQuery = SolicitudPago::query()
+            ->with(SolicitudPago::eagerLodable())
+            ->where('empresa_construcc_id', $empresaId)
+            ->where('usuario_id', $usuarioId);
+
+        /**
+         * 🔥 SEGMENTOS
+         */
+        $segmentDefs = [
+
+            'por_validar' => fn($q) =>
+            $q->where('verificada', false)
+                ->where('estado_solicitud', EstadoSP::PENDIENTE->value),
+
+            'validadas' => fn($q) =>
+            $q->where('verificada', true)
+                ->where('estado_solicitud', EstadoSP::PENDIENTE->value),
+
+            'rechazadas' => fn($q) =>
+            $q->where('estado_solicitud', EstadoSP::RECHAZADA->value)
+                ->latest('fecha_rechazo')
+                ->limit(10),
+        ];
+
+        /**
+         * 🔥 EJECUCIÓN
+         */
+        $data = [];
+
+        foreach ($segmentDefs as $key => $callback) {
+            $data[$key] = ConstruccSolicitudPagoResource::collection(
+                $callback(clone $baseQuery)->get()
+            );
+        }
+
+        return $this->success($data);
+    }
+
+    /**
+     * Listado segmentado de solicitudes NO verificadas
+     */
+    public function indexNoVerificadasParaDirectores(Request $request): JsonResponse
+    {
+        $usuarioId = (int) $request->input('usuario_id');
+        $empresaId = $request->input('empresa_construcc_id');
+
+        /**
+         * 🔹 BASE QUERY
+         */
+        $baseQuery = SolicitudPago::query()
+            ->with(SolicitudPago::eagerLodable())
+            ->where('empresa_construcc_id', $empresaId);
+
+        /**
+         * 🔥 SEGMENTOS
+         */
+        $segmentDefs = [
+
+            // 🔹 SP del usuario
+            'mis_sp' => fn($q) =>
+            $q
+                ->where('usuario_id', $usuarioId)
+                ->where('verificada', false)
+                ->where('estado_solicitud', EstadoSP::PENDIENTE->value),
+
+            // 🔹 SP de la empresa sin validar
+            'por_validar' => fn($q) =>
+            $q
+                ->where('usuario_id', '!=', $usuarioId)
+                ->where('verificada', false)
+                ->where('estado_solicitud', EstadoSP::PENDIENTE->value),
+
+            // 🔹 Rechazadas de la empresa
+            'rechazadas' => fn($q) =>
+            $q
+                ->where('estado_solicitud', EstadoSP::RECHAZADA->value)
+                ->latest('fecha_rechazo')
+                ->limit(10),
+        ];
+
+        /**
+         * 🔥 EJECUCIÓN
+         */
+        $data = [];
+
+        foreach ($segmentDefs as $key => $callback) {
+            $data[$key] = ConstruccSolicitudPagoResource::collection(
+                $callback(clone $baseQuery)->get()
+            );
+        }
+
+        return $this->success($data);
+    }
+
+
 
     /**
      * Marcar una solicitud de pago como verificada
@@ -1205,10 +1411,10 @@ class ConstruccSolicitudPagoController extends Controller
         $proveedores = \App\Models\Proveedor::query()
 
             // 🔥 Mantienes tu exclusión
-            ->where(function ($q) {
-                $q->where('tipo_alta', '!=', 2)
-                    ->orWhereNull('tipo_alta');
-            })
+            // ->where(function ($q) {
+            //     $q->where('tipo_alta', '!=', 2)
+            //         ->orWhereNull('tipo_alta');
+            // })
 
             // 🔥 AQUÍ está la magia: mismo patrón que index
             ->where(function ($q) use ($empresaId, $usuarioConstruccId) {
@@ -1878,7 +2084,7 @@ class ConstruccSolicitudPagoController extends Controller
 
             // Determinar estado inicial según el nivel del usuario
             // 0: Admin, 1: DG, 2: DT, 3: DA, 5: PC - Auto-aprueban
-            // 4: SI, 6: RO - Requieren aprobación
+            // 4: SI, 6: RO, 7 - Requieren aprobación
             $nivelId = $validated['nivel_id'] ?? null;
             $nivelesDirectores = [0, 1, 2, 3, 5]; // Admin, DG, DT, DA, PC
 
@@ -2479,19 +2685,7 @@ class ConstruccSolicitudPagoController extends Controller
             'usuario_construcc_subio_factura_rol' => $request->usuario_construcc_subio_factura_rol,
         ]);
 
-        $solicitudPago->load('empresaConstrucc');
-        if ($solicitudPago->empresaConstrucc) {
-            $solicitudPago->empresaConstrucc->notify(
-                new SolicitudPagoFacturaSubidaNotification(
-                    $solicitudPago->numero_folio_solicitud,
-                    $solicitudPago->id,
-                    $solicitudPago->proveedor_id,
-                    $request->usuario_construcc_subio_factura_id,
-                    $rutaPdf,
-                    $rutaXml
-                )
-            );
-        }
+        $solicitudPago->enviarCorreoFacturaAEmpresaConstrucc($rutaPdf, $rutaXml);
 
         Log::info('Factura: Antes Notificación a InterAPI');
 
@@ -2514,5 +2708,82 @@ class ConstruccSolicitudPagoController extends Controller
             'Factura cargada correctamente.',
             201
         );
+    }
+
+
+
+
+    /**
+     * contadores 
+     */
+    public function metricas(Request $request): JsonResponse
+    {
+        // ✅ Validación
+        $request->validate([
+            'empresa_construcc_id' => ['required', 'integer'],
+            'usuario_id' => ['required', 'integer'],
+            'usuario_rol' => ['required', 'integer'],
+        ]);
+
+        $empresaId = $request->empresa_construcc_id;
+        $usuarioId = $request->usuario_id;
+        $rol = $request->usuario_rol;
+
+        /**
+         * 🔹 BASE QUERY
+         */
+        $baseQuery = SolicitudPago::on('mysql5')
+            ->where('empresa_construcc_id', $empresaId);
+
+        // 🔹 control por rol
+        if ($rol == 6) {
+            $baseQuery->where('usuario_id', $usuarioId);
+        }
+
+        /**
+         * 🔥 CONTEOS (ORM)
+         */
+
+        $pendienteAutorizar = (clone $baseQuery)
+            ->where('verificada', true)
+            ->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+            ->whereDoesntHave('pagos')
+            ->count();
+
+        $autorizadas = (clone $baseQuery)
+            ->where('verificada', true)
+            ->where('estado_solicitud', EstadoSP::AUTORIZADA->value)
+            ->count();
+
+        $porValidar = (clone $baseQuery)
+            ->where('verificada', false)
+            ->where('usuario_id', $usuarioId)
+            ->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+            ->count();
+
+        $porValidarOtros = (clone $baseQuery)
+            ->when($rol != 6, function ($q) use ($usuarioId) {
+                $q->where('usuario_id', '!=', $usuarioId);
+            })
+            ->where('verificada', false)
+            ->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+            ->count();
+
+        $sinFactura = (clone $baseQuery)
+            ->where('verificada', true)
+            ->whereIn('estado_solicitud', [
+                EstadoSP::AUTORIZADA->value,
+                EstadoSP::PAGADO->value
+            ])
+            ->where('tiene_factura', false)
+            ->count();
+
+        return $this->success([
+            'pendiente_autorizar' => $pendienteAutorizar,
+            'autorizadas' => $autorizadas,
+            'por_validar' => $porValidar,
+            'por_validar_otros' => $porValidarOtros,
+            'sin_factura' => $sinFactura,
+        ], 'Conteos obtenidos correctamente');
     }
 }

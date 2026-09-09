@@ -22,16 +22,18 @@ class ConstruccProveedorGenerarSppRequest extends FormRequest
             // Archivos - Validación condicional
             // Si hay cotización, factura no es obligatoria
             // Si NO hay cotización, factura SÍ es obligatoria
-            'cotizacion' => 'nullable|file|mimes:pdf,jpg,jpeg,png,bmp,gif,webp,doc,docx,xls,xlsx|max:10240',
+            // 'cotizacion' => 'nullable|file|mimes:pdf,jpg,jpeg,png,bmp,gif,webp,doc,docx,xls,xlsx|max:10240',
+            'cotizacion' => 'nullable|file|max:10240',
 
-            // Cuenta bancaria del proveedor (debe existir y pertenecer al proveedor)
-            'cuenta_bancaria_id' => 'required|exists:cuentas_bancarias,id',
+
+            // Cuenta bancaria del proveedor: Es opcional para las SPP generadas desde usuarios cosntrucc
+            'cuenta_bancaria_id' => 'nullable',
 
             // Recursos de construcción
             'empresa_construcc_id' => 'required|exists:empresa_construcc,id',
             'usuario_id' => 'required|integer',
             'usuario_nombre' => 'required|string|max:255',
-            'nivel_id' => 'required|integer|in:0,1,2,3,4,5,6', // 0=Admin, 1=DG, 2=DT, 3=DA, 4=SI, 5=PC, 6=RO
+            'nivel_id' => 'required|integer|in:0,1,2,3,4,5,6,7', // 0=Admin, 1=DG, 2=DT, 3=DA, 4=SI, 5=PC, 6=RO, 7
 
             // Campos adicionales de la solicitud de pago
             'obra_id' => 'nullable|integer',
@@ -41,6 +43,10 @@ class ConstruccProveedorGenerarSppRequest extends FormRequest
             'utilizara' => 'nullable|string|max:255',
             'equipo' => 'nullable|string|max:255',
             'equipo_id' => 'nullable|integer',
+
+            // Monto parcial
+            'monto_parcial' => 'nullable|numeric|min:0',
+            'motivo_parcial' => 'nullable|string|max:1000',
         ];
 
         // Validación condicional de factura
@@ -55,6 +61,15 @@ class ConstruccProveedorGenerarSppRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    protected function prepareForValidation()
+    {
+        $this->merge([
+            'cuenta_bancaria_id' => $this->cuenta_bancaria_id ?: null,
+            'monto_parcial' => $this->monto_parcial ?: null,
+            'motivo_parcial' => $this->motivo_parcial ?: null,
+        ]);
     }
 
     public function messages()
@@ -83,7 +98,7 @@ class ConstruccProveedorGenerarSppRequest extends FormRequest
             'cotizacion.max' => 'El archivo de cotización no debe superar los 10MB',
 
             // Mensajes para cuenta bancaria
-            'cuenta_bancaria_id.required' => 'La cuenta bancaria es obligatoria',
+            'cuenta_bancaria_id.nullable' => 'La cuenta bancaria es opcional',
             'cuenta_bancaria_id.exists' => 'La cuenta bancaria seleccionada no existe',
 
             // Mensajes para recursos de construcción
@@ -108,4 +123,3 @@ class ConstruccProveedorGenerarSppRequest extends FormRequest
         ];
     }
 }
- 

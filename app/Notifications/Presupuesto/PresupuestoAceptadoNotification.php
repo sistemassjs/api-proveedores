@@ -3,17 +3,16 @@
 namespace App\Notifications\Presupuesto;
 
 use App\Models\Presupuesto;
-use App\Services\FcmService;
+use App\Support\PresupuestoNotificationContent;
 use App\Support\PresupuestoPdf;
 use App\Traits\NotificationStyleTrait;
+use App\Services\FcmService;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 
-/**
- * Notificación al proveedor cuando el cliente acepta el presupuesto.
- */
 class PresupuestoAceptadoNotification extends Notification implements ShouldBroadcastNow
 {
     use NotificationStyleTrait;
@@ -26,17 +25,19 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
     {
         $via = ['broadcast', 'database'];
 
-        if ($notifiable->email && filter_var($notifiable->email, FILTER_VALIDATE_EMAIL)) {
-            $via[] = 'mail';
-        }
-
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if (
+            method_exists($notifiable, 'deviceTokens') &&
+            $notifiable->deviceTokens()->where('is_active', true)->exists()
+        ) {
             $via[] = 'fcm';
         }
 
         return $via;
     }
 
+    /**
+     * Broadcast
+     */
     public function toBroadcast(object $notifiable): BroadcastMessage
     {
         return new BroadcastMessage($this->addStylesToData($this->baseData()));
@@ -47,15 +48,21 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
         return 'presupuesto';
     }
 
+    /**
+     * Database
+     */
     public function toArray(object $notifiable): array
     {
         return $this->addStylesToData($this->baseData());
     }
 
+    /**
+     * Mail
+     */
     public function toMail(object $notifiable): MailMessage
     {
         $frontendUrl = config('app.frontend_url', config('app.url'));
-        $urlDetalle = $frontendUrl . '/pages/proveedor/presupuestos/detalle/' . $this->presupuesto->id;
+        $urlDetalle = $frontendUrl . '/pages/proveedor/presupuestos/preview/' . $this->presupuesto->id;
 
         $mail = (new MailMessage)
             ->subject('Presupuesto aceptado #' . $this->presupuesto->numero_presupuesto)
@@ -63,23 +70,28 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
                 'notifiable' => $notifiable,
                 'presupuesto' => $this->presupuesto,
                 'urlDetalle' => $urlDetalle,
+                'proveedorLogo' => $this->resolverLogoProveedorBase64(),
             ]);
 
         try {
             $this->presupuesto->loadMissing(Presupuesto::eagerLodable());
             $pdf = PresupuestoPdf::renderPdfBinary($this->presupuesto);
+
             $mail->attachData(
                 $pdf,
                 'Presupuesto_' . $this->presupuesto->numero_presupuesto . '.pdf',
                 ['mime' => 'application/pdf']
             );
         } catch (\Throwable $e) {
-            // El correo sigue enviándose sin adjunto si falla el PDF
+            // opcional: log si quieres visibilidad
         }
 
         return $mail;
     }
 
+    /**
+     * FCM (correcto)
+     */
     public function toFcm(object $notifiable): void
     {
         $tokens = $notifiable->deviceTokens()
@@ -91,36 +103,101 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
             return;
         }
 
-        $cliente = $this->presupuesto->empresa_receptora_empresa ?? $this->presupuesto->empresa_receptora_nombre ?? 'el cliente';
+        $base = $this->addStylesToData($this->baseData());
 
-        app(FcmService::class)->sendToTokens(
-            $tokens,
-            [
-                'title' => 'Presupuesto aceptado #' . $this->presupuesto->numero_presupuesto,
-                'body' => $cliente . ' aceptó tu presupuesto.',
-            ],
-            $this->addStylesToData([
-                'action_url' => '/pages/proveedor/presupuestos/detalle/' . $this->presupuesto->id,
-            ])
-        );
+        $notification = [
+            'title' => $base['titulo'],
+            'body' => $base['mensaje'],
+        ];
+
+        $data = [
+            'titulo' => (string) $base['titulo'],
+            'mensaje' => (string) $base['mensaje'],
+            'tipo' => 'presupuesto',
+            'subtipo' => (string) $base['subtipo'],
+            'action_url' => (string) $base['action_url'],
+            'presupuesto_id' => (string) $base['presupuesto_id'],
+            'presupuesto_numero' => (string) $base['presupuesto_numero'],
+            'proveedor_id' => (string) $base['proveedor_id'],
+            'estatus' => (string) $base['estatus'],
+            'usuario_envio_nombre' => (string) $base['usuario_envio_nombre'],
+            'empresa_emisora_nombre' => (string) $base['empresa_emisora_nombre'],
+            'fecha_emision' => (string) ($base['fecha_emision'] ?? ''),
+            'destinatario_nombre' => (string) ($base['destinatario_nombre'] ?? ''),
+            'empresa_logo_url' => (string) ($base['empresa_logo_url'] ?? ''),
+            'timestamp' => (string) $base['timestamp'],
+        ];
+
+        $data = $this->addStylesToData($data);
+
+        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
     }
 
+    /**
+     * Base data
+     */
     private function baseData(): array
     {
-        $cliente = $this->presupuesto->empresa_receptora_empresa ?? $this->presupuesto->empresa_receptora_nombre ?? 'el cliente';
+        $ctx = PresupuestoNotificationContent::contexto($this->presupuesto);
+        $mensajeBase = 'Emisión '.$ctx['fecha_emision_display'].' · '.$ctx['emisor_empresa'];
 
-        return [
+        return array_merge([
             'tipo' => 'presupuesto',
             'subtipo' => 'aceptado',
-            'titulo' => 'Presupuesto aceptado #' . $this->presupuesto->numero_presupuesto,
-            'mensaje' => $cliente . ' aceptó tu presupuesto.',
-            'action_url' => '/pages/proveedor/presupuestos/detalle/' . $this->presupuesto->id,
+            'titulo' => PresupuestoNotificationContent::tituloBandeja($this->presupuesto, 'aceptado'),
+            'mensaje' => PresupuestoNotificationContent::mensajeConHechos($mensajeBase, $this->presupuesto),
+            'action_url' => '/pages/proveedor/presupuestos/preview/'.$this->presupuesto->id,
             'presupuesto_id' => $this->presupuesto->id,
-            'presupuesto_numero' => $this->presupuesto->numero_presupuesto,
             'proveedor_id' => $this->presupuesto->proveedor_id,
+            'usuario_envio_id' => $this->presupuesto->user_id,
+            'evento' => 'aceptacion',
             'estatus' => 'aceptado',
             'timestamp' => now()->toIso8601String(),
-        ];
+        ], PresupuestoNotificationContent::camposEstructurados($this->presupuesto, 'aceptado'));
+    }
+
+    private function resolverLogoProveedorBase64(): ?string
+    {
+        $logo = $this->presupuesto->proveedor?->logo;
+        if (! is_string($logo) || trim($logo) === '') {
+            return null;
+        }
+
+        if (str_starts_with($logo, 'data:image')) {
+            return $logo;
+        }
+
+        if (filter_var($logo, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $logoPath = null;
+        if (str_starts_with($logo, '/') || str_starts_with($logo, 'storage/')) {
+            $logoPath = public_path($logo);
+        } elseif (Storage::disk('public')->exists($logo)) {
+            $logoPath = Storage::disk('public')->path($logo);
+        } else {
+            $logoPath = public_path('storage/' . $logo);
+        }
+
+        if (! $logoPath || ! is_readable($logoPath)) {
+            return null;
+        }
+
+        $binary = @file_get_contents($logoPath);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode($binary);
     }
 
     protected function getNotificationTipo(): string

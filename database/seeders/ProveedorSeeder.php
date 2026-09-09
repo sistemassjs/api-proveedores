@@ -48,7 +48,6 @@ class ProveedorSeeder extends Seeder
                 'calificacion' => round(mt_rand(30, 50) / 10, 2),
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
             // $user1->proveedores()->attach($proveedor1->id, ['is_main' => true]);
@@ -90,7 +89,6 @@ class ProveedorSeeder extends Seeder
                 'calificacion' => round(mt_rand(30, 50) / 10, 2),
                 'is_proveedor_sp' => false,
                 'is_proveedor_catalogo' => true,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
             // $user2->proveedores()->attach($proveedor2->id, ['is_main' => true]);
@@ -132,7 +130,6 @@ class ProveedorSeeder extends Seeder
                 'calificacion' => round(mt_rand(30, 50) / 10, 2),
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
             // $user3->proveedores()->attach($proveedor3->id, ['is_main' => true]);

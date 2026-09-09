@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,7 +17,7 @@ class MarcaResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'logo' => asset('storage/'.$this->logo),
+            'logo' => PublicStorageUrl::make($this->logo),
             'nombre' => $this->nombre,
             'descripcion' => $this->descripcion,
             'productos_count' => $this->productos_count, // 👈 aquí lo expones

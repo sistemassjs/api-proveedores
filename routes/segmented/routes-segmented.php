@@ -34,6 +34,8 @@ require __DIR__ . '/construcc.php';
 // 1. Rutas públicas (sin autenticación)
 require __DIR__ . '/public.php';
 
+require __DIR__ . '/puricadora_colibri.php';
+
 // 2. Rutas de autenticación protegidas
 require __DIR__ . '/auth.php';
 

@@ -20,6 +20,9 @@ class ContactoController extends Controller
     {
         try {
             $validated = $request->validated();
+            $files = $request->hasFile('files')
+                ? (array) $request->file('files')
+                : [];
 
             // Obtener destinatarios de contacto desde configuración (env: MAIL_CONTACT_RECIPIENTS)
             $destinatarios = config('mail.contact_recipients', []);
@@ -36,11 +39,13 @@ class ContactoController extends Controller
             // Usar BCC para que los destinatarios no vean los correos de los demás
             $mail = new ContactoMail(
                 $validated['nombre'],
-                $validated['email'] ?? null,
-                $validated['telefono'] ?? null,
-                $validated['empresa'] ?? null,
-                $validated['mensaje']
+                $validated['email'] ?? '',
+                $validated['telefono'] ?? '',
+                $validated['empresa'] ?? '',
+                $validated['mensaje'] ?? '',
+                $files // 👈 aquí
             );
+            
             Mail::to(config('mail.from.address'))->bcc($destinatarios)->send($mail);
 
             // Log del envío exitoso

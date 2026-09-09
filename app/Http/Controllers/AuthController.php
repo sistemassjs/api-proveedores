@@ -12,14 +12,16 @@ use App\Http\Requests\Auth\AuthUpdateFotoPerfilRequest;
 use App\Http\Requests\Auth\AuthUpdateUserDataRequest;
 use App\Http\Requests\Auth\PasswordResetRequest;
 use App\Http\Requests\Auth\PasswordResetCompleteRequest;
-use App\Http\Requests\Proveedor\ProveedorRegisterCompleteRequest;
-use App\Http\Requests\Proveedor\ProveedorRegisterRequest;
-use App\Http\Requests\Proveedor\ProveedorRegistroBasicoCompleteRequest;
-use App\Http\Requests\Proveedor\ProveedorRegistroBasicoRequest;
-use App\Http\Requests\Proveedor\ProveedorAsociarEmpresaRequest;
+use App\Http\Requests\Auth\ProveedorRegisterCompleteRequest;
+use App\Http\Requests\Auth\ProveedorRegistroBasicoCompleteRequest;
+use App\Http\Requests\Auth\ProveedorRegistroBasicoRequest;
+use App\Http\Requests\Auth\ProveedorAsociarEmpresaRequest;
+use App\Http\Requests\Auth\ProveedorRegisterRequest;
+use App\Http\Requests\Auth\ProveedorReenviarCorreoRegistroRequest;
 use App\Http\Requests\Auth\CompletarRegistroProveedorRequest;
 use App\Http\Resources\ProveedorResource;
-use App\Http\Resources\UserAuthenticateResource;
+use App\Http\Resources\Auth\UserAuthenticateResource;
+use App\Support\UserCuentaEstado;
 use App\Mail\CompletaRegistroProveedorMail;
 use App\Mail\CompletaRegistroUsuarioMail;
 use App\Mail\VerifyUpdatedEmailMail;
@@ -30,7 +32,7 @@ use App\Models\EmpresaConstrucc;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\Auth\CuentaVerificadaNotification;
-use App\Notifications\ProveedorEmpresa\ProveedorAsociadoAEmpresaNotification;
+use App\Notifications\Auth\NewUserNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +47,11 @@ use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
+    /**
+     * ID del usuario admin a notificar, ing. Julio
+     */
+    public int $id_user_admin_a_notificar = 2;
+
     public function register(AuthRegisterRequest $request)
     {
         $validatedData = $request->validated();
@@ -81,56 +88,282 @@ class AuthController extends Controller
         // TODO: Add request to CONSTRUCC APP
         // ...
 
-        return $this->success($data, 'Proveedor pendiente de completar registro');
+        return $this->success($data, 'Usuario pendiente de completar registro en GestionPlus');
         // [
         //     'user' => new UserResource($user->load(User::eagerLodable())),
         //     'data' => $data
         // ],
     }
 
+    /**
+     * Registra un nuevo proveedor en la base de datos.
+     */
     public function register_proveedor(ProveedorRegisterRequest $request)
     {
-        $proveedor = Proveedor::create($request->validated());
-        $token = Str::random(60);
+        $validatedData = $request->validated();
 
-        Cache::put("registro_proveedor_{$token}", $proveedor->id, 60 * 60 * 24 * 7 * 360); // 1 año
+        $proveedorExistente = Proveedor::withoutGlobalScope('solo_activos')->where(function ($query) use ($validatedData) {
+            if (isset($validatedData['telefono_codigo_pais'], $validatedData['telefono'])) {
+                $query->where('telefono_codigo_pais', $validatedData['telefono_codigo_pais'])
+                    ->where('telefono', $validatedData['telefono']);
+            }
 
-        $url = config('services.frontend.url') . "/gen-pass?token={$token}";
-        Mail::to($proveedor->email)->send(new CompletaRegistroProveedorMail($url));
+            if (isset($validatedData['razon_social'])) {
+                $query->orWhere('razon_social', strtoupper($validatedData['razon_social']));
+            }
+
+            $telefonoCompleto = ($validatedData['telefono_codigo_pais'] ?? '') . ($validatedData['telefono'] ?? '');
+            if (isset($validatedData['email']) && $validatedData['email'] !== $telefonoCompleto) {
+                $query->orWhere('email', $validatedData['email']);
+            }
+        })->first();
+
+        if ($proveedorExistente) {
+            if ($this->proveedorTieneRegistroCompletado($proveedorExistente)) {
+                return $this->error(
+                    'Tu empresa ya completó el registro en GestiónPlus. Inicia sesión con tu correo y contraseña.',
+                    ['codigo' => 'registro_ya_completado'],
+                    409
+                );
+            }
+
+            if ($proveedorExistente->tipo_alta == 1) {
+                return $this->error(
+                    'Teléfono ya registrado. Recupera tu contraseña si no puedes entrar.',
+                    [
+                        'campo_duplicado' => 'telefono',
+                        'valor' => $proveedorExistente->telefono,
+                    ],
+                    409
+                );
+            }
+
+            if ($proveedorExistente->tipo_alta == 2) {
+                $proveedorExistente->load(['cuentasBancarias', 'empresasConstrucc']);
+
+                $tokenData = [
+                    'proveedor_id' => $proveedorExistente->id,
+                    'timestamp' => time(),
+                    'telefono' => $proveedorExistente->telefono,
+                ];
+                $tokenTemporal = base64_encode(json_encode($tokenData));
+
+                return $this->success([
+                    'requiere_completar_registro' => true,
+                    'proveedor' => [
+                        'id' => $proveedorExistente->id,
+                        'razon_social' => $proveedorExistente->razon_social,
+                        'nombre_comercial' => $proveedorExistente->nombre_comercial,
+                        'email' => $proveedorExistente->email,
+                        'telefono' => $proveedorExistente->telefono,
+                        'cuentas_bancarias' => $proveedorExistente->cuentasBancarias->map(function ($cuenta) {
+                            $tipo = $cuenta->clabe ? 'clabe' : ($cuenta->cuenta ? 'cuenta' : 'tarjeta');
+
+                            return [
+                                'id' => $cuenta->id,
+                                'alias' => $cuenta->alias,
+                                'banco_nombre' => $cuenta->banco_nombre,
+                                'tipo_cuenta' => $tipo,
+                                'cuenta' => $cuenta->cuenta,
+                                'clabe' => $cuenta->clabe,
+                                'tarjeta' => $cuenta->tarjeta,
+                                'preferida' => $cuenta->preferida,
+                            ];
+                        }),
+                        'empresas_construcc' => $proveedorExistente->empresasConstrucc->map(function ($empresa) {
+                            return [
+                                'id' => $empresa->id,
+                                'nombre' => $empresa->nombre,
+                            ];
+                        }),
+                    ],
+                    'token_temporal' => $tokenTemporal,
+                ], 'Empresa ya registrada. Verifica tus datos y completa el registro.', 200);
+            }
+
+            $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedorExistente);
+            $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+
+            return $this->success([
+                'url' => $url,
+                'data' => $proveedorExistente->load(Proveedor::eagerLodable()),
+            ], 'Revisa tu correo para activar la cuenta.', 200);
+        }
+
+        $proveedor = Proveedor::create($validatedData);
+        $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
+        $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
 
         return $this->success([
             'url' => $url,
             'data' => $proveedor->load(Proveedor::eagerLodable()),
-        ], 'Proveedor registrado. Revisa tu correo para continuar.', 200);
+        ], 'Revisa tu correo para activar la cuenta.', 200);
     }
 
-    public function register_proveedor_completar(ProveedorRegisterCompleteRequest $request)
+    /**
+     * Reenvía el correo para completar registro con validaciones explícitas por escenario.
+     */
+    public function reenviarCorreoRegistroProveedor(ProveedorReenviarCorreoRegistroRequest $request)
     {
-        $proveedorId = Cache::get("registro_proveedor_{$request->token}");
-        if (! $proveedorId) {
-            return $this->error('Token inválido o expirado', [], 498);
+        $email = strtolower(trim($request->validated('email')));
+
+        $proveedor = Proveedor::withoutGlobalScope('solo_activos')
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        if (! $proveedor) {
+            return $this->error(
+                'Este correo no está registrado.',
+                ['codigo' => 'proveedor_no_encontrado'],
+                404
+            );
         }
 
-        $proveedor = Proveedor::findOrFail($proveedorId);
+        if ($this->proveedorTieneRegistroCompletado($proveedor)) {
+            return $this->error(
+                'El registro ya está completado. Inicia sesión o recupera tu contraseña.',
+                ['codigo' => 'registro_ya_completado'],
+                409
+            );
+        }
+
+        if ($proveedor->estatus === EstadoUsuario::BLOQUEADO->value) {
+            return $this->error(
+                'Cuenta bloqueada. Contacta a soporte.',
+                ['codigo' => 'proveedor_bloqueado'],
+                403
+            );
+        }
+
+        if ($proveedor->estatus === EstadoUsuario::SUSPENDIDO->value) {
+            return $this->error(
+                'Cuenta suspendida. Contacta a soporte.',
+                ['codigo' => 'proveedor_suspendido'],
+                403
+            );
+        }
+
+        if ((int) $proveedor->tipo_alta === 2) {
+            return $this->error(
+                'Registro desde Construcción: completa la activación en ese módulo.',
+                ['codigo' => 'registro_construccion_pendiente'],
+                422
+            );
+        }
+
+        $tieneUsuarioActivo = DB::table('user_proveedor')
+            ->where('proveedor_id', $proveedor->id)
+            ->where('activo', true)
+            ->exists();
+
+        if ($tieneUsuarioActivo) {
+            return $this->error(
+                'Ya tienes usuario. Inicia sesión o recupera tu contraseña.',
+                ['codigo' => 'usuario_ya_existe'],
+                409
+            );
+        }
+
+        if (
+            $proveedor->token_completar_registro === null
+            || $proveedor->token_completar_registro_generado_at === null
+        ) {
+            return $this->error(
+                'No hay activación pendiente. Regístrate de nuevo o contacta soporte.',
+                ['codigo' => 'sin_enlace_pendiente'],
+                422
+            );
+        }
+
+        $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
+
+        return $this->success(
+            [],
+            'Correo reenviado. Revisa bandeja y spam.',
+            200
+        );
+    }
+
+    /**
+     * Completa el registro de un proveedor
+     * 
+     * @param ProveedorRegisterCompleteRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function register_proveedor_completar(ProveedorRegisterCompleteRequest $request)
+    {
+        $normalizedToken = preg_replace('/\s+/', '', urldecode(trim((string) $request->input('token'))));
+        $tokenHash = hash('sha256', $normalizedToken);
+
+        $proveedor = Proveedor::withoutGlobalScope('solo_activos')
+            ->where(function ($query) use ($normalizedToken, $tokenHash) {
+                $query->where('token_completar_registro', $normalizedToken)
+                    ->orWhere('token_completar_registro', $tokenHash);
+            })
+            ->first();
+
+        if (! $proveedor) {
+            return $this->error(
+                'Enlace inválido o ya utilizado. Si tu empresa ya activó la cuenta, inicia sesión. Si no, solicita un nuevo correo de activación.',
+                ['codigo' => 'token_invalido'],
+                498
+            );
+        }
+
+        if ($this->proveedorTieneRegistroCompletado($proveedor)) {
+            return $this->error(
+                'Tu empresa ya completó el registro en GestiónPlus. Inicia sesión con tu correo y contraseña.',
+                ['codigo' => 'registro_ya_completado'],
+                409
+            );
+        }
+
+        if ($proveedor->estatus === EstadoUsuario::BLOQUEADO->value) {
+            return $this->error(
+                'La cuenta de la empresa está bloqueada. Contacta a soporte para reactivarla.',
+                ['codigo' => 'proveedor_bloqueado'],
+                403
+            );
+        }
+
+        if ($proveedor->estatus === EstadoUsuario::SUSPENDIDO->value) {
+            return $this->error(
+                'La cuenta de la empresa está suspendida. Contacta a soporte.',
+                ['codigo' => 'proveedor_suspendido'],
+                403
+            );
+        }
+
+        if ((int) $proveedor->tipo_alta === 2) {
+            return $this->error(
+                'Este registro debe completarse desde el módulo de Construcción.',
+                ['codigo' => 'registro_construccion_pendiente'],
+                422
+            );
+        }
 
         if (! $proveedor->user) {
             $idRoleProveedor = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->first()->id;
             $user = User::create([
-                'name' => $proveedor->nombre_comercial,
+                'name' => $proveedor->nombre_propietario,
                 'email' => $proveedor->email,
+                'telefono_codigo_pais' => $proveedor->telefono_codigo_pais,
+                'telefono' => $proveedor->telefono,
                 'password' => Hash::make($request->password),
                 'role_id' => $idRoleProveedor,
+                'cambiar_pass_default' => false
             ]);
 
             $user->proveedores()->attach($proveedor->id, [
                 'tipo_relacion' => 'PRINCIPAL',
                 'activo' => true,
                 'fecha_asignacion' => now(),
-                'observaciones' => 'Usuario principal del proveedor',
+                'observaciones' => 'Usuario principal de la empresa',
             ]);
         } else {
             $user = $proveedor->user;
             $user->password = Hash::make($request->password);
+            $user->cambiar_pass_default = false;
             $user->save();
         }
 
@@ -151,14 +384,26 @@ class AuthController extends Controller
             ]);
         }
 
-        Cache::forget("registro_proveedor_{$request->token}");
+        $proveedor->update([
+            'registro_completado_at' => now(),
+            'token_completar_registro' => null,
+            'estatus' => EstadoUsuario::REGISTRO_COMPLETADO->value,
+        ]);
+
         $token = $user->createToken('auth_token')->plainTextToken;
+
+        // $admin = User::find($this->id_user_admin_a_notificar);
+        $admins = User::administradoresActivos()->get();
+
+        foreach ($admins as $admin) {
+            $admin->notify(new NewUserNotification($user, $proveedor));
+        }
 
         return $this->success([
             'user' => new UserAuthenticateResource($user->load(User::eagerLodable())),
             'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
             'token' => $token,
-        ], 'Registro completado', 201);
+        ], 'Registro completado exitosamente en GestionPlus', 201);
     }
 
     public function update_foto_perfil(AuthUpdateFotoPerfilRequest $request)
@@ -193,14 +438,21 @@ class AuthController extends Controller
             // Buscar usuario por email o teléfono
             $user = User::where(function ($q) use ($request) {
                 $q->where('email', $request->email)
+                    ->orWhere('telefono', $request->email)
                     ->orWhere('telefono', $request->email);
-            })
-                ->where('status', '!=', EstadoUsuario::BLOQUEADO->value)
-                ->where('status', '!=', EstadoUsuario::SUSPENDIDO->value)
-                ->first();
+            })->first();
 
-            if (! $user || ! Hash::check($request->password, $user->password)) {
-                throw new UnauthorizedException('Credenciales incorrectas.');
+            if (! $user || blank($user->password) || ! Hash::check($request->password, $user->password)) {
+                throw new UnauthorizedException('Credenciales incorrectas en GestionPlus.');
+            }
+
+            $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($user);
+            if (! $cuentaCheck['ok']) {
+                return $this->error(
+                    $cuentaCheck['message'],
+                    ['codigo' => $cuentaCheck['codigo']],
+                    403
+                );
             }
 
             $token = $user->createToken('API Token')->plainTextToken;
@@ -210,18 +462,18 @@ class AuthController extends Controller
             return $this->success([
                 'user' => new UserAuthenticateResource($user),
                 'token' => $token,
-            ], 'Login exitoso.', 201);
+            ], 'Login exitoso en GestionPlus.', 201);
         } catch (ValidationException $e) {
             // Error en la validación de los datos de entrada
-            return $this->error('Los datos proporcionados no son válidos.', $e->errors(), 422);
+            return $this->error('Los datos proporcionados no son válidos en GestionPlus.', $e->errors(), 422);
         } catch (UnauthorizedException $e) {
             // Credenciales incorrectas o acceso no autorizado
-            Log::error('Error al iniciar sesión: ' . $e->getMessage());
+            Log::error('Error al iniciar sesión en GestionPlus: ' . $e->getMessage());
             return $this->error($e->getMessage(), [], 401);
         } catch (\Exception $e) {
             // Cualquier otro error inesperado
-            Log::error('Error al iniciar sesión: ' . $e->getMessage());
-            return $this->error('Ocurrió un error al intentar iniciar sesión.', [], 500);
+            Log::error('Error al iniciar sesión en GestionPlus: ' . $e->getMessage());
+            return $this->error('Ocurrió un error al intentar iniciar sesión en GestionPlus.', [], 500);
         }
     }
 
@@ -250,7 +502,7 @@ class AuthController extends Controller
     public function refresh(Request $request)
     {
         if (! $request->user()) {
-            throw new UnauthorizedException('No autorizado o sesión no válida');
+            throw new UnauthorizedException('No autorizado o sesión no válida en GestionPlus');
         }
 
         $user = $request->user();
@@ -275,7 +527,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         if (! $request->user()) {
-            throw new UnauthorizedException('No autorizado o sesión no válida');
+            throw new UnauthorizedException('No autorizado o sesión no válida en GestionPlus');
         }
 
         // Solo eliminar el token del dispositivo actual, no todos los tokens
@@ -285,7 +537,7 @@ class AuthController extends Controller
             [
                 'success' => true,
             ],
-            'Sesión cerrada correctamente',
+            'Sesión cerrada correctamente en GestionPlus',
             200
         );
     }
@@ -316,7 +568,7 @@ class AuthController extends Controller
             'user' => new UserAuthenticateResource($user),
             'token' => $newToken,
             'proveedor' => new ProveedorResource($proveedor),
-        ], 'Token renovado exitosamente', 200);
+        ], 'Token renovado exitosamente en GestionPlus', 200);
     }
 
     /**
@@ -330,28 +582,47 @@ class AuthController extends Controller
         try {
             $validatedData = $request->validated();
 
-            // VALIDACIÓN: Verificar si el proveedor ya existe (RFC, email o teléfono)
             $proveedorExistente = Proveedor::where(function ($query) use ($validatedData) {
-                $query->where('telefono', $validatedData['telefono']);
 
-                // Si se proporcionó RFC en el request (aunque no está en el FormRequest actual, podría agregarse)
-                if (isset($validatedData['rfc'])) {
-                    $query->orWhere('rfc', strtoupper($validatedData['rfc']));
+                // TELÉFONO
+                if (!empty($validatedData['telefono'])) {
+                    $query->orWhere('telefono', $validatedData['telefono']);
                 }
 
-                // Si se proporcionó email diferente al teléfono
-                if (isset($validatedData['email']) && $validatedData['email'] !== $validatedData['telefono']) {
-                    $query->orWhere('email', $validatedData['email']);
+                // RFC
+                if (!empty($validatedData['rfc'])) {
+                    $query->orWhereRaw('UPPER(rfc) = ?', [
+                        strtoupper(trim($validatedData['rfc']))
+                    ]);
                 }
-            })->first();
 
-            $this->success($proveedorExistente, 'Proveedor encontrado', 200);
+                // RAZÓN SOCIAL
+                if (!empty($validatedData['razon_social'])) {
+                    $query->orWhereRaw('LOWER(razon_social) = ?', [
+                        strtolower(trim($validatedData['razon_social']))
+                    ]);
+                }
+
+                // EMAIL
+                if (!empty($validatedData['email'])) {
+                    $query->orWhereRaw('LOWER(email) = ?', [
+                        strtolower(trim($validatedData['email']))
+                    ]);
+                }
+            })
+                ->where(function ($q) {
+                    $q->where('tipo_alta', 1)
+                        ->orWhereNull('tipo_alta');
+                })
+                ->first();
+
+            $this->success($proveedorExistente, 'Proveedor encontrado en GestionPlus', 200);
 
             if ($proveedorExistente) {
                 // Caso 1: Proveedor ya tiene usuario asignado (tipo_alta = 1)
                 if ($proveedorExistente->tipo_alta == 1) {
                     return $this->error(
-                        'Este teléfono ya está registrado con un usuario activo. Si olvidaste tu contraseña, usa la opción de recuperación.',
+                        'Este teléfono ya está registrado con un usuario activo en GestionPlus. Si olvidaste tu contraseña, usa la opción de recuperación en GestionPlus.',
                         [
                             'campo_duplicado' => 'telefono',
                             'valor' => $validatedData['telefono'],
@@ -403,7 +674,7 @@ class AuthController extends Controller
                             }),
                         ],
                         'token_temporal' => $tokenTemporal,
-                    ], 'Tu empresa ya está registrada. Verifica tus datos y completa el registro.', 200);
+                    ], 'Empresa ya registrada. Verifica tus datos y completa el registro en GestionPlus.', 200);
                 }
             }
 
@@ -415,28 +686,32 @@ class AuthController extends Controller
                 'telefono' => $validatedData['telefono'],
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => false,
                 'perfil_empresa_completo' => false,
             ]);
 
-            // Obtener rol de gerente
-            $idRoleProveedor = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->first()->id;
+            // EL USUARIO ES CUANDO NOS E VALIDA
+            if (!$request->solo_validar) {
 
-            // Crear usuario usando el teléfono como identificador
-            $user = User::create([
-                'name' => $validatedData['nombre_comercial'],
-                'email' => $validatedData['telefono'], // Usar teléfono como email/usuario
-                'password' => Hash::make($validatedData['password']),
-                'role_id' => $idRoleProveedor,
-            ]);
+                // Obtener rol de gerente
+                $idRoleProveedor = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->first()->id;
 
-            // Relacionar usuario con proveedor
-            $user->proveedores()->attach($proveedor->id, [
-                'tipo_relacion' => 'PRINCIPAL',
-                'activo' => true,
-                'fecha_asignacion' => now(),
-                'observaciones' => 'Usuario principal del proveedor - Registro por enlace',
-            ]);
+                // Crear usuario usando el teléfono como identificador
+                $user = User::create([
+                    'name' => $validatedData['nombre_comercial'],
+                    'email' => $validatedData['telefono'], // Usar teléfono como email/usuario
+                    'password' => Hash::make($validatedData['password']),
+                    'role_id' => $idRoleProveedor,
+                    'cambiar_pass_default' => false,
+                ]);
+
+                // Relacionar usuario con proveedor
+                $user->proveedores()->attach($proveedor->id, [
+                    'tipo_relacion' => 'PRINCIPAL',
+                    'activo' => true,
+                    'fecha_asignacion' => now(),
+                    'observaciones' => 'Usuario principal del proveedor - Registro por enlace',
+                ]);
+            }
 
             // Crear sucursal matriz por defecto
             $proveedor->sucursales()->create([
@@ -450,6 +725,12 @@ class AuthController extends Controller
                 'coordenadas_lng' => null,
                 'estatus' => 'activo',
             ]);
+
+            if ($request->solo_validar) {
+                return $this->success([
+                    'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
+                ], 'Validación exitosa. El proveedor no fue registrado, solo se verificaron los datos en GestionPlus.', 200);
+            }
 
             // Registrar relación con empresa Construcc si se proporcionaron los datos
             if (isset($validatedData['empresa_construcc_id'])) {
@@ -476,13 +757,17 @@ class AuthController extends Controller
                     'usuario' => $validatedData['telefono'],
                     'mensaje' => 'Guarda tu usuario para iniciar sesión',
                 ],
-            ], 'Registro completado exitosamente', 201);
+            ], 'Registro completado exitosamente en GestionPlus', 201);
         } catch (ValidationException $e) {
             // Error en la validación de los datos de entrada
-            return $this->error('Los datos proporcionados no son válidos.', $e->errors(), 422);
+            return $this->error('Los datos proporcionados no son válidos en GestionPlus.', $e->errors(), 422);
         } catch (\Exception $e) {
+            Log::info('Error en register_proveedor_basico_sp en GestionPlus', [
+                'error_message' => $e->getMessage(),
+                'stack_trace' => $e->getTraceAsString(),
+            ]);
             // Cualquier otro error inesperado
-            return $this->error('Ocurrió un error al intentar completar el registro. Por favor, intenta nuevamente.', [], 500);
+            return $this->error('Ocurrió un error al intentar completar el registro en GestionPlus. Por favor, intenta nuevamente.', [], 500);
         }
     }
 
@@ -506,7 +791,7 @@ class AuthController extends Controller
             // 2. Validar que sea tipo_alta = 2
             if ($proveedor->tipo_alta !== 2) {
                 return $this->error(
-                    'Este proveedor no requiere completar registro. Ya tiene un usuario asignado.',
+                    'Este proveedor no requiere completar registro en GestionPlus. Ya tiene un usuario asignado.',
                     null,
                     403
                 );
@@ -523,10 +808,10 @@ class AuthController extends Controller
                     (time() - $tokenData['timestamp']) > 3600
                 ) { // Token válido por 1 hora
 
-                    return $this->error('Token inválido o expirado. Por favor, intenta registrarte nuevamente.', null, 403);
+                    return $this->error('Token inválido o expirado en GestionPlus. Por favor, intenta registrarte nuevamente.', null, 403);
                 }
             } catch (\Exception $e) {
-                return $this->error('Token inválido. Por favor, intenta registrarte nuevamente.', null, 403);
+                return $this->error('Token inválido en GestionPlus. Por favor, intenta registrarte nuevamente.', null, 403);
             }
 
             // 4. Actualizar datos del proveedor si se enviaron
@@ -559,10 +844,12 @@ class AuthController extends Controller
                     'email' => $proveedor->telefono,
                     'password' => Hash::make($validatedData['password']),
                     'role_id' => $idRoleProveedor,
+                    'cambiar_pass_default' => false,
                 ]);
             } else {
                 // Si el usuario ya existe, actualizar la contraseña
                 $user->password = Hash::make($validatedData['password']);
+                $user->cambiar_pass_default = false;
                 $user->save();
             }
 
@@ -574,7 +861,7 @@ class AuthController extends Controller
                     'tipo_relacion' => 'PRINCIPAL',
                     'activo' => true,
                     'fecha_asignacion' => now(),
-                    'observaciones' => 'Usuario completó registro desde tipo_alta=2',
+                    'observaciones' => 'Usuario completó registro desde tipo_alta=2 en GestionPlus',
                 ]);
             }
 
@@ -594,7 +881,7 @@ class AuthController extends Controller
             }
 
             // 10. Registrar en logs
-            Log::info('Proveedor completó registro desde tipo_alta=2 a tipo_alta=1', [
+            Log::info('Proveedor completó registro desde tipo_alta=2 a tipo_alta=1 en GestionPlus', [
                 'proveedor_id' => $proveedor->id,
                 'user_id' => $user->id,
                 'telefono' => $proveedor->telefono,
@@ -611,18 +898,17 @@ class AuthController extends Controller
                 'user' => new UserAuthenticateResource($user),
                 'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
                 'token' => $token,
-                'mensaje' => 'Registro completado exitosamente. Ya puedes iniciar sesión.',
-            ], 'Registro completado exitosamente', 201);
+            ], 'Registro completado exitosamente en GestionPlus. Ya puedes iniciar sesión.', 201);
         } catch (\Exception $e) {
             DB::rollBack();
 
-            Log::error('Error al completar registro de proveedor', [
+            Log::error('Error al completar registro de proveedor en GestionPlus', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return $this->error(
-                'Ocurrió un error al completar el registro. Por favor, intenta nuevamente.',
+                'Ocurrió un error al completar el registro en GestionPlus. Por favor, intenta nuevamente.',
                 null,
                 500
             );
@@ -646,32 +932,32 @@ class AuthController extends Controller
          * 4. MANDAR NOTIFICACION AL PROVEEDOR (DATABASE, PUSH, BROADCAST, MAIL ..)
          */
         try {
-            Log::info('Iniciando proceso de asociar proveedor existente.', [
-                'payload_request' => $request->all()
-            ]);
+            // Log::info('Iniciando proceso de asociar proveedor existente.', [
+            //     'payload_request' => $request->all()
+            // ]);
 
             $validatedData = $request->validated();
-            Log::info('Datos validados correctamente.', [
-                'validated' => $validatedData
-            ]);
+            // Log::info('Datos validados correctamente.', [
+            //     'validated' => $validatedData
+            // ]);
 
             // 1. Obtener o crear la empresa
-            Log::info('Buscando / creando empresa constructora...', [
-                'empresa_construcc_id' => $validatedData['empresa_construcc_id'] ?? null
-            ]);
+            // Log::info('Buscando / creando empresa constructora...', [
+            //     'empresa_construcc_id' => $validatedData['empresa_construcc_id'] ?? null
+            // ]);
 
             $empresa = $this->getOrCreateEmpresaConstruccFromRequestData($validatedData);
 
-            Log::info('Resultado búsqueda/creación empresa:', [
-                'empresa_id' => $empresa->id ?? null,
-                'empresa_nombre' => $empresa->nombre ?? null,
-                'empresa_rfc' => $empresa->rfc ?? null
-            ]);
+            // Log::info('Resultado búsqueda/creación empresa:', [
+            //     'empresa_id' => $empresa->id ?? null,
+            //     'empresa_nombre' => $empresa->nombre ?? null,
+            //     'empresa_rfc' => $empresa->rfc ?? null
+            // ]);
 
             // 2. Buscar proveedor por teléfono
-            Log::info('Buscando proveedor por teléfono...', [
-                'telefono' => $validatedData['telefono']
-            ]);
+            // Log::info('Buscando proveedor por teléfono...', [
+            //     'telefono' => $validatedData['telefono']
+            // ]);
 
             $proveedor = Proveedor::where('telefono', $validatedData['telefono'])->first();
 
@@ -679,20 +965,20 @@ class AuthController extends Controller
                 Log::warning('Proveedor no encontrado por teléfono.', [
                     'telefono' => $validatedData['telefono']
                 ]);
-                return $this->error('No se encontró un proveedor con este teléfono.', [], 404);
+                return $this->error('No se encontró un proveedor con este teléfono en GestionPlus.', [], 404);
             }
 
-            Log::info('Proveedor encontrado.', [
-                'proveedor_id' => $proveedor->id,
-                'proveedor_nombre' => $proveedor->nombre_comercial ?? $proveedor->razon_social
-            ]);
+            // Log::info('Proveedor encontrado.', [
+            //     'proveedor_id' => $proveedor->id,
+            //     'proveedor_nombre' => $proveedor->nombre_comercial ?? $proveedor->razon_social
+            // ]);
 
             // 3. Validar si ya existe la asociación
-            Log::info('Verificando si ya existe una asociación...', [
-                'empresa_id' => $empresa->id,
-                'proveedor_id' => $proveedor->id,
-                'usuario_construcc_id' => $validatedData['usuario_construcc_id']
-            ]);
+            // Log::info('Verificando si ya existe una asociación...', [
+            //     'empresa_id' => $empresa->id,
+            //     'proveedor_id' => $proveedor->id,
+            //     'usuario_construcc_id' => $validatedData['usuario_construcc_id']
+            // ]);
 
             $existeAsociacion = DB::table('empresa_construcc_proveedor')
                 ->where('empresa_construcc_id', $empresa->id)
@@ -706,18 +992,18 @@ class AuthController extends Controller
                     'proveedor_id' => $proveedor->id
                 ]);
 
-                return $this->error('Este usuario ya tiene registrada una invitación para este proveedor.', null, 400);
+                return $this->error('Este usuario ya tiene registrada una invitación para este proveedor en GestionPlus.', null, 400);
             }
 
             // 4. Crear asociación
-            Log::info('Creando asociación proveedor-empresa...');
+            // Log::info('Creando asociación proveedor-empresa en GestionPlus...');
 
             $proveedor->empresasConstrucc()->attach($empresa->id, [
                 'usuario_construcc_id' => $validatedData['usuario_construcc_id'],
                 'usuario_construcc_nombre' => $validatedData['usuario_construcc_nombre'],
             ]);
 
-            Log::info('Asociación creada exitosamente.', [
+            Log::info('Asociación creada exitosamente en GestionPlus.', [
                 'empresa_id'    => $empresa->id,
                 'proveedor_id'  => $proveedor->id,
                 'usuario_construcc_id' => $validatedData['usuario_construcc_id']
@@ -725,7 +1011,7 @@ class AuthController extends Controller
 
             // 5. Enviar notificación
             try {
-                Log::info('Intentando enviar notificación al proveedor...');
+                Log::info('Intentando enviar notificación al proveedor en GestionPlus...');
 
                 $usuario = $proveedor->usuarioPrincipal();
 
@@ -740,9 +1026,9 @@ class AuthController extends Controller
                         $validatedData['usuario_construcc_nombre']
                     ));
 
-                    Log::info('Notificación enviada al proveedor.', [
-                        'usuario_principal' => $usuario->id,
-                    ]);
+                    // Log::info('Notificación enviada al proveedor.', [
+                    //     'usuario_principal' => $usuario->id,
+                    // ]);
                 } else {
                     Log::warning('Proveedor no tiene usuario principal. No se envió notificación.');
                 }
@@ -754,21 +1040,21 @@ class AuthController extends Controller
                 ]);
             }
 
-            Log::info('Proceso de asociación completado exitosamente.');
+            // Log::info('Proceso de asociación completado exitosamente.');
 
             return $this->success([
                 'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
                 'asociado' => true,
                 'empresa_id' => $empresa->id,
                 'empresa_nombre' => $empresa->nombre,
-            ], 'Proveedor asociado exitosamente a la empresa.', 200);
+            ], 'Empresa de GestionPlus asociada exitosamente a la empresa en GestionPlus.', 200);
         } catch (\Exception $e) {
-            Log::error('Error general al asociar proveedor existente', [
+            Log::error('Error general al asociar proveedor existente en GestionPlus', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return $this->error('Error al asociar el proveedor. Intenta nuevamente.', [], 500);
+            return $this->error('No fue posible asociar la Empresa de GestionPlus con la empresa en GestionPlus. Por favor, intenta nuevamente.', [], 500);
         }
     }
 
@@ -783,7 +1069,7 @@ class AuthController extends Controller
         $data = Cache::get("registro_proveedor_basico_{$request->token}");
 
         if (! $data) {
-            return $this->error('Token inválido o expirado', [], 498);
+            return $this->error('Token inválido o expirado en GestionPlus', [], 498);
         }
 
         // Crear proveedor con datos del cache
@@ -795,7 +1081,6 @@ class AuthController extends Controller
             'telefono' => $data['telefono'],
             'is_proveedor_sp' => true,
             'is_proveedor_catalogo' => false,
-            'cambiar_pass_default' => false,
             'perfil_empresa_completo' => false,
         ]);
 
@@ -808,6 +1093,7 @@ class AuthController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($request->password),
             'role_id' => $idRoleProveedor,
+            'cambiar_pass_default' => false,
         ]);
 
         // Relacionar usuario con proveedor
@@ -846,7 +1132,7 @@ class AuthController extends Controller
             'user' => new UserAuthenticateResource($user),
             'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
             'token' => $token,
-        ], 'Registro completado exitosamente', 201);
+        ], 'Registro completado exitosamente en GestionPlus.', 201);
     }
 
     /**
@@ -861,12 +1147,13 @@ class AuthController extends Controller
         // Verificar que la contraseña actual sea correcta
         if (! Hash::check($request->current_password, $user->password)) {
             throw ValidationException::withMessages([
-                'current_password' => ['La contraseña actual no es correcta.'],
+                'current_password' => ['La contraseña actual no es correcta en GestionPlus.'],
             ]);
         }
 
         // Actualizar la nueva contraseña
         $user->password = Hash::make($request->new_password);
+        $user->cambiar_pass_default = false;
         $user->save();
 
         // Revocar token actual y generar uno nuevo
@@ -877,15 +1164,11 @@ class AuthController extends Controller
         $user->load(User::eagerLodable());
         $proveedor = $user->proveedorPrincipal();
 
-        // Si el proveedor tiene la bandera cambiar_pass_default en true, actualizarla a false
-        $proveedor->cambiar_pass_default = false;
-        $proveedor->save();
-
         return $this->success([
             'user' => new UserAuthenticateResource($user),
             'token' => $newToken,
-            'proveedor' => new ProveedorResource($proveedor),
-        ], 'Contraseña actualizada correctamente.', 200);
+            'proveedor' => $proveedor ? new ProveedorResource($proveedor) : null,
+        ], 'Contraseña actualizada correctamente en GestionPlus.', 200);
     }
 
     /**
@@ -898,43 +1181,68 @@ class AuthController extends Controller
 
     {
         $email = $request->email;
-        // Buscar usuario por email o teléfono
+
         $user = User::where(function ($q) use ($request) {
             $q->where('email', $request->email)
                 ->orWhere('telefono', $request->email);
-        })
-            ->where('status', '!=', EstadoUsuario::BLOQUEADO->value)
-            ->where('status', '!=', EstadoUsuario::SUSPENDIDO->value)
-            ->first();
+        })->first();
 
-        if (!$user) {
-            // Retornar éxito aunque no exista para evitar enumeration attacks
-            return $this->success(
-                ['email' => $email],
-                'Si existe una cuenta con este correo, recibirás las instrucciones para recuperar tu contraseña.',
-                200
+        if (! $user) {
+            return $this->error(
+                'No encontramos ninguna cuenta con ese correo electrónico o número de teléfono en GestionPlus. Comprueba que escribiste bien los datos o regístrate si aún no tienes cuenta.',
+                [],
+                404
             );
         }
 
-        // Generar token único
+        if (in_array($user->status, [
+            EstadoUsuario::BLOQUEADO->value,
+            EstadoUsuario::SUSPENDIDO->value,
+        ], true)) {
+            return $this->error(
+                'No podemos enviar el enlace de recuperación porque la cuenta asociada está bloqueada o suspendida en GestionPlus. Para resolverlo, contacta a soporte.',
+                [],
+                403
+            );
+        }
+
+        $userEmail = $user->email;
+        if ($userEmail === null || filter_var($userEmail, FILTER_VALIDATE_EMAIL) === false) {
+            return $this->error(
+                'Tu cuenta no tiene un correo electrónico válido donde enviar el enlace de recuperación en GestionPlus. Completa o actualiza tu correo en tu perfil o pide ayuda a soporte.',
+                [],
+                422
+            );
+        }
+
         $token = Str::random(60);
 
-        // Guardar en cache con expiración de 1 hora
         Cache::put("password_reset_{$token}", [
             'user_id' => $user->id,
             'email' => $user->email,
-            'created_at' => now()
-        ], 60 * 60); // 1 hora
+            'created_at' => now(),
+        ], 60 * 60);
 
-        // Generar URL para reset
         $url = config('services.frontend.url') . "/auth/reset-password?token={$token}";
 
-        // Enviar email
-        Mail::to($user->email)->send(new PasswordResetMail($url, $user->name));
+        try {
+            Mail::to($userEmail)->send(new PasswordResetMail($url, $user->name));
+        } catch (\Throwable $e) {
+            Log::error('Fallo al enviar correo de recuperación de contraseña', [
+                'user_id' => $user->id,
+                'exception' => $e->getMessage(),
+            ]);
+
+            return $this->error(
+                'Encontramos tu cuenta, pero no pudimos enviar el correo de recuperación en este momento (fallo temporal del servicio de correo). Vuelve a intentarlo en unos minutos o contacta a soporte si el problema continúa.',
+                [],
+                503
+            );
+        }
 
         return $this->success(
             ['email' => $email],
-            'Si existe una cuenta con este correo, recibirás las instrucciones para recuperar tu contraseña.',
+            'Te enviamos un correo con instrucciones para restablecer tu contraseña en GestionPlus. Revisa tu bandeja de entrada, la carpeta de spam y el apartado de promociones.',
             200
         );
     }
@@ -951,7 +1259,7 @@ class AuthController extends Controller
 
         if (!$data) {
             return $this->error(
-                'El enlace de recuperación ha expirado o es inválido. Por favor, solicita uno nuevo.',
+                'El enlace de recuperación ha expirado o es inválido en GestionPlus. Por favor, solicita uno nuevo.',
                 [],
                 400
             );
@@ -962,7 +1270,7 @@ class AuthController extends Controller
         if ($createdAt->diffInMinutes(now()) > 60) {
             Cache::forget("password_reset_{$request->token}");
             return $this->error(
-                'El enlace de recuperación ha expirado. Por favor, solicita uno nuevo.',
+                'El enlace de recuperación ha expirado en GestionPlus. Por favor, solicita uno nuevo.',
                 [],
                 400
             );
@@ -1045,11 +1353,13 @@ class AuthController extends Controller
 
         // Verificar si el correo existe en la tabla users
         $existe = User::where('email', $request->email)->exists();
+        // También verificar en proveedores.email para evitar conflictos aunque el email no se use como username
+        $existeEnProveedores = Proveedor::where('email', $request->email)->exists();
 
         return $this->success([
-            'existe' => $existe,
+            'existe' => $existe || $existeEnProveedores,
             'email' => $request->email,
-        ], $existe ? 'El correo ya está registrado.' : 'El correo está disponible.', 200);
+        ], ($existe || $existeEnProveedores) ? 'El correo ya está registrado.' : 'El correo está disponible.', 200);
     }
 
     /**
@@ -1065,8 +1375,12 @@ class AuthController extends Controller
         ]);
 
         // Verificar si la razón social existe en la tabla proveedores
-        $existe = Proveedor::where('razon_social', $request->razon_social)
-            ->where('tipo_alta', '!=', 2)
+        // normalizar para mismo formato de comparación (trim y mayúsculas)\
+        $existe = Proveedor::whereRaw('UPPER(TRIM(razon_social)) = ?', [trim(strtoupper($request->razon_social))])
+            ->where(function ($q) {
+                $q->where('tipo_alta', 1)
+                    ->orWhereNull('tipo_alta');
+            })
             ->exists();
 
         return $this->success([
@@ -1118,6 +1432,7 @@ class AuthController extends Controller
         $emailBeforeUpdate = $user->email;
 
         $user->update($validatedData);
+
         $verificationEmailSent = false;
 
         $emailChanged = array_key_exists('email', $validatedData) && $validatedData['email'] !== $emailBeforeUpdate;
@@ -1142,9 +1457,9 @@ class AuthController extends Controller
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'created_at' => now()->toIso8601String(),
-            ], 60 * 60 * 24); // 24 horas
+            ], 60 * 60 * 24 * 360); // 360 horas = 15 días
 
-            Cache::put($userTokenKey, $verificationToken, 60 * 60 * 24);
+            Cache::put($userTokenKey, $verificationToken, 60 * 60 * 24 * 360); // 360 horas = 15 días
 
             $verificationUrl = url("/api/auth/verificar-email-token?token={$verificationToken}");
             Mail::to($user->email)->send(new VerifyUpdatedEmailMail($verificationUrl, $user->name));
@@ -1158,7 +1473,7 @@ class AuthController extends Controller
             [
                 'user' => new UserAuthenticateResource($user),
                 'token' => $token,
-                'proveedor' => new ProveedorResource($user->proveedorPrincipal()),
+                'proveedor' => $user->proveedorPrincipal() ? new ProveedorResource($user->proveedorPrincipal()) : null,
                 'email_verification_required' => $requiresEmailVerification,
                 'email_verification_sent' => $verificationEmailSent,
                 'email_verification_message' => $verificationEmailSent
@@ -1216,5 +1531,78 @@ class AuthController extends Controller
         $frontendHomeUrl = rtrim((string) config('services.frontend.url', 'http://localhost:8100'), '/') . '/';
 
         return redirect()->away($frontendHomeUrl);
+    }
+
+    /**
+     * Verificar si un teléfono ya está registrado
+     * Excluyendo el usuario actual
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verificarTelefonoExistenteExcluyendoUsuario(Request $request)
+    {
+        $request->validate([
+            'telefono' => ['required', 'string'],
+        ]);
+
+
+        $telefono = $request->input('telefono');
+        $existe = User::where('telefono', $telefono)->where('id', '!=', $request->user()->id)->exists();
+        return $this->success([
+            'existe' => $existe,
+            'telefono' => $telefono,
+        ], $existe ? 'El teléfono ya está registrado.' : 'El teléfono está disponible.', 200);
+    }
+
+    /**
+     * Verificar si un email ya está registrado
+     * Excluyendo el usuario actual
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verificarEmailExistenteExcluyendoUsuario(Request $request)
+    {
+        $request->validate([
+            'email' => ['required', 'string'],
+        ]);
+
+
+        $email = $request->input('email');
+        $existe = User::where('email', $email)->where('id', '!=', $request->user()->id)->exists();
+        return $this->success([
+            'existe' => $existe,
+            'email' => $email,
+        ], $existe ? 'El email ya está registrado.' : 'El email está disponible.', 200);
+    }
+
+    private function proveedorTieneRegistroCompletado(Proveedor $proveedor): bool
+    {
+        return $proveedor->registro_completado_at !== null;
+    }
+
+    private function enviarCorreoCompletarRegistroConTokenAlmacenado(Proveedor $proveedor): string
+    {
+        if (filled($proveedor->token_completar_registro)) {
+            $plainToken = $proveedor->token_completar_registro;
+        } else {
+            $plainToken = Str::random(60);
+            $proveedor->update([
+                'token_completar_registro' => $plainToken,
+                'token_completar_registro_generado_at' => now(),
+            ]);
+        }
+
+        $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+        $proveedorId = $proveedor->id;
+        $correo = $proveedor->email;
+
+        dispatch(function () use ($url, $proveedorId, $correo) {
+            $proveedorMail = Proveedor::withoutGlobalScope('solo_activos')->find($proveedorId);
+            if ($proveedorMail && $correo) {
+                Mail::to($correo)->send(new CompletaRegistroProveedorMail($url, $proveedorMail));
+            }
+        })->afterResponse();
+
+        return $plainToken;
     }
 }

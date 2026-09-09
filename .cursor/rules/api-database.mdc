@@ -6,10 +6,46 @@ alwaysApply: false
 
 # Database - api-proveedores
 
-## Migraciones
-- Nombre: `YYYY_MM_DD_HHMMSS_descripcion_accion_table.php`
-- `Schema::create()` o `Schema::table()`
-- Siempre implementar `down()` con `Schema::dropIfExists()` o reversión
+## Migraciones (obligatorio)
+
+- **Siempre** crear migraciones con Artisan; **no** crear archivos a mano en `database/migrations/`.
+- Ejecutar desde la raíz de `api-proveedores`:
+
+```bash
+# Tabla nueva
+php artisan make:migration create_nombre_tabla_table
+
+# Alterar tabla existente
+php artisan make:migration descripcion_cambio --table=nombre_tabla
+```
+
+- Tras generar el archivo, implementar `up()` / `down()` en la clase creada por Artisan.
+- Nombre generado por Artisan: `YYYY_MM_DD_HHMMSS_snake_case.php` (respetar el prefijo de fecha que asigne el comando).
+- `Schema::create()` o `Schema::table()` según el caso.
+- Siempre implementar `down()` con `Schema::dropIfExists()`, reversión de columnas o lógica equivalente.
+- Para migraciones de datos masivos o respaldos, registrar pasos en el canal de log `migrations` (`storage/logs/migrations.log`) cuando aplique.
+
+## Checklist obligatorio: drop / rename de columnas
+
+Cuando una migración **elimine** (`dropColumn`) o **renombre** columnas, **antes de dar por cerrado el cambio** revisar y alinear el código con el esquema real. Mínimo obligatorio:
+
+1. **Modelo** de la tabla (`app/Models/…`):
+   - Quitar o renombrar en `$fillable`, `$casts`, `$hidden`, `$appends`.
+   - Actualizar scopes, filtros (`$filters` / `filterBy*`), accessors/mutators y métodos que lean/escriban la columna.
+2. **Usos en escritura** que hagan `only([...])`, `create($payload)`, `update($payload)`, `replicate()`, duplicar/clonar, seeders y factories: no incluir columnas ya inexistentes (provoca `SQLSTATE[42S22] Unknown column`).
+3. **Form Requests** (`Store*` / `Update*`): reglas y `prepareForValidation` de esos campos.
+4. **API Resources**: no leer atributos droppeados; si el contrato JSON debe seguir exponiendo un alias legacy, **derivarlo** de la nueva fuente (JSON/otra columna), no de la columna borrada.
+5. **Docs de dominio** en `docs/context/` (p. ej. `database.md`) si el campo estaba documentado.
+
+### Rename
+
+- Migración: preferir flujo seguro (añadir nueva → backfill → cambiar lecturas/escrituras → dropear vieja) o `renameColumn` + checklist completo.
+- Buscar el nombre viejo en Models, Controllers, Requests, Resources, seeders y front del dominio.
+
+### Anti-patrón (evitar)
+
+- Dejar la columna en `$fillable` “por compatibilidad” después del `dropColumn`: Eloquent la mandará en `INSERT`/`UPDATE` y fallará en runtime (p. ej. `duplicar` presupuesto con `obs_traslados`).
+- Marcar solo `@deprecated` en el modelo sin quitar fillable/casts cuando la migración ya dropeó la columna.
 
 ## Convenciones de columnas
 ```php

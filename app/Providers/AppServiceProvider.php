@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Channels\FcmChannel;
+use App\Enums\UserRoleEnumerate;
 use App\Exceptions\Handler;
 use App\Models\Producto;
 use App\Models\SolicitudPago;
@@ -16,12 +17,20 @@ use App\Services\ReporteService;
 use App\Services\SucursalService;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use App\Support\EmailLogoHelper;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
+use App\Livewire\Pulse\ErroresGenerales;
+use App\Livewire\Pulse\RegistrosDiariosUsuariosProveedores;
+use App\Livewire\Pulse\TotalProveedores;
+use App\Livewire\Pulse\TotalUsuarios;
+use App\Livewire\Pulse\UsuariosProveedores;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -69,6 +78,15 @@ class AppServiceProvider extends ServiceProvider
             date_default_timezone_set(config('app.timezone'));
         }
 
+        // Forzar raíz de URLs (asset/route) con APP_URL para proxies con path (p. ej. /gestion).
+        $appUrl = config('app.url');
+        if (is_string($appUrl) && $appUrl !== '') {
+            URL::forceRootUrl(rtrim($appUrl, '/'));
+            if (str_starts_with($appUrl, 'https://')) {
+                URL::forceScheme('https');
+            }
+        }
+
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
 
         if (env('APP_ENV') === 'production') {
@@ -81,7 +99,21 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer('emails.*', function ($view) {
-            $view->with('logoAppDataUri', EmailLogoHelper::logoGestionProDataUri());
+            $view->with('logoAppDataUri', EmailLogoHelper::logoGestionPlusDataUri());
         });
+
+        Gate::define('viewPulse', function ($user = null) {
+            if (app()->isLocal()) {
+                return true;
+            }
+
+            return $user && $user->hasRole(UserRoleEnumerate::ADMINISTRADOR->value);
+        });
+
+        Livewire::component('pulse.usuarios-proveedores', UsuariosProveedores::class);
+        Livewire::component('pulse.errores-generales', ErroresGenerales::class);
+        Livewire::component('pulse.total-usuarios', TotalUsuarios::class);
+        Livewire::component('pulse.total-proveedores', TotalProveedores::class);
+        Livewire::component('pulse.registros-diarios-usuarios-proveedores', RegistrosDiariosUsuariosProveedores::class);
     }
 }

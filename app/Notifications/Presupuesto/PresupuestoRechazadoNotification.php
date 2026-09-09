@@ -4,12 +4,14 @@ namespace App\Notifications\Presupuesto;
 
 use App\Models\Presupuesto;
 use App\Services\FcmService;
+use App\Support\PresupuestoNotificationContent;
 use App\Support\PresupuestoPdf;
 use App\Traits\NotificationStyleTrait;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Notificación al proveedor cuando el cliente rechaza el presupuesto.
@@ -26,12 +28,10 @@ class PresupuestoRechazadoNotification extends Notification implements ShouldBro
     public function via(object $notifiable): array
     {
         $via = ['broadcast', 'database'];
-
-        if ($notifiable->email && filter_var($notifiable->email, FILTER_VALIDATE_EMAIL)) {
-            $via[] = 'mail';
-        }
-
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if (
+            method_exists($notifiable, 'deviceTokens')
+            && $notifiable->deviceTokens()->where('is_active', true)->exists()
+        ) {
             $via[] = 'fcm';
         }
 
@@ -56,7 +56,7 @@ class PresupuestoRechazadoNotification extends Notification implements ShouldBro
     public function toMail(object $notifiable): MailMessage
     {
         $frontendUrl = config('app.frontend_url', config('app.url'));
-        $urlDetalle = $frontendUrl . '/pages/proveedor/presupuestos/detalle/' . $this->presupuesto->id;
+        $urlDetalle = $frontendUrl . '/pages/proveedor/presupuestos/preview/' . $this->presupuesto->id;
 
         $mail = (new MailMessage)
             ->subject('Presupuesto rechazado #' . $this->presupuesto->numero_presupuesto)
@@ -65,6 +65,7 @@ class PresupuestoRechazadoNotification extends Notification implements ShouldBro
                 'presupuesto' => $this->presupuesto,
                 'motivoRechazo' => $this->motivoRechazo,
                 'urlDetalle' => $urlDetalle,
+                'proveedorLogo' => $this->resolverLogoProveedorBase64(),
             ]);
 
         try {
@@ -92,45 +93,104 @@ class PresupuestoRechazadoNotification extends Notification implements ShouldBro
             return;
         }
 
-        $cliente = $this->presupuesto->empresa_receptora_empresa ?? $this->presupuesto->empresa_receptora_nombre ?? 'el cliente';
-        $body = $cliente . ' rechazó tu presupuesto.';
-        if ($this->motivoRechazo) {
-            $body .= ' Motivo: ' . \Illuminate\Support\Str::limit($this->motivoRechazo, 80);
-        }
+        $base = $this->addStylesToData($this->baseData());
 
-        app(FcmService::class)->sendToTokens(
-            $tokens,
-            [
-                'title' => 'Presupuesto rechazado #' . $this->presupuesto->numero_presupuesto,
-                'body' => $body,
-            ],
-            $this->addStylesToData([
-                'action_url' => '/pages/proveedor/presupuestos/detalle/' . $this->presupuesto->id,
-            ])
-        );
+        $notification = [
+            'title' => $base['titulo'],
+            'body' => $base['mensaje'],
+        ];
+
+        $data = [
+            'titulo' => (string) $base['titulo'],
+            'mensaje' => (string) $base['mensaje'],
+            'tipo' => 'presupuesto',
+            'subtipo' => (string) $base['subtipo'],
+            'action_url' => (string) $base['action_url'],
+            'presupuesto_id' => (string) $base['presupuesto_id'],
+            'presupuesto_numero' => (string) $base['presupuesto_numero'],
+            'proveedor_id' => (string) $base['proveedor_id'],
+            'estatus' => (string) $base['estatus'],
+            'motivo_rechazo' => (string) ($base['motivo_rechazo'] ?? ''),
+            'usuario_envio_nombre' => (string) $base['usuario_envio_nombre'],
+            'empresa_emisora_nombre' => (string) $base['empresa_emisora_nombre'],
+            'fecha_emision' => (string) ($base['fecha_emision'] ?? ''),
+            'destinatario_nombre' => (string) ($base['destinatario_nombre'] ?? ''),
+            'empresa_logo_url' => (string) ($base['empresa_logo_url'] ?? ''),
+            'timestamp' => (string) $base['timestamp'],
+        ];
+
+        $data = $this->addStylesToData($data);
+
+        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
     }
 
     private function baseData(): array
     {
-        $cliente = $this->presupuesto->empresa_receptora_empresa ?? $this->presupuesto->empresa_receptora_nombre ?? 'el cliente';
-        $mensaje = $cliente . ' rechazó tu presupuesto.';
-        if ($this->motivoRechazo) {
-            $mensaje .= ' Motivo: ' . \Illuminate\Support\Str::limit($this->motivoRechazo, 100);
-        }
+        $esCorreccion = $this->motivoRechazo !== null && trim((string) $this->motivoRechazo) !== '';
+        $eventoTitulo = $esCorreccion ? 'correccion' : 'rechazado';
 
-        return [
+        $mensajeBase = $esCorreccion || $this->motivoRechazo
+            ? 'Motivo: '.\Illuminate\Support\Str::limit(trim((string) $this->motivoRechazo), 90)
+            : 'Sin motivo indicado';
+
+        return array_merge([
             'tipo' => 'presupuesto',
-            'subtipo' => 'rechazado',
-            'titulo' => 'Presupuesto rechazado #' . $this->presupuesto->numero_presupuesto,
-            'mensaje' => $mensaje,
+            'subtipo' => $esCorreccion ? 'correccion_solicitada' : 'rechazado',
+            'titulo' => PresupuestoNotificationContent::tituloBandeja($this->presupuesto, $eventoTitulo),
+            'mensaje' => PresupuestoNotificationContent::mensajeConHechos($mensajeBase, $this->presupuesto),
             'motivo_rechazo' => $this->motivoRechazo,
-            'action_url' => '/pages/proveedor/presupuestos/detalle/' . $this->presupuesto->id,
+            'action_url' => '/pages/proveedor/presupuestos/preview/'.$this->presupuesto->id,
             'presupuesto_id' => $this->presupuesto->id,
-            'presupuesto_numero' => $this->presupuesto->numero_presupuesto,
             'proveedor_id' => $this->presupuesto->proveedor_id,
+            'usuario_envio_id' => $this->presupuesto->user_id,
+            'evento' => $esCorreccion ? 'solicitud_correccion' : 'rechazo',
             'estatus' => 'rechazado',
             'timestamp' => now()->toIso8601String(),
-        ];
+        ], PresupuestoNotificationContent::camposEstructurados($this->presupuesto, $eventoTitulo));
+    }
+
+    private function resolverLogoProveedorBase64(): ?string
+    {
+        $logo = $this->presupuesto->proveedor?->logo;
+        if (! is_string($logo) || trim($logo) === '') {
+            return null;
+        }
+
+        if (str_starts_with($logo, 'data:image')) {
+            return $logo;
+        }
+
+        if (filter_var($logo, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $logoPath = null;
+        if (str_starts_with($logo, '/') || str_starts_with($logo, 'storage/')) {
+            $logoPath = public_path($logo);
+        } elseif (Storage::disk('public')->exists($logo)) {
+            $logoPath = Storage::disk('public')->path($logo);
+        } else {
+            $logoPath = public_path('storage/' . $logo);
+        }
+
+        if (! $logoPath || ! is_readable($logoPath)) {
+            return null;
+        }
+
+        $binary = @file_get_contents($logoPath);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode($binary);
     }
 
     protected function getNotificationTipo(): string

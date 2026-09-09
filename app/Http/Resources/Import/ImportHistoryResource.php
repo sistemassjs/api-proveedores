@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Import;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,7 +22,7 @@ class ImportHistoryResource extends JsonResource
             'tipo' => $this->tipo,
             'tipo_label' => $this->getTipoLabel(),
             'archivo' => $this->archivo,
-            'archivo_url' => $this->archivo ? asset("storage/{$this->archivo}") : null,
+            'archivo_url' => PublicStorageUrl::make($this->archivo),
             'formato' => $this->formato,
             'estado' => $this->estado,
             'estado_label' => $this->getEstadoLabel(),

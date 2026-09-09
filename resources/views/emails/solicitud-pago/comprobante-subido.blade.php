@@ -22,10 +22,10 @@
   }
 
   .header {
-   background: linear-gradient(135deg, #2196f3, #64b5f6);
-   color: #ffffff;
+   background: transparent;
+   padding: 0;
+   margin: 0;
    text-align: center;
-   padding: 30px 20px;
   }
 
   .logo {
@@ -81,8 +81,8 @@
   }
 
   .footer {
-   background-color: #343a40;
-   color: #ffffff;
+   background-color: #f1f5f9;
+   color: #475569;
    text-align: center;
    padding: 15px;
    font-size: 12px;
@@ -94,29 +94,21 @@
 
  <div class="email-container">
   <div class="header">
-   @include('emails.partials.logo-app')
-      <h1>Comprobante subido</h1>
-      <p>Sistema de Gestion de Proveedores</p>
+   @include('emails.partials.app-header', ['title' => 'Comprobante subido'])
   </div>
 
   <div class="content">
    <p>Hola <strong>{{ $notifiable->name }}</strong>,</p>
 
    <div class="info-box">
-    Se ha subido el comprobante de la solicitud de pago <strong>#{{ $solicitudPagoFolio }}</strong>.
+    Se ha subido el comprobante de la solicitud de pago.
    </div>
 
-   <div class="details">
-    <div class="detail-item">
-     <span class="detail-label">Folio:</span> #{{ $solicitudPagoFolio }}
-    </div>
-    <div class="detail-item">
-     <span class="detail-label">Proveedor ID:</span> {{ $proveedorId }}
-    </div>
-    <div class="detail-item">
-     <span class="detail-label">Fecha:</span> {{ now()->format('d/m/Y') }}
-    </div>
-   </div>
+   @include('emails.partials.spp-summary', [
+    'sppFolio' => $solicitudPagoFolio,
+    'sppEstado' => 'Comprobante subido',
+    'sppFecha' => now(),
+   ])
 
    <p style="text-align: center; margin: 30px 0;">
     <a href="{{ $urlSolicitud }}" class="action-button">
@@ -125,9 +117,7 @@
    </p>
   </div>
 
-  <div class="footer">
-   © {{ date('Y') }} {{ config('app.name') }} · Mensaje automático
-  </div>
+  <div class="footer">@include('emails.partials.app-footer')</div>
  </div>
 
 </body>

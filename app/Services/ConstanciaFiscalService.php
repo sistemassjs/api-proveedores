@@ -10,7 +10,7 @@ class ConstanciaFiscalService
 {
     /**
      * Extrae los datos fiscales de una constancia fiscal PDF.
-     * Intenta extraer del QR primero, si falla extrae directamente del texto del PDF.
+     * Intenta extraer del texto del PDF y, si no es suficiente, usa OCR.
      *
      * @param string $pdfPath Ruta completa al archivo PDF
      * @return array|null Array con los datos fiscales o null si falla
@@ -28,19 +28,19 @@ class ConstanciaFiscalService
             ]);
 
             // 2. Intentar extraer datos directamente del texto del PDF
-            $datosFiscales = $this->extraerDatosDeTextoPDF($text);
-            
-            // 3. Si faltan datos importantes, intentar con QR
-            if (!$datosFiscales || empty($datosFiscales['rfc'])) {
-                Log::info('Intentando extraer datos del QR...');
-                $qrUrl = $this->extraerQRdePDF($pdfPath, $text);
-                
-                if ($qrUrl) {
-                    $datosQR = $this->obtenerDatosDelSAT($qrUrl);
-                    if ($datosQR) {
-                        // Combinar datos del texto con datos del QR
-                        $datosFiscales = array_merge($datosFiscales ?? [], $datosQR);
-                    }
+            $textoBase = $this->normalizarTexto($text);
+            $datosFiscales = $this->extraerDatosDeTextoPDF($textoBase);
+
+            // 3. Si faltan datos clave, ejecutar OCR (sin usar QR)
+            if (!$this->tieneDatosClave($datosFiscales)) {
+                Log::info('Texto PDF insuficiente, ejecutando OCR de constancia fiscal...');
+                $textoOCR = $this->extraerTextoConOCR($pdfPath);
+
+                if (!empty($textoOCR)) {
+                    $datosOCR = $this->extraerDatosDeTextoPDF($this->normalizarTexto($textoOCR));
+
+                    // Mantener formato actual y completar solo campos faltantes.
+                    $datosFiscales = $this->combinarDatosFiscales($datosFiscales ?? [], $datosOCR);
                 }
             }
 
@@ -49,6 +49,148 @@ class ConstanciaFiscalService
             Log::error('Error al extraer datos fiscales: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Verifica si la extracción contiene datos mínimos útiles para autocompletado.
+     */
+    private function tieneDatosClave(array $datosFiscales): bool
+    {
+        return !empty($datosFiscales['rfc'])
+            || !empty($datosFiscales['razon_social'])
+            || !empty($datosFiscales['nombre_completo'])
+            || !empty($datosFiscales['denominacion_razon_social']);
+    }
+
+    /**
+     * Combina extracción base + OCR sin alterar el contrato de salida.
+     */
+    private function combinarDatosFiscales(array $base, array $ocr): array
+    {
+        $combinado = $base;
+
+        foreach ($ocr as $key => $value) {
+            if ($key === 'regimenes') {
+                $baseRegimenes = is_array($combinado['regimenes'] ?? null) ? $combinado['regimenes'] : [];
+                $ocrRegimenes = is_array($value) ? $value : [];
+                $combinado['regimenes'] = !empty($baseRegimenes) ? $baseRegimenes : $ocrRegimenes;
+                continue;
+            }
+
+            if (is_array($value)) {
+                $baseArray = is_array($combinado[$key] ?? null) ? $combinado[$key] : [];
+                $combinado[$key] = array_replace($value, $baseArray);
+                continue;
+            }
+
+            if (empty($combinado[$key]) && !empty($value)) {
+                $combinado[$key] = $value;
+            }
+        }
+
+        return $combinado;
+    }
+
+    /**
+     * OCR del PDF usando herramientas locales disponibles.
+     */
+    private function extraerTextoConOCR(string $pdfPath): ?string
+    {
+        try {
+            if (!$this->comandoDisponible('tesseract')) {
+                Log::warning('OCR omitido: tesseract no está disponible en el servidor.');
+                return null;
+            }
+
+            $images = $this->convertirPdfAImagenes($pdfPath);
+            if (empty($images)) {
+                Log::warning('OCR omitido: no se pudieron generar imágenes del PDF.');
+                return null;
+            }
+
+            $texto = '';
+            foreach ($images as $imagePath) {
+                $textoPagina = $this->ejecutarTesseract($imagePath);
+                if (!empty($textoPagina)) {
+                    $texto .= "\n" . $textoPagina;
+                }
+            }
+
+            return trim($texto) !== '' ? $texto : null;
+        } catch (\Throwable $e) {
+            Log::error('Error al ejecutar OCR de constancia fiscal: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Convierte PDF a imágenes por página para OCR.
+     *
+     * @return array<int, string>
+     */
+    private function convertirPdfAImagenes(string $pdfPath): array
+    {
+        $images = [];
+        $tempDir = storage_path('app/tmp/ocr_' . Str::uuid()->toString());
+
+        if (!is_dir($tempDir)) {
+            @mkdir($tempDir, 0775, true);
+        }
+
+        if (!extension_loaded('imagick') || !class_exists('Imagick')) {
+            Log::warning('Imagick no disponible para OCR.');
+            return [];
+        }
+
+        $imagickClass = 'Imagick';
+        $imagick = new $imagickClass();
+        $imagick->setResolution(300, 300);
+        $imagick->readImage($pdfPath);
+
+        foreach ($imagick as $index => $page) {
+            $page->setImageFormat('png');
+            $page->setImageCompressionQuality(100);
+            $imagePath = $tempDir . DIRECTORY_SEPARATOR . 'page_' . $index . '.png';
+            $page->writeImage($imagePath);
+            $images[] = $imagePath;
+        }
+
+        $imagick->clear();
+        $imagick->destroy();
+
+        return $images;
+    }
+
+    /**
+     * Ejecuta OCR por página con idioma español e inglés.
+     */
+    private function ejecutarTesseract(string $imagePath): ?string
+    {
+        $cmd = 'tesseract ' . escapeshellarg($imagePath) . ' stdout -l spa+eng --oem 1 --psm 6 2>NUL';
+        $output = shell_exec($cmd);
+
+        return is_string($output) && trim($output) !== '' ? $output : null;
+    }
+
+    /**
+     * Verifica disponibilidad de comando en el sistema.
+     */
+    private function comandoDisponible(string $comando): bool
+    {
+        $resultado = shell_exec('where ' . escapeshellarg($comando) . ' 2>NUL');
+        return is_string($resultado) && trim($resultado) !== '';
+    }
+
+    /**
+     * Normaliza texto para mejorar matching de regex.
+     */
+    private function normalizarTexto(string $text): string
+    {
+        $normalizado = str_replace(["\r\n", "\r"], "\n", $text);
+        $normalizado = preg_replace('/[ \t]+/', ' ', $normalizado) ?? $normalizado;
+        $normalizado = preg_replace('/\n{3,}/', "\n\n", $normalizado) ?? $normalizado;
+
+        return trim($normalizado);
     }
 
     /**

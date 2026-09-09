@@ -3,14 +3,15 @@
 # API Solicitudes de Pago - Los Mochis, Sinaloa, México
 ###
 
-@baseUrl = http://localhost:80/api
+# @baseUrl = http://localhost:80/api
 # @baseUrl = https://apicons.ddns.net:8092/api
+@baseUrl = https://api.rorisafe.com/gestion/api
 @contentType = application/json
 @acceptType = application/json
 @apiKey = 7f2wnCyn7ctmTE7B3mrtDPKCPVF9z8pYseihsHA6
 
 ### VARIABLES
-@solicitudId = 17
+@solicitudId = 568
 @rol = DG
 
 
@@ -36,7 +37,7 @@ X-API-KEY: {{apiKey}}
 Accept: {{acceptType}}
 
 ### 🆕 1.1. Buscar solicitud de pago por folio
-GET {{baseUrl}}/construcc/solicitudes-pago/folio/000017
+GET {{baseUrl}}/construcc/solicitudes-pago/568
 X-API-KEY: {{apiKey}}
 Accept: {{acceptType}}
 

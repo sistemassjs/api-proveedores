@@ -15,11 +15,53 @@ use Illuminate\Http\Request;
 
 class TiendaController extends Controller
 {
+    private function productoRelations(): array
+    {
+        return array_values(array_unique(array_merge(
+            Producto::eagerLodable(),
+            ['proveedor']
+        )));
+    }
+
+    private function applyProductoFilters($query, Request $request)
+    {
+        if ($request->filled('search')) {
+            $search = $request->get('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'LIKE', "%{$search}%")
+                    ->orWhere('descripcion', 'LIKE', "%{$search}%")
+                    ->orWhere('sku', 'LIKE', "%{$search}%")
+                    ->orWhere('codigo_interno', 'LIKE', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('categoria') || $request->filled('categoria_id')) {
+            $query->where('categoria_id', $request->get('categoria_id', $request->get('categoria')));
+        }
+
+        if ($request->filled('proveedor_id')) {
+            $query->where('proveedor_id', $request->get('proveedor_id'));
+        }
+
+        if ($request->filled('precio_min')) {
+            $query->where('precio_base', '>=', $request->get('precio_min'));
+        }
+
+        if ($request->filled('precio_max')) {
+            $query->where('precio_base', '<=', $request->get('precio_max'));
+        }
+
+        if ($request->boolean('disponible')) {
+            $query->where('stock', '>', 0);
+        }
+
+        return $query;
+    }
+
     public function accesosRapidos()
     {
         $accesos = AccesoRapido::where('activo', true)
             ->orderBy('orden')
-            ->select('id', 'titulo', 'descripcion', 'icono', 'url', 'color')
             ->get();
 
         return $this->success(TiendaAccesoRapidoResource::collection($accesos));
@@ -27,36 +69,32 @@ class TiendaController extends Controller
 
     public function proveedoresPrincipales(Request $request)
     {
-        $query = Proveedor::where('estatus', 'activo')
-            ->where('principal', true);
+        $base = Proveedor::query();
 
-        // Filtros de búsqueda
-        if ($request->has('search')) {
+        $query = (clone $base)->where('principal', true);
+
+        if (! $query->exists()) {
+            $query = (clone $base)->where('is_proveedor_catalogo', true);
+        }
+
+        if (! $query->exists()) {
+            $query = $base;
+        }
+
+        if ($request->filled('search')) {
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
-                $q->where('nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('descripcion', 'LIKE', "%{$search}%");
+                $q->where('nombre_comercial', 'LIKE', "%{$search}%")
+                    ->orWhere('razon_social', 'LIKE', "%{$search}%");
             });
         }
 
-        if ($request->has('categoria')) {
-            $query->where('categoria', $request->get('categoria'));
-        }
-
-        if ($request->has('ciudad')) {
-            $query->where('ciudad', $request->get('ciudad'));
-        }
-
-        if ($request->has('calificacion_min')) {
-            $query->where('calificacion', '>=', $request->get('calificacion_min'));
-        }
-
-        // $proveedores = $query->with(['productos' => function ($q) {
-        //     $q->where('activo', true)->limit(3);
-        // }])
-        $proveedores = $query->with(Proveedor::eagerLodable())
-            // ->select('id', 'nombre', 'descripcion', 'logo', 'calificacion', 'categoria', 'ciudad')
-            ->orderBy('calificacion', 'desc')
+        $proveedores = $query
+            ->withCount(['productos as total_productos' => function ($q) {
+                $q->where('activo', true);
+            }])
+            ->orderByDesc('calificacion')
+            ->orderBy('nombre_comercial')
             ->paginate($request->get('per_page', 15));
 
         $data = TiendaProveedorResource::collection($proveedores)->resolve();
@@ -66,42 +104,32 @@ class TiendaController extends Controller
 
     public function productosDestacados(Request $request)
     {
-        $limit = $request->get('limit', 6);
+        $limit = (int) $request->get('limit', 6);
 
-        $query = Producto::where('activo', true)
-            ->where('destacado', true);
+        $query = Producto::where('activo', true)->where('destacado', true);
+        $this->applyProductoFilters($query, $request);
 
-        // Filtros de búsqueda
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('descripcion', 'LIKE', "%{$search}%")
-                    ->orWhere('codigo', 'LIKE', "%{$search}%");
-            });
-        }
-
-        if ($request->has('categoria')) {
-            $query->where('categoria', $request->get('categoria'));
-        }
-
-        if ($request->has('proveedor_id')) {
-            $query->where('proveedor_id', $request->get('proveedor_id'));
-        }
-
-        if ($request->has('disponible') && $request->get('disponible') == true) {
-            $query->where('stock', '>', 0);
-        }
-
-        $productos = $query->with(Producto::eagerLodable())
-            ->orderBy('created_at', 'desc')
+        $productos = (clone $query)
+            ->with($this->productoRelations())
+            ->orderByDesc('created_at')
             ->limit($limit)
             ->get();
 
+        // Fallback temporal: si no hay marcados como destacados, usar recientes activos
+        if ($productos->isEmpty()) {
+            $fallback = Producto::where('activo', true);
+            $this->applyProductoFilters($fallback, $request);
+            $productos = $fallback
+                ->with($this->productoRelations())
+                ->orderByDesc('created_at')
+                ->limit($limit)
+                ->get();
+        }
+
         $productos->each(function ($producto) {
-            $producto->motivo = 'oferta';        // Atributo dinámico, no columna
-            $producto->descuento = 10;
-            $producto->mensaje = '¡Oferta especial!';
+            $producto->motivo = $producto->destacado ? 'oferta' : 'nuevo';
+            $producto->descuento = $producto->destacado ? 10 : null;
+            $producto->mensaje = $producto->destacado ? '¡Oferta especial!' : 'Recién agregado';
         });
 
         return $this->success(TiendaProductoDestacadoResource::collection($productos));
@@ -109,73 +137,16 @@ class TiendaController extends Controller
 
     public function productosMasPedidos(Request $request)
     {
-        $limit = $request->get('limit', 8);
+        $limit = (int) $request->get('limit', 8);
 
-        $query = Producto::where('activo', true)
-            ->whereHas('pedidoProductos');
+        // Sin relación de pedidos en el esquema actual: aproximar por stock/actividad
+        $query = Producto::where('activo', true);
+        $this->applyProductoFilters($query, $request);
 
-        // Filtros de búsqueda
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('descripcion', 'LIKE', "%{$search}%")
-                    ->orWhere('codigo', 'LIKE', "%{$search}%");
-            });
-        }
-
-        if ($request->has('categoria')) {
-            $query->where('categoria', $request->get('categoria'));
-        }
-
-        if ($request->has('proveedor_id')) {
-            $query->where('proveedor_id', $request->get('proveedor_id'));
-        }
-
-        if ($request->has('precio_min')) {
-            $query->where('precio_base', '>=', $request->get('precio_min'));
-        }
-
-        if ($request->has('precio_max')) {
-            $query->where('precio_base', '<=', $request->get('precio_max'));
-        }
-
-        if ($request->has('disponible') && $request->get('disponible') == true) {
-            $query->where('stock', '>', 0);
-        }
-
-        if ($request->has('periodo')) {
-            $periodo = $request->get('periodo');
-            $fechaInicio = match ($periodo) {
-                'semana' => Carbon::now()->subWeek(),
-                'mes' => Carbon::now()->subMonth(),
-                'trimestre' => Carbon::now()->subMonths(3),
-                default => Carbon::now()->subMonth()
-            };
-
-            $query->whereHas('pedidoProductos.pedido', function ($q) use ($fechaInicio) {
-                $q->where('created_at', '>=', $fechaInicio);
-            });
-        }
-
-        $productos = $query->withCount(['pedidoProductos as total_pedidos' => function ($q) use ($request) {
-            if ($request->has('periodo')) {
-                $periodo = $request->get('periodo');
-                $fechaInicio = match ($periodo) {
-                    'semana' => Carbon::now()->subWeek(),
-                    'mes' => Carbon::now()->subMonth(),
-                    'trimestre' => Carbon::now()->subMonths(3),
-                    default => Carbon::now()->subMonth()
-                };
-
-                $q->whereHas('pedido', function ($query) use ($fechaInicio) {
-                    $query->where('created_at', '>=', $fechaInicio);
-                });
-            }
-        }])
-            ->with(['proveedor:id,nombre,logo'])
-            ->select('id', 'nombre', 'descripcion', 'precio_base', 'imagen', 'stock', 'categoria', 'proveedor_id')
-            ->orderBy('total_pedidos', 'desc')
+        $productos = $query
+            ->with($this->productoRelations())
+            ->orderByDesc('stock')
+            ->orderByDesc('created_at')
             ->limit($limit)
             ->get();
 
@@ -184,47 +155,19 @@ class TiendaController extends Controller
 
     public function productosRecientes(Request $request)
     {
-        $limit = $request->get('limit', 8);
+        $limit = (int) $request->get('limit', 8);
 
         $query = Producto::where('activo', true);
+        $this->applyProductoFilters($query, $request);
 
-        // Filtros de búsqueda
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('descripcion', 'LIKE', "%{$search}%")
-                    ->orWhere('codigo', 'LIKE', "%{$search}%");
-            });
-        }
-
-        if ($request->has('categoria')) {
-            $query->where('categoria', $request->get('categoria'));
-        }
-
-        if ($request->has('proveedor_id')) {
-            $query->where('proveedor_id', $request->get('proveedor_id'));
-        }
-
-        if ($request->has('precio_min')) {
-            $query->where('precio_base', '>=', $request->get('precio_min'));
-        }
-
-        if ($request->has('precio_max')) {
-            $query->where('precio_base', '<=', $request->get('precio_max'));
-        }
-
-        if ($request->has('disponible') && $request->get('disponible') == true) {
-            $query->where('stock', '>', 0);
-        }
-
-        if ($request->has('dias')) {
-            $dias = $request->get('dias', 30);
+        if ($request->filled('dias')) {
+            $dias = (int) $request->get('dias', 30);
             $query->where('created_at', '>=', Carbon::now()->subDays($dias));
         }
 
-        $productos = $query->with(Producto::eagerLodable())
-            ->orderBy('created_at', 'desc')
+        $productos = $query
+            ->with($this->productoRelations())
+            ->orderByDesc('created_at')
             ->limit($limit)
             ->get();
 
@@ -233,7 +176,7 @@ class TiendaController extends Controller
 
     public function show($id)
     {
-        $producto = Producto::with(Producto::eagerLodable())->find($id);
+        $producto = Producto::with($this->productoRelations())->find($id);
         if (! $producto) {
             throw new ResourceNotFoundException('Producto no encontrado.');
         }

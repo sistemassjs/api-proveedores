@@ -73,7 +73,8 @@ DB_PASSWORD=Sistemas789sjs
 # Aplicación
 APP_ENV=local
 APP_DEBUG=true
-APP_URL=https://localhost:80
+APP_URL=http://localhost:8088
+APP_FRONTEND_URL=http://localhost:4300
 APP_KEY=base64:/GwWRGgv9r5AiO1gXVxmJZWcZo7oW+aQEyrqiwkhVxA=
 
 # Colas
@@ -126,7 +127,7 @@ composer dev
 ```
 
 Este comando inicia automáticamente:
-- 👨‍💻 **Servidor Laravel** (localhost:8080)
+- 👨‍💻 **Servidor Laravel** (localhost:8088)
 - 📋 **Queue Workers** (imports, notifications, default)
 - 📝 **Logs en tiempo real** (storage/logs/laravel.log)
 - ⚡ **Vite** (assets frontend)
@@ -136,7 +137,7 @@ Este comando inicia automáticamente:
 
 **Terminal 1 - Servidor Laravel:**
 ```bash
-php artisan serve --host localhost --port 8080
+php artisan serve --host 0.0.0.0 --port 8088
 ```
 
 **Terminal 2 - Queue Workers:**
@@ -215,7 +216,7 @@ php artisan queue:retry all
 
 3. **Terminal 3 - Servidor PHP:**
    ```bash
-   php artisan serve --port=8000
+   php artisan serve --host 0.0.0.0 --port=8088
    ```
 
 4. **Terminal 4 - Compilación Frontend (opcional):**
@@ -287,9 +288,10 @@ npm run build
 
 ## 🌐 Endpoints Principales
 
-- **API:** `http://localhost:8000/api`
-- **WebSocket:** `ws://localhost:6001`
-- **Documentación API:** `http://localhost:8000/api/documentation`
+- **API:** `http://localhost:8088/api`
+- **WebSocket:** `ws://localhost:8080`
+- **Documentación API:** `http://localhost:8088/api/documentation`
+- **Front (app-proveedores):** `http://localhost:4300`
 
 ## 📋 Checklist de Verificación
 

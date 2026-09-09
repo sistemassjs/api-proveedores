@@ -27,6 +27,12 @@ class PagoSolicitudPago extends Pivot
         'estado_pago',
         'notas',
         'fecha_aplicacion',
+        // Datos de autorización en caso de que el pago sea registrado por un usuario diferente al que autorizó la SPP
+        'usuario_autorizo_id',
+        'usuario_autorizo_nombre',
+        'monto_autorizado',
+        'motivo_autorizacion',
+        'fecha_autorizacion',
     ];
 
     protected $casts = [
@@ -35,6 +41,9 @@ class PagoSolicitudPago extends Pivot
         'fecha_aplicacion' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        // Campos de autorización
+        'fecha_autorizacion' => 'datetime',
+        'monto_autorizado' => 'decimal:2',
     ];
 
 

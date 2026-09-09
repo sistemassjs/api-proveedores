@@ -3,14 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Presupuesto\StorePresupuestoRequest;
+use App\Http\Requests\Presupuesto\UpdatePresupuestoPdfThemeRequest;
 use App\Http\Requests\Presupuesto\UpdatePresupuestoRequest;
 use App\Http\Resources\Presupuesto\PresupuestoResource;
 use App\Http\Resources\ProveedorResource;
-use App\Support\PresupuestoPdfTemplate;
+use App\Services\Presupuesto\PresupuestoThemeService;
+use App\Support\PresupuestoAnexoArchivoResponse;
+use App\Support\PresupuestoAnexoImagenOptimizer;
+use App\Support\PresupuestoPdf;
+use App\Support\PresupuestoPdfDocumentConfig;
 use App\Models\CarteraCliente;
+use App\Models\ConfigEmisorReceptorPresupuesto;
 use App\Models\Presupuesto;
+use App\Models\PresupuestoAnexo;
+use App\Models\PresupuestoAnexoPdf;
 use App\Models\PresupuestoConcepto;
 use App\Models\Proveedor;
+use BaconQrCode\Renderer\GDLibRenderer;
+use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +30,11 @@ use App\Notifications\Presupuesto\PresupuestoEnviadoNotification;
 use App\Notifications\Presupuesto\PresupuestoRecibidoClienteProveedorNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -31,6 +44,55 @@ use Throwable;
 class ProveedorPresupuestoController extends Controller
 {
     private bool $logEnabled = true;
+
+    public function __construct(
+        private readonly PresupuestoThemeService $presupuestoThemeService,
+    ) {}
+
+    /**
+     * Catálogo de temas visuales para PDF / vista previa de presupuestos.
+     */
+    public function updatePdfTheme(
+        UpdatePresupuestoPdfThemeRequest $request,
+        Proveedor $proveedor,
+        Presupuesto $presupuesto
+    ): JsonResponse {
+        if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+            return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
+        }
+
+        if (! $this->puedeEditarPresupuesto($presupuesto)) {
+            return $this->error(
+                'No se puede modificar el estilo de este presupuesto en su estado actual.',
+                ['estado_actual' => $presupuesto->estado],
+                422
+            );
+        }
+
+        $presupuesto->pdf_theme = $this->presupuestoThemeService->resolveThemeKey(
+            $request->validated('pdf_theme')
+        );
+        $presupuesto->save();
+
+        return $this->success(
+            new PresupuestoResource($presupuesto->fresh(Presupuesto::eagerLodable())),
+            'Estilo del presupuesto actualizado correctamente.'
+        );
+    }
+
+    public function listPdfThemes(Request $request, Proveedor $proveedor): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
+            return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
+        }
+
+        return $this->success([
+            'themes' => $this->presupuestoThemeService->getThemes(),
+            'default_theme' => $this->presupuestoThemeService->getDefaultThemeKey(),
+        ], 'Temas de presupuesto obtenidos correctamente.');
+    }
 
     /**
      * Obtiene el siguiente folio de presupuesto para el proveedor autenticado.
@@ -42,11 +104,12 @@ class ProveedorPresupuestoController extends Controller
         $proveedor = $user?->proveedorPrincipal();
 
         if (! $user || ! $proveedor) {
-            return $this->error('No fue posible resolver el proveedor del usuario autenticado.', null, 422);
+            return $this->error('No fue posible resolver la empresa en GestionPlus.', null, 422);
+            // return $this->error('No fue posible resolver la empresa del usuario autenticado en GestionPlus.', null, 422);
         }
 
         if (! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
-            return $this->error('El usuario autenticado no tiene acceso al proveedor indicado.', null, 403);
+            return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
         }
 
         return $this->success([
@@ -64,7 +127,7 @@ class ProveedorPresupuestoController extends Controller
         $user = $request->user();
 
         if (! $user || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
-            return $this->error('El usuario autenticado no tiene acceso al proveedor indicado.', null, 403);
+            return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
         }
 
         return $this->success([
@@ -81,20 +144,19 @@ class ProveedorPresupuestoController extends Controller
         $user = $request->user();
 
         if (! $user || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
-            return $this->error('El usuario autenticado no tiene acceso al proveedor indicado.', null, 403);
+            return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
         }
 
         $filters = $request->only(Proveedor::getFilters());
-        $perPage = min((int) $request->input('per_page', 50), 100);
+//        $perPage = min((int) $request->input('per_page', 50), 100);
 
         $proveedores = Proveedor::with(Proveedor::eagerLodable())
+            ->where('id', '!=', $proveedor->id)
             ->filter($filters)
             ->orderBy('nombre_comercial', 'asc')
-            ->paginate($perPage);
+            ->get();
 
-        $data = ProveedorResource::collection($proveedores)->resolve();
-
-        return $this->paginated($proveedores->setCollection(collect($data)));
+        return $this->success(ProveedorResource::collection($proveedores));
     }
 
     public function index(Request $request, Proveedor $proveedor): JsonResponse
@@ -125,7 +187,7 @@ class ProveedorPresupuestoController extends Controller
 
         $sortBy = $request->input('sort_by', 'created_at');
         $order = $request->input('order', 'desc');
-        $perPage = $request->input('per_page', 10);
+        $perPage = min(max(1, (int) $request->input('per_page', 10)), 100);
 
         $ultimasN = isset($filters['ultimas_presupuestos']) ? (int) $filters['ultimas_presupuestos'] : 0;
         $hasUltimas = $ultimasN > 0;
@@ -161,6 +223,45 @@ class ProveedorPresupuestoController extends Controller
             'aceptados' => (int) (clone $baseQuery)->where('estado', Presupuesto::ESTADO_ACEPTADO)->count(),
         ];
 
+        $unreadSegmentCountsFormatted = [
+            'borrador' => (int) (clone $baseQuery)
+                ->where('estado', Presupuesto::ESTADO_BORRADOR)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'enviados' => (int) (clone $baseQuery)
+                ->where('estado', Presupuesto::ESTADO_ENVIADO)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'observados' => (int) (clone $baseQuery)
+                ->whereIn('estado', [Presupuesto::ESTADO_RECHAZADO, Presupuesto::ESTADO_RECHAZADO_CON_OBSERVACION])
+                ->whereNotNull('motivo_rechazo')
+                ->whereRaw('TRIM(motivo_rechazo) != ?', [''])
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'rechazados' => (int) (clone $baseQuery)
+                ->whereIn('estado', [Presupuesto::ESTADO_RECHAZADO, Presupuesto::ESTADO_RECHAZADO_CON_OBSERVACION, Presupuesto::ESTADO_VENCIDO])
+                ->where(function ($q) {
+                    $q->whereNull('motivo_rechazo')
+                        ->orWhereRaw('TRIM(COALESCE(motivo_rechazo, "")) = ?', ['']);
+                })
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'aceptados' => (int) (clone $baseQuery)
+                ->where('estado', Presupuesto::ESTADO_ACEPTADO)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+        ];
+
         if ($hasUltimas) {
             $ids = (clone $baseQuery)->pluck('id');
             $listQuery = Presupuesto::query()
@@ -187,7 +288,10 @@ class ProveedorPresupuestoController extends Controller
             $originalPaginator->setCollection(collect($data)),
             'Datos paginados.',
             200,
-            ['segment_counts' => $segmentCountsFormatted]
+            [
+                'segment_counts' => $segmentCountsFormatted,
+                'unread_segment_counts' => $unreadSegmentCountsFormatted,
+            ]
         );
     }
 
@@ -197,8 +301,12 @@ class ProveedorPresupuestoController extends Controller
             $validated = $request->validated();
             $user = $request->user();
 
+            Log::info('Validación de presupuesto', [
+                'payload' => $validated,
+            ]);
+
             if (! $user || ! method_exists($user, 'tieneAccesoAProveedor') || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
-                return $this->error('El usuario autenticado no tiene acceso al proveedor indicado.', null, 403);
+                return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
             }
 
             if ((int) $validated['proveedor_id'] !== (int) $proveedor->id) {
@@ -206,6 +314,17 @@ class ProveedorPresupuestoController extends Controller
             }
 
             $validated = $this->resolverReceptorEmpresaParaValidacion($validated, $proveedor);
+            $validated = $this->normalizarTerminosPayload($validated);
+
+            try {
+                $validated = $this->normalizarTarjetaEmisorPresupuesto($validated, (int) $proveedor->id, true);
+            } catch (\InvalidArgumentException $e) {
+                return $this->error($e->getMessage(), null, 422);
+            }
+
+            Log::info('Modificacion Validación de presupuesto', [
+                'payload' => $validated,
+            ]);
 
             if (! empty($validated['empresa_receptora_id'])) {
                 $idReceptor = (int) $validated['empresa_receptora_id'];
@@ -231,6 +350,7 @@ class ProveedorPresupuestoController extends Controller
                 $payload['iva_porcentaje'] = $payload['iva_porcentaje'] ?? 16.00;
                 $payload['estado'] = $payload['estado'] ?? Presupuesto::ESTADO_BORRADOR;
                 $payload = $this->normalizarEmpresaReceptora($payload, (int) $payload['proveedor_id']);
+                $payload = $this->normalizarPdfThemeEnPayload($payload);
 
                 $presupuesto = Presupuesto::create($payload);
                 $presupuesto->asegurarTokenPublico();
@@ -243,6 +363,7 @@ class ProveedorPresupuestoController extends Controller
             });
 
             $this->log('Presupuesto creado', ['presupuesto_id' => $presupuesto->id]);
+            $this->log('Presupuesto creado', ['presupuesto_id' => $presupuesto]);
 
             return $this->success(
                 new PresupuestoResource($presupuesto),
@@ -259,7 +380,7 @@ class ProveedorPresupuestoController extends Controller
     public function show(Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
     {
         if (! $this->presupuestoAccesiblePorProveedor($proveedor, $presupuesto)) {
-            return $this->error('Presupuesto no pertenece a este proveedor.', null, 403);
+            return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
         }
 
         $user = auth()->user();
@@ -272,7 +393,7 @@ class ProveedorPresupuestoController extends Controller
             $this->marcarNotificacionesPresupuestoRecibidoLeidas($user, (int) $presupuesto->id);
         }
 
-        $presupuesto->load(Presupuesto::eagerLodable());
+        $presupuesto->load(array_merge(Presupuesto::eagerLodable(), ['estadoLogs.user']));
         $presupuesto->asegurarTokenPublico();
 
         return $this->success(new PresupuestoResource($presupuesto));
@@ -282,12 +403,12 @@ class ProveedorPresupuestoController extends Controller
     {
         try {
             if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
-                return $this->error('Presupuesto no pertenece a este proveedor.', null, 403);
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
             }
 
             if (! $this->puedeEditarPresupuesto($presupuesto)) {
                 return $this->error(
-                    'No se puede modificar este presupuesto. Solo se editan borradores o presupuestos con observaciones del cliente.',
+                    'No se puede modificar este presupuesto en GestionPlus. Solo se editan borradores o presupuestos con observaciones del cliente.',
                     ['estado_actual' => $presupuesto->estado],
                     422
                 );
@@ -295,10 +416,21 @@ class ProveedorPresupuestoController extends Controller
 
             $validated = $request->validated();
             if ((int) $validated['proveedor_id'] !== (int) $proveedor->id) {
-                return $this->error('El proveedor del payload no coincide con el proveedor de la ruta.', null, 422);
+                return $this->error('La empresa del payload no coincide con la empresa de la ruta en GestionPlus.', null, 422);
             }
 
             $validated = $this->resolverReceptorEmpresaParaValidacion($validated, $proveedor);
+            $validated = $this->normalizarTerminosPayload($validated);
+
+            try {
+                $validated = $this->normalizarTarjetaEmisorPresupuesto(
+                    $validated,
+                    (int) $proveedor->id,
+                    array_key_exists('config_emisor_presupuesto_id', $validated),
+                );
+            } catch (\InvalidArgumentException $e) {
+                return $this->error($e->getMessage(), null, 422);
+            }
 
             if (! empty($validated['empresa_receptora_id'])) {
                 $idReceptor = (int) $validated['empresa_receptora_id'];
@@ -320,6 +452,7 @@ class ProveedorPresupuestoController extends Controller
                 $payload['proveedor_id'] = (int) $validated['proveedor_id'];
                 $payload['numero_presupuesto'] = $payload['numero_presupuesto'] ?? $presupuesto->numero_presupuesto;
                 $payload = $this->normalizarEmpresaReceptora($payload, (int) $payload['proveedor_id']);
+                $payload = $this->normalizarPdfThemeEnPayload($payload);
 
                 $presupuesto->update($payload);
                 if ($presupuesto->estado === Presupuesto::ESTADO_BORRADOR) {
@@ -359,12 +492,12 @@ class ProveedorPresupuestoController extends Controller
     {
         try {
             if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
-                return $this->error('Presupuesto no pertenece a este proveedor.', null, 403);
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
             }
 
             if ($presupuesto->estado !== Presupuesto::ESTADO_BORRADOR) {
                 return $this->error(
-                    'Solo se pueden eliminar presupuestos en borrador.',
+                    'Solo se pueden eliminar presupuestos en borrador en GestionPlus.',
                     ['estado_actual' => $presupuesto->estado],
                     422
                 );
@@ -384,73 +517,316 @@ class ProveedorPresupuestoController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return $this->error('No fue posible eliminar el presupuesto.', [$e->getMessage()], 500);
+            return $this->error('No fue posible eliminar el presupuesto en GestionPlus.', [$e->getMessage()], 500);
         }
     }
 
     /**
+     * Genera PDF desde datos del formulario (para borradores).
+     */
+    public function generarPdfDesdeFormulario(StorePresupuestoRequest $request, Proveedor $proveedor): Response
+    {
+        try {
+            $user = $request->user();
+
+            if (! $user || ! method_exists($user, 'tieneAccesoAProveedor') || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario autenticado no tiene acceso al proveedor indicado.',
+                ], 403);
+            }
+
+            $validated = $request->validated();
+
+            if ((int) $validated['proveedor_id'] !== (int) $proveedor->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El proveedor del payload no coincide con el proveedor de la ruta.',
+                ], 422);
+            }
+
+            $validated = $this->resolverReceptorEmpresaParaValidacion($validated, $proveedor);
+            $validated = $this->normalizarTerminosPayload($validated);
+            try {
+                $validated = $this->normalizarTarjetaEmisorPresupuesto($validated, (int) $proveedor->id, true);
+            } catch (\InvalidArgumentException $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+            $normalized = $this->normalizarEmpresaReceptora($validated, (int) $proveedor->id);
+            $presupuestoGuardado = $this->guardarBorradorParaPreview($request, $proveedor, $validated);
+
+            $this->log('Generación de PDF desde formulario solicitada', [
+                'proveedor_id' => $proveedor->id,
+                'numero_presupuesto' => $presupuestoGuardado->numero_presupuesto,
+            ]);
+
+            $theme = $request->input('pdf_theme')
+                ?? $request->query('theme')
+                ?? $request->query('pdf_theme')
+                ?? $presupuestoGuardado->pdf_theme;
+
+            return $this->respuestaPdfPresupuestoUnificado(
+                $presupuestoGuardado,
+                is_string($theme) ? $theme : null,
+                [
+                    'X-Presupuesto-Id' => (string) $presupuestoGuardado->id,
+                    'X-Presupuesto-Numero' => (string) $presupuestoGuardado->numero_presupuesto,
+                ]
+            );
+        } catch (Throwable $e) {
+            $this->log('Error al generar PDF desde formulario', [
+                'proveedor_id' => $proveedor->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No fue posible generar el PDF.',
+                'errors' => [$e->getMessage()],
+            ], 500);
+        }
+    }
+
+    /**
+     * Envía el correo al cliente con enlace público (operación aparte del cambio de estado).
+     * Permitido para cualquier estado del presupuesto.
+     */
+    public function enviarCorreo(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    {
+        $validated = $request->validate([
+            'incluir_invitacion' => 'boolean',
+            'correo_destino' => 'email',
+        ]);
+
+        try {
+            if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
+            }
+
+            if (! $validated['correo_destino'] || ! filter_var($validated['correo_destino'], FILTER_VALIDATE_EMAIL)) {
+                return $this->error('No hay correo del cliente válido para enviar.', null, 422);
+            }
+
+            $presupuesto->load(Presupuesto::eagerLodable());
+            $presupuesto->asegurarTokenPublico();
+
+            $incluirInvitacion = $validated['incluir_invitacion'] ?? false;
+            // $this->despacharCorreoPresupuesto($presupuesto, $incluirInvitacion);
+
+            $appUrl = config('app.frontend_url', config('app.url'));
+            $enlacePublico = rtrim((string) $appUrl, '/') . '/public/presupuesto/' . $presupuesto->token_publico;
+
+            $nombreReceptor = $presupuesto->empresa_receptora_nombre ?? $presupuesto->empresa_receptora_empresa;
+
+            Mail::to($validated['correo_destino'])->send(
+                new PresupuestoEnviadoMail($presupuesto, $enlacePublico, $nombreReceptor, $incluirInvitacion)
+            );
+
+            $this->log('Presupuesto: correo al cliente enviado', ['presupuesto_id' => $presupuesto->id]);
+
+            return $this->success(
+                new PresupuestoResource($presupuesto->fresh(Presupuesto::eagerLodable())),
+                'Correo enviado correctamente al cliente en GestionPlus.'
+            );
+        } catch (Throwable $e) {
+            $this->log('Error al enviar correo de presupuesto', [
+                'presupuesto_id' => $presupuesto->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('No fue posible enviar el correo.', [$e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Notifica en la app (y FCM) al receptor: proveedor catálogo o cliente con cuenta en otro proveedor.
+     * No notifica al usuario que generó el presupuesto (user_id).
+     * Permitido para cualquier estado del presupuesto.
+     */
+    public function notificarReceptorApp(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    {
+        try {
+            if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
+            }
+
+            $presupuesto->load(Presupuesto::eagerLodable());
+
+            $esReenvio = $request->boolean('es_reenvio');
+
+            $this->despacharNotificacionesReceptor($presupuesto, $esReenvio);
+
+            $this->log('Presupuesto: notificación a receptor en app', [
+                'presupuesto_id' => $presupuesto->id,
+                'es_reenvio' => $esReenvio,
+            ]);
+
+            return $this->success(
+                new PresupuestoResource($presupuesto->fresh(Presupuesto::eagerLodable())),
+                'Notificación enviada a los usuarios del receptor en GestionPlus.'
+            );
+        } catch (Throwable $e) {
+            $this->log('Error al notificar receptor de presupuesto en GestionPlus', [
+                'presupuesto_id' => $presupuesto->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('No fue posible enviar la notificación en GestionPlus.', [$e->getMessage()], 500);
+        }
+    }
+
+
+    /**
      * Duplica un presupuesto con un nuevo folio y estado borrador.
+     *
+     * Body opcional (bool, default true):
+     * - mantener_cliente
+     * - mantener_anexos_imagen
+     * - mantener_anexos_pdf
+     * - mantener_tarjeta
      */
     public function duplicar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
     {
         try {
             if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
-                return $this->error('Presupuesto no pertenece a este proveedor.', null, 403);
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
             }
 
             $user = $request->user();
             if (! $user || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
-                return $this->error('El usuario autenticado no tiene acceso al proveedor indicado.', null, 403);
+                return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
             }
 
-            $presupuesto->load('conceptos');
+            $presupuesto->load(['conceptos', 'anexos', 'anexosPdf']);
 
-            $nuevo = DB::transaction(function () use ($presupuesto, $user) {
+            $mantenerCliente = $this->boolFromRequest($request, 'mantener_cliente', true);
+            $mantenerAnexosImagen = $this->boolFromRequest($request, 'mantener_anexos_imagen', true);
+            $mantenerAnexosPdf = $this->boolFromRequest($request, 'mantener_anexos_pdf', true);
+            $mantenerTarjeta = $this->boolFromRequest($request, 'mantener_tarjeta', true);
+
+            $nuevo = DB::transaction(function () use (
+                $presupuesto,
+                $user,
+                $mantenerCliente,
+                $mantenerAnexosImagen,
+                $mantenerAnexosPdf,
+                $mantenerTarjeta
+            ) {
                 $payload = $presupuesto->only([
                     'proveedor_id',
-                    'empresa_receptora_id',
-                    'proveedor_receptor_id',
-                    'empresa_receptora_nombre',
-                    'empresa_receptora_puesto',
-                    'empresa_receptora_empresa',
-                    'empresa_receptora_alias',
-                    'empresa_receptora_telefono',
-                    'empresa_receptora_correo',
                     'configuracion_condiciones',
                     'concepto_general',
+                    'nombre_presupuesto',
+                    'titulo_anexos',
+                    'titulo_anexos_pdf',
                     'con_iva',
                     'iva_porcentaje',
+                    'porcentaje_descuento',
+                    'cantidad_descuento',
                     'term_cond_dias_vigencia',
                     'term_cond_moneda',
                     'term_cond_impuestos_en_pdf',
                     'term_cond_iva',
-                    'term_cond_anticipo_porcentaje',
                     'term_cond_tiempo_entrega_dias',
+                    'term_cond_inicio_trabajo',
+                    'term_cond_inicio_trabajo_porcentaje',
+                    'term_cond_inicio_trabajo_cantidad',
+                    'term_cond_textos_libres',
+                    'term_cond_visibilidad',
+                    'validacion_alcances',
                     'obs_garantia_dias',
-                    'obs_traslados',
-                    'obs_viaticos',
+                    'config_mostrar_totales',
+                    'pdf_theme',
+                    'ppto_config',
+                    'incluir_leyenda_atentamente',
                 ]);
 
+                if ($mantenerTarjeta) {
+                    $payload = array_merge($payload, $presupuesto->only([
+                        'config_emisor_presupuesto_id',
+                        'empresa_emisora_nombre',
+                        'empresa_emisora_puesto',
+                        'empresa_emisora_telefono',
+                        'empresa_emisora_correo',
+                        'empresa_emisora_nombre_comercial',
+                    ]));
+                } else {
+                    $payload['config_emisor_presupuesto_id'] = null;
+                    $payload['empresa_emisora_nombre'] = null;
+                    $payload['empresa_emisora_puesto'] = null;
+                    $payload['empresa_emisora_telefono'] = null;
+                    $payload['empresa_emisora_correo'] = null;
+                    $payload['empresa_emisora_nombre_comercial'] = null;
+                }
+
+                if ($mantenerCliente) {
+                    $payload = array_merge($payload, $presupuesto->only([
+                        'empresa_receptora_id',
+                        'proveedor_receptor_id',
+                        'empresa_receptora_nombre',
+                        'empresa_receptora_puesto',
+                        'empresa_receptora_empresa',
+                        'empresa_receptora_alias',
+                        'empresa_receptora_telefono',
+                        'empresa_receptora_correo',
+                    ]));
+                } else {
+                    $payload['empresa_receptora_id'] = null;
+                    $payload['proveedor_receptor_id'] = null;
+                    $payload['empresa_receptora_nombre'] = null;
+                    $payload['empresa_receptora_puesto'] = null;
+                    $payload['empresa_receptora_empresa'] = null;
+                    $payload['empresa_receptora_alias'] = null;
+                    $payload['empresa_receptora_telefono'] = null;
+                    $payload['empresa_receptora_correo'] = null;
+                }
+
+                // No copiar columnas droppeadas (obs_traslados / obs_viaticos / term_cond_anticipo_porcentaje)
+                // ni estado de ciclo del origen (rechazo, visto, token).
                 $payload['numero_presupuesto'] = Presupuesto::generarNumeroPresupuesto((int) $presupuesto->proveedor_id);
                 $payload['fecha_emision'] = now()->toDateString();
                 $payload['estado'] = Presupuesto::ESTADO_BORRADOR;
                 $payload['user_id'] = $user->id;
+                $payload['motivo_rechazo'] = null;
+                $payload['item_visto'] = false;
 
                 $nuevo = Presupuesto::create($payload);
                 $nuevo->asegurarTokenPublico();
 
-                $conceptos = $presupuesto->conceptos->map(function (PresupuestoConcepto $c, int $index) {
-                    return [
+                $conceptos = $presupuesto->conceptos->map(function (PresupuestoConcepto $c) {
+                    $fila = [
+                        'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
                         'descripcion' => $c->descripcion,
                         'cantidad' => (float) $c->cantidad,
                         'unidad' => $c->unidad,
                         'precio_unitario' => (float) $c->precio_unitario,
+                        'proveedor_nombre' => $c->proveedor_nombre,
+                        'proveedor_logo_url' => $c->proveedor_logo_url,
                     ];
+
+                    // Se re-almacena como copia propia del nuevo presupuesto (evita compartir archivo).
+                    $imagenBase64 = PresupuestoAnexoArchivoResponse::archivoBase64($c->imagen_path);
+                    if ($imagenBase64 !== null) {
+                        $fila['imagen_base64'] = $imagenBase64;
+                    }
+
+                    return $fila;
                 })->values()->all();
 
                 $this->sincronizarConceptos($nuevo, $conceptos);
                 $nuevo->recalcularDesdeConceptos();
                 $nuevo->save();
+
+                if ($mantenerAnexosImagen) {
+                    $this->duplicarAnexosImagenDesdeOrigen($presupuesto, $nuevo);
+                }
+
+                if ($mantenerAnexosPdf) {
+                    $this->duplicarAnexosPdfDesdeOrigen($presupuesto, $nuevo);
+                }
 
                 return $nuevo->fresh(Presupuesto::eagerLodable());
             });
@@ -459,6 +835,10 @@ class ProveedorPresupuestoController extends Controller
                 'origen_id' => $presupuesto->id,
                 'nuevo_id' => $nuevo->id,
                 'numero_presupuesto' => $nuevo->numero_presupuesto,
+                'mantener_cliente' => $mantenerCliente,
+                'mantener_anexos_imagen' => $mantenerAnexosImagen,
+                'mantener_anexos_pdf' => $mantenerAnexosPdf,
+                'mantener_tarjeta' => $mantenerTarjeta,
             ]);
 
             return $this->success(
@@ -472,8 +852,297 @@ class ProveedorPresupuestoController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return $this->error('No fue posible duplicar el presupuesto.', [$e->getMessage()], 500);
+            return $this->error('No fue posible duplicar el presupuesto en GestionPlus.', [$e->getMessage()], 500);
         }
+    }
+
+    private function boolFromRequest(Request $request, string $key, bool $default): bool
+    {
+        $value = filter_var(
+            $request->input($key, $default),
+            FILTER_VALIDATE_BOOLEAN,
+            FILTER_NULL_ON_FAILURE
+        );
+
+        return $value === null ? $default : $value;
+    }
+
+    private function duplicarAnexosImagenDesdeOrigen(Presupuesto $origen, Presupuesto $destino): void
+    {
+        $disk = Storage::disk('public');
+        $proveedorId = (int) $destino->proveedor_id;
+
+        foreach ($origen->anexos as $anexo) {
+            $origenPath = (string) ($anexo->archivo_path ?? '');
+            if ($origenPath === '' || ! $disk->exists($origenPath)) {
+                continue;
+            }
+
+            $extension = pathinfo($origenPath, PATHINFO_EXTENSION) ?: 'jpg';
+            $nuevoPath = sprintf(
+                'proveedores/%d/presupuestos/%d/anexos/%s.%s',
+                $proveedorId,
+                (int) $destino->id,
+                Str::uuid()->toString(),
+                $extension
+            );
+            $disk->copy($origenPath, $nuevoPath);
+
+            PresupuestoAnexo::create([
+                'presupuesto_id' => $destino->id,
+                'titulo' => $anexo->titulo,
+                'descripcion' => $anexo->descripcion,
+                'precio' => $anexo->precio,
+                'orden' => $anexo->orden,
+                'archivo_path' => $nuevoPath,
+                'archivo_width' => $anexo->archivo_width,
+                'archivo_height' => $anexo->archivo_height,
+                'archivo_aspect_ratio' => $anexo->archivo_aspect_ratio,
+            ]);
+        }
+    }
+
+    private function duplicarAnexosPdfDesdeOrigen(Presupuesto $origen, Presupuesto $destino): void
+    {
+        $disk = Storage::disk('public');
+        $proveedorId = (int) $destino->proveedor_id;
+
+        foreach ($origen->anexosPdf as $anexo) {
+            $origenPath = (string) ($anexo->archivo_path ?? '');
+            if ($origenPath === '' || ! $disk->exists($origenPath)) {
+                continue;
+            }
+
+            $nuevoPath = sprintf(
+                'proveedores/%d/presupuestos/%d/anexos-pdf/%s.pdf',
+                $proveedorId,
+                (int) $destino->id,
+                Str::uuid()->toString()
+            );
+            $disk->copy($origenPath, $nuevoPath);
+
+            PresupuestoAnexoPdf::create([
+                'presupuesto_id' => $destino->id,
+                'titulo' => $anexo->titulo,
+                'orden' => $anexo->orden,
+                'archivo_path' => $nuevoPath,
+                'paginas' => $anexo->paginas,
+                'mostrar_estampado' => $anexo->mostrar_estampado,
+                'mostrar_numero_pagina' => $anexo->mostrar_numero_pagina,
+                'mostrar_datos_presupuesto' => $anexo->mostrar_datos_presupuesto,
+            ]);
+        }
+    }
+
+
+    /**
+     * Genera y descarga el PDF de un presupuesto guardado.
+     */
+    public function generarPdf(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): Response
+    {
+        try {
+            if (! $this->presupuestoAccesiblePorProveedor($proveedor, $presupuesto)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Presupuesto no pertenece a este proveedor.',
+                ], 403);
+            }
+
+            $presupuesto->load(Presupuesto::eagerLodable());
+
+            $this->log('Generación de PDF solicitada', [
+                'presupuesto_id' => $presupuesto->id,
+                'numero_presupuesto' => $presupuesto->numero_presupuesto,
+            ]);
+
+            $theme = $request->query('theme') ?? $request->query('pdf_theme');
+
+            return $this->respuestaPdfPresupuestoUnificado(
+                $presupuesto,
+                is_string($theme) ? $theme : null
+            );
+        } catch (Throwable $e) {
+            $this->log('Error al generar PDF', [
+                'presupuesto_id' => $presupuesto->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No fue posible generar el PDF.',
+                'errors' => [$e->getMessage()],
+            ], 500);
+        }
+    }
+
+    /**
+     * Marca el presupuesto como enviado (estado, token público, vigencia). Correo y notificación in-app van en endpoints dedicados.
+     *
+     * @see enviarCorreo
+     * @see notificarReceptorApp
+     */
+    public function enviar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    {
+        try {
+            if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
+            }
+
+            if (! in_array($presupuesto->estado, [
+                Presupuesto::ESTADO_BORRADOR,
+                Presupuesto::ESTADO_RECHAZADO,
+                Presupuesto::ESTADO_RECHAZADO_CON_OBSERVACION,
+            ], true)) {
+                return $this->error(
+                    'Solo se puede enviar un presupuesto en borrador o tras una corrección solicitada (rechazo con observación).',
+                    ['estado_actual' => $presupuesto->estado],
+                    422
+                );
+            }
+
+            if (in_array($presupuesto->estado, [
+                Presupuesto::ESTADO_RECHAZADO,
+                Presupuesto::ESTADO_RECHAZADO_CON_OBSERVACION,
+            ], true)) {
+                $motivo = trim((string) ($presupuesto->motivo_rechazo ?? ''));
+                if ($motivo === '') {
+                    return $this->error(
+                        'Solo se puede reenviar un presupuesto rechazado cuando hay motivo u observación del cliente.',
+                        ['estado_actual' => $presupuesto->estado],
+                        422
+                    );
+                }
+            }
+
+            $presupuesto->load(Presupuesto::eagerLodable());
+
+            DB::transaction(function () use ($request, $presupuesto) {
+                $estadoAnterior = $presupuesto->estado;
+
+                // Al enviar desde borrador (o reenviar tras corrección), la fecha de emision se fija al dia actual.
+                $presupuesto->fecha_emision = now()->toDateString();
+                $presupuesto->estado = Presupuesto::ESTADO_ENVIADO;
+                $presupuesto->motivo_rechazo = null;
+                $presupuesto->asegurarTokenPublico();
+
+                if (! $presupuesto->fecha_vencimiento) {
+                    $presupuesto->fecha_vencimiento = $this->calcularFechaVencimiento($presupuesto);
+                }
+                $presupuesto->save();
+                $presupuesto->registrarCambioEstado($estadoAnterior, $request->user()?->id);
+
+                if ($this->debeNotificarComoProveedorCatalogo($presupuesto)) {
+                    $this->notificarUsuarioPrincipalProveedorReceptor($presupuesto);
+                }
+            });
+
+            $presupuesto->refresh()->load(Presupuesto::eagerLodable());
+            $this->log('Presupuesto enviado (estado)', ['presupuesto_id' => $presupuesto->id]);
+
+            return $this->success(
+                new PresupuestoResource($presupuesto),
+                'Presupuesto marcado como enviado.'
+            );
+        } catch (Throwable $e) {
+            $this->log('Error al enviar presupuesto', [
+                'presupuesto_id' => $presupuesto->id,
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+                'code' => $e->getCode(),
+            ]);
+
+            return $this->error('No fue posible enviar el presupuesto en GestionPlus.', [$e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Reenvía el presupuesto por correo al cliente (solo si ya está enviado y tiene correo).
+     */
+    public function reenviar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    {
+        try {
+            if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+                return $this->error('La empresa no tiene acceso a este presupuesto en GestionPlus.', null, 403);
+            }
+
+            if (! $presupuesto->empresa_receptora_correo || ! filter_var($presupuesto->empresa_receptora_correo, FILTER_VALIDATE_EMAIL)) {
+                return $this->error('No hay correo del cliente para reenviar.', null, 422);
+            }
+
+            $presupuesto->load(Presupuesto::eagerLodable());
+            $presupuesto->asegurarTokenPublico();
+
+            // $this->despacharCorreoPresupuesto($presupuesto);
+            $this->despacharNotificacionesReceptor($presupuesto, true);
+
+            $this->log('Presupuesto reenviado por correo', ['presupuesto_id' => $presupuesto->id]);
+
+            return $this->success(
+                new PresupuestoResource($presupuesto->fresh(Presupuesto::eagerLodable())),
+                'Presupuesto reenviado correctamente al cliente.'
+            );
+        } catch (Throwable $e) {
+            $this->log('Error al reenviar presupuesto', [
+                'presupuesto_id' => $presupuesto->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('No fue posible reenviar el presupuesto.', [$e->getMessage()], 500);
+        }
+    }
+
+
+    
+    ///////////////////////
+    // PRIVATES METHODS ///
+    ///////////////////////
+
+    /**
+     * Guarda o actualiza un borrador antes de generar el PDF de preview.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function guardarBorradorParaPreview(Request $request, Proveedor $proveedor, array $validated): Presupuesto
+    {
+        return DB::transaction(function () use ($request, $proveedor, $validated) {
+            $payload = collect($validated)->except(['conceptos', 'presupuesto_id'])->toArray();
+            $payload['user_id'] = $request->user()->id;
+            $payload['proveedor_id'] = (int) $validated['proveedor_id'];
+            $payload['con_iva'] = $payload['con_iva'] ?? true;
+            $payload['iva_porcentaje'] = $payload['iva_porcentaje'] ?? 16.00;
+            $payload['estado'] = Presupuesto::ESTADO_BORRADOR;
+            $payload = $this->normalizarEmpresaReceptora($payload, (int) $payload['proveedor_id']);
+
+            $presupuestoId = (int) ($validated['presupuesto_id'] ?? 0);
+            if ($presupuestoId > 0) {
+                $presupuesto = Presupuesto::query()->findOrFail($presupuestoId);
+
+                if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+                    abort(403, 'La empresa no tiene acceso a este presupuesto en GestionPlus.');
+                }
+
+                if (! $this->puedeEditarPresupuesto($presupuesto)) {
+                    abort(422, 'No se puede modificar este presupuesto en GestionPlus.');
+                }
+
+                $payload['numero_presupuesto'] = $payload['numero_presupuesto'] ?? $presupuesto->numero_presupuesto;
+                $presupuesto->update($payload);
+            } else {
+                $payload['numero_presupuesto'] = $payload['numero_presupuesto'] ?? Presupuesto::generarNumeroPresupuesto((int) $payload['proveedor_id']);
+                $presupuesto = Presupuesto::create($payload);
+            }
+
+            $presupuesto->asegurarTokenPublico();
+            $this->sincronizarConceptos($presupuesto, $validated['conceptos']);
+            $presupuesto->recalcularDesdeConceptos();
+            $presupuesto->fecha_vencimiento = array_key_exists('term_cond_dias_vigencia', $payload)
+                ? $this->calcularFechaVencimiento($presupuesto)
+                : $presupuesto->fecha_vencimiento;
+            $presupuesto->save();
+
+            return $presupuesto->fresh(Presupuesto::eagerLodable());
+        });
     }
 
     /**
@@ -571,6 +1240,19 @@ class ProveedorPresupuestoController extends Controller
      */
     private function normalizarEmpresaReceptora(array $payload, int $proveedorId): array
     {
+        unset($payload['empresa_receptora_logo']);
+
+        foreach ([
+            'empresa_receptora_nombre',
+            'empresa_receptora_puesto',
+            'empresa_receptora_empresa',
+            'empresa_receptora_alias',
+            'empresa_receptora_telefono',
+            'empresa_receptora_correo',
+        ] as $field) {
+            $payload[$field] = $this->normalizarTextoReceptor($payload[$field] ?? null);
+        }
+
         $esProveedorReceptor = filter_var($payload['es_proveedor_receptor'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         if (empty($payload['empresa_receptora_id'])) {
@@ -588,18 +1270,14 @@ class ProveedorPresupuestoController extends Controller
             $proveedorReceptorId = (int) $payload['empresa_receptora_id'];
             $receptor = Proveedor::query()->findOrFail($proveedorReceptorId);
 
-            $payload['empresa_receptora_nombre'] = $this->valorReceptorNoVacio(
+            $payload['empresa_receptora_nombre'] = $this->primerTextoReceptorOpcional(
                 $receptor->contacto_nombre,
-                $receptor->nombre_propietario,
-                $receptor->nombre_comercial,
-                $receptor->razon_social,
-                'Contacto'
+                $receptor->nombre_propietario
             );
-            $payload['empresa_receptora_puesto'] = $receptor->contacto_cargo;
-            $payload['empresa_receptora_empresa'] = $this->valorReceptorNoVacio(
+            $payload['empresa_receptora_puesto'] = $this->normalizarTextoReceptor($receptor->contacto_cargo);
+            $payload['empresa_receptora_empresa'] = $this->primerTextoReceptorOpcional(
                 $receptor->nombre_comercial,
-                $receptor->razon_social,
-                'Empresa'
+                $receptor->razon_social
             );
             $payload['empresa_receptora_alias'] = null;
             $payload['empresa_receptora_telefono'] = $this->primerTextoReceptorOpcional(
@@ -621,12 +1299,12 @@ class ProveedorPresupuestoController extends Controller
                 ->where('proveedor_id', $proveedorId)
                 ->findOrFail((int) $payload['empresa_receptora_id']);
 
-            $payload['empresa_receptora_nombre'] = $this->valorReceptorNoVacio($cliente->nombre, 'Contacto');
-            $payload['empresa_receptora_puesto'] = $cliente->puesto;
-            $payload['empresa_receptora_empresa'] = $this->valorReceptorNoVacio($cliente->empresa, 'Empresa');
-            $payload['empresa_receptora_alias'] = $cliente->alias_empresa;
-            $payload['empresa_receptora_telefono'] = $cliente->telefono;
-            $payload['empresa_receptora_correo'] = $cliente->correo;
+            $payload['empresa_receptora_nombre'] = $this->normalizarTextoReceptor($cliente->nombre);
+            $payload['empresa_receptora_puesto'] = $this->normalizarTextoReceptor($cliente->puesto);
+            $payload['empresa_receptora_empresa'] = $this->normalizarTextoReceptor($cliente->empresa);
+            $payload['empresa_receptora_alias'] = $this->normalizarTextoReceptor($cliente->alias_empresa);
+            $payload['empresa_receptora_telefono'] = $this->normalizarTextoReceptor($cliente->telefono);
+            $payload['empresa_receptora_correo'] = $this->normalizarTextoReceptor($cliente->correo);
             $payload['proveedor_receptor_id'] = null;
             $payload['configuracion_condiciones'] = $this->limpiarMetaReceptorEnConfiguracionJson(
                 $payload['configuracion_condiciones'] ?? null
@@ -639,42 +1317,28 @@ class ProveedorPresupuestoController extends Controller
     }
 
     /**
-     * Primer texto no vacío; si no hay, usa el último argumento (reserva) o «—».
-     *
-     * @param  string|null  ...$candidatos  último puede ser reserva fija
-     */
-    private function valorReceptorNoVacio(?string $primero, ?string ...$candidatos): string
-    {
-        $todos = array_merge([$primero], $candidatos);
-        foreach ($todos as $c) {
-            if ($c === null) {
-                continue;
-            }
-            $t = trim((string) $c);
-            if ($t !== '') {
-                return $t;
-            }
-        }
-
-        return '—';
-    }
-
-    /**
      * @param  string|null  ...$vals
      */
     private function primerTextoReceptorOpcional(?string ...$vals): ?string
     {
         foreach ($vals as $v) {
-            if ($v === null) {
-                continue;
-            }
-            $t = trim((string) $v);
-            if ($t !== '') {
+            $t = $this->normalizarTextoReceptor($v);
+            if ($t !== null) {
                 return $t;
             }
         }
 
         return null;
+    }
+
+    private function normalizarTextoReceptor(mixed $value): ?string
+    {
+        $text = trim((string) ($value ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        return preg_match('/^[_\-\x{2013}\x{2014}]+$/u', $text) === 1 ? null : $text;
     }
 
     /**
@@ -689,6 +1353,129 @@ class ProveedorPresupuestoController extends Controller
         unset($config['proveedor_receptor_id'], $config['receptor_es_proveedor_catalogo']);
 
         return $config;
+    }
+
+    /**
+     * Normaliza términos para persistencia y preview (fase de transición legacy -> estructura escalable).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function normalizarTerminosPayload(array $payload): array
+    {
+        $inicioTrabajo = isset($payload['term_cond_inicio_trabajo']) ? (int) $payload['term_cond_inicio_trabajo'] : null;
+        $anticipoPct = isset($payload['term_cond_inicio_trabajo_porcentaje']) ? (float) $payload['term_cond_inicio_trabajo_porcentaje'] : null;
+        $anticipoMonto = isset($payload['term_cond_inicio_trabajo_cantidad']) ? (float) $payload['term_cond_inicio_trabajo_cantidad'] : null;
+
+        if ($inicioTrabajo !== 2) {
+            $payload['term_cond_inicio_trabajo_porcentaje'] = null;
+            $payload['term_cond_inicio_trabajo_cantidad'] = null;
+        } else {
+            $tienePct = $anticipoPct !== null && $anticipoPct > 0;
+            $tieneMonto = $anticipoMonto !== null && $anticipoMonto > 0;
+
+            if ($tienePct && $tieneMonto) {
+                // Política de conflicto: priorizar porcentaje y limpiar monto.
+                $payload['term_cond_inicio_trabajo_cantidad'] = null;
+            } elseif (! $tienePct && ! $tieneMonto) {
+                $payload['term_cond_inicio_trabajo_porcentaje'] = null;
+                $payload['term_cond_inicio_trabajo_cantidad'] = null;
+            } else {
+                $payload['term_cond_inicio_trabajo_porcentaje'] = $tienePct ? $anticipoPct : null;
+                $payload['term_cond_inicio_trabajo_cantidad'] = $tieneMonto ? $anticipoMonto : null;
+            }
+        }
+
+        $textos = is_array($payload['term_cond_textos_libres'] ?? null) ? $payload['term_cond_textos_libres'] : [];
+        $textos = array_values(array_filter(array_map(
+            static fn($item) => trim((string) $item),
+            $textos
+        ), static fn($item) => $item !== ''));
+        $payload['term_cond_textos_libres'] = array_slice($textos, 0, 4);
+
+        $configuracion = is_array($payload['configuracion_condiciones'] ?? null) ? $payload['configuracion_condiciones'] : [];
+        $terminosActivos = ! array_key_exists('terminos_activo', $configuracion)
+            || (bool) $configuracion['terminos_activo'];
+
+        $legacyTraslados = array_key_exists('obs_traslados', $payload) ? (bool) $payload['obs_traslados'] : false;
+        $legacyViaticos = array_key_exists('obs_viaticos', $payload) ? (bool) $payload['obs_viaticos'] : false;
+        $visibilidad = is_array($payload['term_cond_visibilidad'] ?? null) ? $payload['term_cond_visibilidad'] : [];
+
+        if (! $terminosActivos) {
+            $payload['term_cond_dias_vigencia'] = null;
+            $payload['term_cond_tiempo_entrega_dias'] = null;
+            $payload['term_cond_inicio_trabajo'] = null;
+            $payload['term_cond_inicio_trabajo_porcentaje'] = null;
+            $payload['term_cond_inicio_trabajo_cantidad'] = null;
+            $payload['term_cond_textos_libres'] = [];
+            $payload['obs_garantia_dias'] = 0;
+        }
+
+        $payload['term_cond_visibilidad'] = [
+            'pago_contra_conformidad' => array_key_exists('pago_contra_conformidad', $visibilidad)
+                ? (bool) $visibilidad['pago_contra_conformidad']
+                : false,
+            'garantia_calidad' => array_key_exists('garantia_calidad', $visibilidad)
+                ? (bool) $visibilidad['garantia_calidad']
+                : false,
+            'correccion_defectos' => array_key_exists('correccion_defectos', $visibilidad)
+                ? (bool) $visibilidad['correccion_defectos']
+                : false,
+            'incluye_materiales_insumos' => array_key_exists('incluye_materiales_insumos', $visibilidad)
+                ? (bool) $visibilidad['incluye_materiales_insumos']
+                : false,
+            'incluye_traslados' => array_key_exists('incluye_traslados', $visibilidad)
+                ? (bool) $visibilidad['incluye_traslados']
+                : $legacyTraslados,
+            'incluye_viaticos' => array_key_exists('incluye_viaticos', $visibilidad)
+                ? (bool) $visibilidad['incluye_viaticos']
+                : $legacyViaticos,
+        ];
+
+        if (! $terminosActivos) {
+            $payload['term_cond_visibilidad'] = [
+                'pago_contra_conformidad' => false,
+                'garantia_calidad' => false,
+                'correccion_defectos' => false,
+                'incluye_materiales_insumos' => false,
+                'incluye_traslados' => false,
+                'incluye_viaticos' => false,
+            ];
+        }
+
+        $alcances = is_array($payload['validacion_alcances'] ?? null) ? $payload['validacion_alcances'] : [];
+        $payload['validacion_alcances'] = [
+            'incluye_todos_los_costos' => array_key_exists('incluye_todos_los_costos', $alcances)
+                ? (bool) $alcances['incluye_todos_los_costos']
+                : false,
+            'sin_costos_adicionales_no_autorizados' => array_key_exists('sin_costos_adicionales_no_autorizados', $alcances)
+                ? (bool) $alcances['sin_costos_adicionales_no_autorizados']
+                : false,
+            'adicionales_requieren_autorizacion_escrita' => array_key_exists('adicionales_requieren_autorizacion_escrita', $alcances)
+                ? (bool) $alcances['adicionales_requieren_autorizacion_escrita']
+                : false,
+        ];
+
+        if (! $terminosActivos) {
+            $payload['validacion_alcances'] = [
+                'incluye_todos_los_costos' => false,
+                'sin_costos_adicionales_no_autorizados' => false,
+                'adicionales_requieren_autorizacion_escrita' => false,
+            ];
+        }
+
+        $mostrarTotales = ! array_key_exists('config_mostrar_totales', $payload)
+            || (bool) $payload['config_mostrar_totales'];
+        if (! $mostrarTotales) {
+            $payload['term_cond_impuestos_en_pdf'] = false;
+            $configuracion = is_array($payload['configuracion_condiciones'] ?? null)
+                ? $payload['configuracion_condiciones']
+                : [];
+            $configuracion['impuestos_activo'] = false;
+            $payload['configuracion_condiciones'] = $configuracion;
+        }
+
+        return $payload;
     }
 
     /**
@@ -728,6 +1515,22 @@ class ProveedorPresupuestoController extends Controller
     /**
      * Al enviar: si el receptor es otro proveedor del catálogo, notificar a sus usuarios activos en app/FCM.
      */
+    /**
+     * Evita duplicados cuando un usuario pertenece al emisor y también al receptor.
+     * En esos casos solo debe recibir la notificación del lado emisor.
+     */
+    private function usuarioDebeExcluirseDeNotificacionReceptor(Presupuesto $presupuesto, User $user): bool
+    {
+        // Si el usuario tiene acceso al proveedor emisor, no debe recibir la notificación de receptor.
+        if (method_exists($user, 'tieneAccesoAProveedor') && $user->tieneAccesoAProveedor((int) $presupuesto->proveedor_id)) {
+            return true;
+        }
+
+        return $presupuesto->user_id
+            ? (int) $presupuesto->user_id === (int) $user->id
+            : false;
+    }
+
     private function notificarUsuariosProveedorReceptor(Presupuesto $presupuesto, bool $esReenvio = false): void
     {
         $id = $this->resolverIdProveedorReceptorCatalogo($presupuesto);
@@ -740,9 +1543,61 @@ class ProveedorPresupuestoController extends Controller
             return;
         }
 
-        foreach ($proveedorReceptor->usuariosActivos()->get() as $user) {
+        foreach ($proveedorReceptor->usuariosActivos()->get()->unique('id') as $user) {
+            if ($this->usuarioDebeExcluirseDeNotificacionReceptor($presupuesto, $user)) {
+                continue;
+            }
+            if ($this->yaSeNotificoReceptorPresupuesto($user, (int) $presupuesto->id, $esReenvio)) {
+                continue;
+            }
             $user->notify(new PresupuestoRecibidoClienteProveedorNotification($presupuesto, $esReenvio));
         }
+    }
+
+    private function notificarUsuarioPrincipalProveedorReceptor(Presupuesto $presupuesto, bool $esReenvio = false): void
+    {
+        $id = $this->resolverIdProveedorReceptorCatalogo($presupuesto);
+        if (! $id) {
+            return;
+        }
+
+        $proveedorReceptor = Proveedor::query()->find((int) $id);
+        if (! $proveedorReceptor) {
+            return;
+        }
+
+        $usuarioPrincipal = $proveedorReceptor->usuarioPrincipal();
+        if (! $usuarioPrincipal || ! $usuarioPrincipal->status) {
+            return;
+        }
+
+        if ($this->usuarioDebeExcluirseDeNotificacionReceptor($presupuesto, $usuarioPrincipal)) {
+            return;
+        }
+
+        if ($this->yaSeNotificoReceptorPresupuesto($usuarioPrincipal, (int) $presupuesto->id, $esReenvio)) {
+            return;
+        }
+
+        $usuarioPrincipal->notify(new PresupuestoRecibidoClienteProveedorNotification($presupuesto, $esReenvio));
+    }
+
+    private function yaSeNotificoReceptorPresupuesto(User $user, int $presupuestoId, bool $esReenvio): bool
+    {
+        $q = $user->notifications()
+            ->where('type', PresupuestoRecibidoClienteProveedorNotification::class)
+            ->where('data->presupuesto_id', $presupuestoId)
+            ->where('created_at', '>=', now()->subMinutes(5));
+
+        if ($esReenvio) {
+            return $q->where('data->es_reenvio', true)->exists();
+        }
+
+        // Primera entrega: es_reenvio false o ausente en registros antiguos.
+        return $q->where(function ($sub) {
+            $sub->where('data->es_reenvio', false)
+                ->orWhereNull('data->es_reenvio');
+        })->exists();
     }
 
     /**
@@ -767,21 +1622,235 @@ class ProveedorPresupuestoController extends Controller
      */
     private function sincronizarConceptos(Presupuesto $presupuesto, array $conceptos): void
     {
+        $pathsAnteriores = $presupuesto->conceptos()
+            ->whereNotNull('imagen_path')
+            ->pluck('imagen_path')
+            ->filter()
+            ->values()
+            ->all();
+
         $presupuesto->conceptos()->delete();
 
+        $pathsConservados = [];
+
         foreach ($conceptos as $index => $conceptoData) {
+            $imagenPath = $this->resolverImagenConcepto($presupuesto, $conceptoData, $pathsAnteriores);
+            if ($imagenPath !== null) {
+                $pathsConservados[] = $imagenPath;
+            }
+
+            $proveedorNombre = trim((string) ($conceptoData['proveedor_nombre'] ?? ''));
+            $proveedorLogo = trim((string) ($conceptoData['proveedor_logo_url'] ?? ''));
+            if (mb_strlen($proveedorNombre) > 150) {
+                $proveedorNombre = mb_substr($proveedorNombre, 0, 150);
+            }
+            if (mb_strlen($proveedorLogo) > 500) {
+                $proveedorLogo = mb_substr($proveedorLogo, 0, 500);
+            }
+
             $concepto = new PresupuestoConcepto([
                 'numero' => $index + 1,
+                'tipo' => $conceptoData['tipo'] ?? PresupuestoConcepto::TIPO_CONCEPTO,
                 'descripcion' => $conceptoData['descripcion'],
                 'cantidad' => $conceptoData['cantidad'],
                 'unidad' => $conceptoData['unidad'],
                 'precio_unitario' => $conceptoData['precio_unitario'],
+                'imagen_path' => $imagenPath,
+                'proveedor_nombre' => $proveedorNombre !== '' ? $proveedorNombre : null,
+                'proveedor_logo_url' => $proveedorLogo !== '' ? $proveedorLogo : null,
             ]);
             $concepto->calcularImporte();
             $presupuesto->conceptos()->save($concepto);
         }
+
+        // Elimina del storage las imágenes de conceptos que ya no se referencian (patrón delete+insert).
+        foreach (array_diff($pathsAnteriores, $pathsConservados) as $pathHuerfano) {
+            if ($pathHuerfano && Storage::disk('public')->exists($pathHuerfano)) {
+                Storage::disk('public')->delete($pathHuerfano);
+            }
+        }
     }
 
+    /**
+     * Resuelve el imagen_path de un concepto entrante: guarda una imagen nueva (base64),
+     * copia desde catálogo propio (path en storage), descarga URL externa o conserva path del ppto.
+     *
+     * @param  array<string, mixed>  $conceptoData
+     * @param  array<int, string>  $pathsAnteriores
+     */
+    private function resolverImagenConcepto(Presupuesto $presupuesto, array $conceptoData, array $pathsAnteriores): ?string
+    {
+        $base64 = $conceptoData['imagen_base64'] ?? null;
+        if (is_string($base64) && trim($base64) !== '') {
+            return $this->guardarImagenConceptoBase64($presupuesto, $base64);
+        }
+
+        $pathEntrante = $conceptoData['imagen_path'] ?? null;
+        if (is_string($pathEntrante) && trim($pathEntrante) !== '') {
+            $pathNormalizado = $this->normalizarPathImagenConcepto(trim($pathEntrante));
+            if ($pathNormalizado !== null) {
+                if (in_array($pathNormalizado, $pathsAnteriores, true)) {
+                    return $pathNormalizado;
+                }
+
+                $copiada = $this->copiarImagenConceptoDesdeStorage($presupuesto, $pathNormalizado);
+                if ($copiada !== null) {
+                    return $copiada;
+                }
+            }
+        }
+
+        $url = $conceptoData['imagen_url'] ?? null;
+        if (is_string($url) && trim($url) !== '') {
+            $descargada = $this->guardarImagenConceptoDesdeUrl($presupuesto, trim($url));
+            if ($descargada !== null) {
+                return $descargada;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizarPathImagenConcepto(string $path): ?string
+    {
+        $path = str_replace('\\', '/', trim($path));
+        if ($path === '' || str_starts_with($path, 'data:image/') || preg_match('/^https?:\/\//i', $path)) {
+            return null;
+        }
+
+        if (str_starts_with($path, '/storage/')) {
+            $path = substr($path, strlen('/storage/'));
+        } elseif (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+        }
+
+        $path = ltrim($path, '/');
+
+        return $path !== '' ? $path : null;
+    }
+
+    /**
+     * Copia una imagen ya en disco público (p. ej. catálogo propio) al folder del presupuesto.
+     */
+    private function copiarImagenConceptoDesdeStorage(Presupuesto $presupuesto, string $sourcePath): ?string
+    {
+        $allowedPrefix = sprintf('proveedores/%d/', (int) $presupuesto->proveedor_id);
+        if (! str_starts_with($sourcePath, $allowedPrefix)) {
+            return null;
+        }
+
+        if (! Storage::disk('public')->exists($sourcePath)) {
+            return null;
+        }
+
+        try {
+            $binary = Storage::disk('public')->get($sourcePath);
+            if ($binary === false || $binary === '') {
+                return null;
+            }
+
+            $optimizado = PresupuestoAnexoImagenOptimizer::optimizarParaAlmacenamiento($binary);
+            $extension = $optimizado['extension'] ?? 'jpg';
+            $contenido = $optimizado['binary'] ?? $binary;
+
+            $path = sprintf(
+                'proveedores/%d/presupuestos/%d/conceptos/%s.%s',
+                (int) $presupuesto->proveedor_id,
+                (int) $presupuesto->id,
+                Str::uuid()->toString(),
+                $extension
+            );
+
+            Storage::disk('public')->put($path, $contenido);
+
+            return $path;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function guardarImagenConceptoDesdeUrl(Presupuesto $presupuesto, string $url): ?string
+    {
+        if (! filter_var($url, FILTER_VALIDATE_URL) || ! preg_match('/^https?:\/\//i', $url)) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(20)
+                ->withHeaders(['Accept' => 'image/*,*/*'])
+                ->get($url);
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $binary = $response->body();
+            if ($binary === '' || strlen($binary) > 5 * 1024 * 1024) {
+                return null;
+            }
+
+            $contentType = strtolower((string) ($response->header('Content-Type') ?? ''));
+            $esImagen = str_starts_with($contentType, 'image/')
+                || (bool) @getimagesizefromstring($binary);
+
+            if (! $esImagen) {
+                return null;
+            }
+
+            $optimizado = PresupuestoAnexoImagenOptimizer::optimizarParaAlmacenamiento($binary);
+            $extension = $optimizado['extension'] ?? 'jpg';
+            $contenido = $optimizado['binary'] ?? $binary;
+
+            $path = sprintf(
+                'proveedores/%d/presupuestos/%d/conceptos/%s.%s',
+                (int) $presupuesto->proveedor_id,
+                (int) $presupuesto->id,
+                Str::uuid()->toString(),
+                $extension
+            );
+
+            Storage::disk('public')->put($path, $contenido);
+
+            return $path;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function guardarImagenConceptoBase64(Presupuesto $presupuesto, string $dataUri): ?string
+    {
+        if (! preg_match('/^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/i', $dataUri, $matches)) {
+            return null;
+        }
+
+        $binary = base64_decode($matches[2], true);
+        if ($binary === false) {
+            return null;
+        }
+
+        $optimizado = PresupuestoAnexoImagenOptimizer::optimizarParaAlmacenamiento($binary);
+        $extension = $optimizado['extension'] ?? 'jpg';
+
+        $path = sprintf(
+            'proveedores/%d/presupuestos/%d/conceptos/%s.%s',
+            (int) $presupuesto->proveedor_id,
+            (int) $presupuesto->id,
+            Str::uuid()->toString(),
+            $extension
+        );
+
+        Storage::disk('public')->put($path, $optimizado['binary']);
+
+        return $path;
+    }
+
+    /**
+     * Registra un mensaje en el log.
+     * 
+     * @param string $message
+     * @param array<string, mixed> $data
+     * @return void
+     */
     private function log($message, $data = []): void
     {
         if (! $this->logEnabled) {
@@ -791,6 +1860,12 @@ class ProveedorPresupuestoController extends Controller
         Log::info($message, $data);
     }
 
+    /**
+     * Genera el folio siguiente para el proveedor.
+     * 
+     * @param \App\Models\Proveedor $proveedor
+     * @return string
+     */
     private function formatearFolioSiguiente(Proveedor $proveedor): string
     {
         $consecutivo = (int) ($proveedor->consecutivo_presupuesto_siguiente ?? 1);
@@ -800,9 +1875,35 @@ class ProveedorPresupuestoController extends Controller
     }
 
     /**
+     * PDF unificado (DomPDF + merge de anexos PDF con título y numeración).
+     *
+     * @param  array<string, string>  $extraHeaders
+     */
+    private function respuestaPdfPresupuestoUnificado(
+        Presupuesto $presupuesto,
+        ?string $themeOverride = null,
+        array $extraHeaders = []
+    ): Response {
+        if ($themeOverride !== null && $themeOverride !== '') {
+            $presupuesto->pdf_theme = $this->presupuestoThemeService->resolveThemeKey($themeOverride);
+        }
+
+        $presupuesto->loadMissing(Presupuesto::eagerLodable());
+
+        $response = PresupuestoPdf::generarPdf($presupuesto);
+
+        foreach ($extraHeaders as $header => $value) {
+            $response->headers->set($header, $value);
+        }
+
+        return $response;
+    }
+
+    /**
      * Genera la respuesta PDF usando Laravel DomPDF.
      *
      * @param array<string, mixed> $datosPresupuesto
+     * @deprecated Usar {@see respuestaPdfPresupuestoUnificado()} para incluir anexos PDF.
      */
     private function generarPdfResponse(array $datosPresupuesto, string $numeroPresupuesto): Response
     {
@@ -811,7 +1912,7 @@ class ProveedorPresupuestoController extends Controller
             $gdDisponible = extension_loaded('gd');
 
             if (!$gdDisponible) {
-                $this->log('Advertencia: GD no está disponible. Las imágenes PNG/GIF no se mostrarán.', [
+                $this->log('Advertencia: GD no está disponible en GestionPlus. Las imágenes PNG/GIF no se mostrarán.', [
                     'numero_presupuesto' => $numeroPresupuesto,
                 ]);
             }
@@ -830,18 +1931,15 @@ class ProveedorPresupuestoController extends Controller
             // Generar PDF usando el facade PDF de barryvdh/laravel-dompdf
             // Tamaño carta (8.5" x 11") con márgenes estándar 1 pulgada (25.4mm)
             // $pdf = Pdf::loadView('presupuestos.pdf', ['presupuesto' => $datosPresupuesto])
-            $pdf = Pdf::loadView(PresupuestoPdfTemplate::viewName(), ['presupuesto' => $datosPresupuesto])
-                ->setPaper('letter', 'portrait') // Tamaño carta (8.5" x 11")
-                ->setOption('isRemoteEnabled', false) // Deshabilitar carga remota para evitar timeouts
-                ->setOption('isHtml5ParserEnabled', true)
-                ->setOption('isPhpEnabled', true) // Requerido para script de número de página
-                ->setOption('defaultFont', 'DejaVu Sans')
-                ->setOption('margin-top', 25)
-                ->setOption('margin-bottom', 70) // ~25mm: reserva espacio para pie de página
-                ->setOption('margin-left', 25)
-                ->setOption('margin-right', 25)
-                ->setOption('enable-local-file-access', false) // No necesitamos acceso a archivos locales si usamos base64
-                ->setOption('chroot', public_path()); // Establecer directorio raíz para archivos locales
+            $pdfDocument = PresupuestoPdfDocumentConfig::fromPresupuestoPayload($datosPresupuesto);
+            $pdfBuilder = Pdf::loadView($pdfDocument->viewName(), [
+                'presupuesto' => $datosPresupuesto,
+                'pdf' => $pdfDocument,
+            ])->setPaper('letter', 'portrait');
+            foreach ($pdfDocument->dompdfOptions() as $option => $value) {
+                $pdfBuilder->setOption($option, $value);
+            }
+            $pdf = $pdfBuilder;
 
             // Retornar PDF como descarga
             return $pdf->download($filename);
@@ -853,7 +1951,7 @@ class ProveedorPresupuestoController extends Controller
                 $errorMessage = 'La extensión GD de PHP es requerida para generar PDFs con imágenes. Por favor, instala la extensión GD en tu servidor PHP.';
             }
 
-            $this->log('Error al generar PDF', [
+            $this->log('Error al generar PDF en GestionPlus', [
                 'numero_presupuesto' => $numeroPresupuesto,
                 'error' => $e->getMessage(),
                 'gd_disponible' => extension_loaded('gd'),
@@ -864,6 +1962,17 @@ class ProveedorPresupuestoController extends Controller
                 'message' => 'No fue posible generar el PDF: ' . $errorMessage,
             ], 500);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function aplicarTemaPdfADatos(array $datos, ?string $theme): array
+    {
+        $datos['pdf_theme'] = $this->presupuestoThemeService->resolveThemeKey($theme);
+
+        return $datos;
     }
 
     /**
@@ -881,7 +1990,7 @@ class ProveedorPresupuestoController extends Controller
         $logos = [
             'facturapro' => '',
             'constucc' => '',
-            'gestionpro' => '',
+            'gestionplus' => '',
         ];
 
         // Verificar si GD está disponible
@@ -893,7 +2002,7 @@ class ProveedorPresupuestoController extends Controller
 
         $facturaproPath = public_path('assets/logos/logo-facturapro.png');
         $constuccPath = public_path('assets/logos/logo-construcc.png');
-        $gestionproPath = public_path('assets/logos/logo-gestionpro.png');
+        $gestionPlusPath = \App\Support\PresupuestoPdf::rutaLogoGestionPlusPresupuestoPdf();
 
         try {
             if (file_exists($facturaproPath) && is_readable($facturaproPath)) {
@@ -910,10 +2019,10 @@ class ProveedorPresupuestoController extends Controller
                 }
             }
 
-            if (file_exists($gestionproPath) && is_readable($gestionproPath)) {
-                $imageData = @file_get_contents($gestionproPath);
+            if ($gestionPlusPath && file_exists($gestionPlusPath) && is_readable($gestionPlusPath)) {
+                $imageData = @file_get_contents($gestionPlusPath);
                 if ($imageData !== false && !empty($imageData)) {
-                    $logos['gestionpro'] = 'data:image/png;base64,' . base64_encode($imageData);
+                    $logos['gestionplus'] = 'data:image/png;base64,' . base64_encode($imageData);
                 }
             }
         } catch (\Exception $e) {
@@ -942,16 +2051,15 @@ class ProveedorPresupuestoController extends Controller
         }
 
         $appUrl = config('app.frontend_url', config('app.url'));
-        $urlWeb = rtrim($appUrl, '/') . '/public/presupuesto/' . $token;
-        $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($urlWeb);
+        $urlWeb = rtrim((string) $appUrl, '/') . '/public/presupuesto/' . $token;
 
         try {
-            $context = stream_context_create([
-                'http' => ['timeout' => 5],
-            ]);
-            $qrImage = @file_get_contents($qrApiUrl, false, $context);
-            if ($qrImage !== false && ! empty($qrImage)) {
-                return 'data:image/png;base64,' . base64_encode($qrImage);
+            $renderer = new GDLibRenderer(200);
+            $writer = new Writer($renderer);
+            $qrPng = $writer->writeString($urlWeb);
+
+            if ($qrPng !== '') {
+                return 'data:image/png;base64,' . base64_encode($qrPng);
             }
         } catch (\Throwable $e) {
             $this->log('Error al generar QR para presupuesto', [
@@ -1038,211 +2146,144 @@ class ProveedorPresupuestoController extends Controller
     }
 
     /**
-     * Genera y descarga el PDF de un presupuesto guardado.
+     * Datos pasados a la plantilla Blade del PDF (`PresupuestoPdfTemplate::viewName()`).
+     *
+     * Solo claves que consume la vista. El bloque «Dirigido a:» usa `receptor_lineas`: nombre → puesto → empresa
+     * (misma vista que el preview; sin alias, teléfono ni correo), vía
+     * {@see PresupuestoPdf::lineasReceptorPdfDesdeColumnasPresupuesto}.
+     *
+     * @return array<string, mixed>
      */
-    public function generarPdf(Proveedor $proveedor, Presupuesto $presupuesto): Response
+    private function datosVistaPdfPresupuestoGuardado(Presupuesto $presupuesto, Proveedor $proveedorEmisor, string $logoProveedorBase64, ?string $lugar, ?string $qrCodeDataUri): array
     {
-        try {
-            if (! $this->presupuestoAccesiblePorProveedor($proveedor, $presupuesto)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Presupuesto no pertenece a este proveedor.',
-                ], 403);
-            }
+        $enunciadosClasificados = $presupuesto->getEnunciadosClasificados();
 
-            $presupuesto->load(Presupuesto::eagerLodable());
-
-            $this->log('Generación de PDF solicitada', [
-                'presupuesto_id' => $presupuesto->id,
-                'numero_presupuesto' => $presupuesto->numero_presupuesto,
-            ]);
-
-            // Convertir logo del proveedor a base64
-            $logoProveedorBase64 = $this->convertirLogoProveedorABase64($presupuesto->proveedor);
-
-            $proveedor = $presupuesto->proveedor;
-            $df = $proveedor?->direccion_fiscal;
-            $estado = \Illuminate\Support\Arr::get((array) ($df ?? []), 'estado', $proveedor->estado ?? 'México');
-            $lugar = $proveedor?->ciudad ? ($proveedor->ciudad . ', ' . $estado) : null;
-
-            // Preparar datos para la vista
-            $datosPresupuesto = [
-                'proveedor' => $proveedor,
-                'logo_proveedor_base64' => $logoProveedorBase64,
-                'numero_presupuesto' => $presupuesto->numero_presupuesto,
-                'uuid' => $presupuesto->uuid ?? null,
-                'clave_unica' => $presupuesto->id ?? null,
-                'fecha_emision' => $presupuesto->fecha_emision,
-                'lugar' => $lugar,
-                'concepto_general' => $presupuesto->concepto_general,
-                'con_iva' => $presupuesto->con_iva,
-                'iva_porcentaje' => $presupuesto->iva_porcentaje,
-                'subtotal' => $presupuesto->subtotal,
-                'iva_total' => $presupuesto->iva_total,
-                'total' => $presupuesto->total,
-                'empresa_receptora' => [
-                    'nombre' => $presupuesto->empresa_receptora_nombre,
-                    'puesto' => $presupuesto->empresa_receptora_puesto,
-                    'empresa' => $presupuesto->empresa_receptora_empresa,
-                    'alias_empresa' => $presupuesto->empresa_receptora_alias,
-                    'telefono' => $presupuesto->empresa_receptora_telefono,
-                    'correo' => $presupuesto->empresa_receptora_correo,
-                    'direccion' => $presupuesto->empresa_receptora_direccion ?? $presupuesto->empresaReceptora?->direccion ?? null,
-                ],
-                'conceptos' => $presupuesto->conceptos->map(function ($concepto) {
-                    return [
-                        'descripcion' => $concepto->descripcion,
-                        'cantidad' => $concepto->cantidad,
-                        'unidad' => $concepto->unidad,
-                        'precio_unitario' => $concepto->precio_unitario,
-                        'precio_total' => $concepto->precio_total,
-                    ];
-                })->toArray(),
-                'terminos_enunciados' => $presupuesto->getTerminosEnunciados(),
-                'observaciones_enunciados' => $presupuesto->getObservacionesEnunciados(),
-                'qr_code' => $qrCode = $this->generarQrCodeParaPresupuesto($presupuesto),
-                'qr_url' => $qrCode ? (rtrim(config('app.frontend_url', config('app.url')), '/') . '/public/presupuesto/' . $presupuesto->token_publico) : null,
-            ];
-
-            return $this->generarPdfResponse($datosPresupuesto, $presupuesto->numero_presupuesto);
-        } catch (Throwable $e) {
-            $this->log('Error al generar PDF', [
-                'presupuesto_id' => $presupuesto->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'No fue posible generar el PDF.',
-                'errors' => [$e->getMessage()],
-            ], 500);
-        }
+        return [
+            'proveedor' => $proveedorEmisor,
+            'logo_proveedor_base64' => $logoProveedorBase64,
+            'numero_presupuesto' => $presupuesto->numero_presupuesto,
+            'uuid' => $presupuesto->uuid,
+            'fecha_emision' => $presupuesto->fecha_emision,
+            'lugar' => $lugar,
+            'concepto_general' => $presupuesto->concepto_general,
+            'nombre_presupuesto' => $presupuesto->nombre_presupuesto,
+            'titulo_anexos' => trim((string) ($presupuesto->titulo_anexos ?? '')) !== ''
+                ? trim((string) $presupuesto->titulo_anexos)
+                : 'Anexos',
+            'titulo_anexos_pdf' => trim((string) ($presupuesto->titulo_anexos_pdf ?? '')) !== ''
+                ? trim((string) $presupuesto->titulo_anexos_pdf)
+                : 'Anexos PDF',
+            'con_iva' => $presupuesto->con_iva,
+            'iva_porcentaje' => $presupuesto->iva_porcentaje,
+            'term_cond_moneda' => $presupuesto->term_cond_moneda ?? 'MXN',
+            'subtotal' => $presupuesto->subtotal,
+            'porcentaje_descuento' => $presupuesto->porcentaje_descuento,
+            'cantidad_descuento' => $presupuesto->cantidad_descuento,
+            'iva_total' => $presupuesto->iva_total,
+            'total' => $presupuesto->total,
+            'config_mostrar_totales' => (bool) ($presupuesto->config_mostrar_totales ?? true),
+            'receptor_lineas' => PresupuestoPdf::lineasReceptorPdfDesdeColumnasPresupuesto($presupuesto),
+            'config_emisor_presupuesto_id' => $presupuesto->config_emisor_presupuesto_id,
+            'empresa_emisora_nombre' => $presupuesto->empresa_emisora_nombre,
+            'empresa_emisora_puesto' => $presupuesto->empresa_emisora_puesto,
+            'empresa_emisora_telefono' => $presupuesto->empresa_emisora_telefono,
+            'empresa_emisora_correo' => $presupuesto->empresa_emisora_correo,
+            'incluir_leyenda_atentamente' => (bool) ($presupuesto->incluir_leyenda_atentamente ?? true),
+            'empresa_emisora_nombre_comercial' => $presupuesto->empresa_emisora_nombre_comercial,
+            'conceptos' => $presupuesto->conceptos->map(static function ($concepto) {
+                return [
+                    'tipo' => $concepto->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                    'descripcion' => $concepto->descripcion,
+                    'cantidad' => $concepto->cantidad,
+                    'unidad' => $concepto->unidad,
+                    'precio_unitario' => $concepto->precio_unitario,
+                    'precio_total' => $concepto->precio_total,
+                    'proveedor_nombre' => $concepto->proveedor_nombre,
+                    'proveedor_logo_url' => $concepto->proveedor_logo_url,
+                ];
+            })->values()->all(),
+            'anexos' => PresupuestoPdf::anexosParaPlantillaPdf($presupuesto),
+            'documentacion_adjuntos' => [],
+            'terminos_enunciados' => $enunciadosClasificados['terminos'],
+            'validaciones_enunciados' => $enunciadosClasificados['validaciones'],
+            'observaciones_enunciados' => $enunciadosClasificados['observaciones'],
+            'qr_code' => $qrCodeDataUri,
+            'pdf_theme' => $presupuesto->pdf_theme,
+        ];
     }
 
     /**
-     * Envía el presupuesto al cliente: cambia estado a enviado, envía email y notifica.
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
      */
-    public function enviar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    private function normalizarTarjetaEmisorPresupuesto(array $payload, int $proveedorId, bool $shouldApply): array
     {
-        try {
-            if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
-                return $this->error('Presupuesto no pertenece a este proveedor.', null, 403);
-            }
-
-            if ($presupuesto->estado !== Presupuesto::ESTADO_BORRADOR) {
-                return $this->error(
-                    'Solo se puede enviar un presupuesto en estado borrador.',
-                    ['estado_actual' => $presupuesto->estado],
-                    422
-                );
-            }
-
-            $presupuesto->load(Presupuesto::eagerLodable());
-
-            DB::transaction(function () use ($presupuesto, $proveedor) {
-                $presupuesto->estado = Presupuesto::ESTADO_ENVIADO;
-                $presupuesto->asegurarTokenPublico();
-
-                if (! $presupuesto->fecha_vencimiento) {
-                    $presupuesto->fecha_vencimiento = $this->calcularFechaVencimiento($presupuesto);
-                }
-                $presupuesto->save();
-
-                $appUrl = config('app.frontend_url', config('app.url'));
-                $enlacePublico = $appUrl . '/public/presupuesto/' . $presupuesto->token_publico;
-                $nombreReceptor = $presupuesto->empresa_receptora_nombre
-                    ?? $presupuesto->empresa_receptora_empresa
-                    ?? 'Cliente';
-
-                if ($presupuesto->empresa_receptora_correo && filter_var($presupuesto->empresa_receptora_correo, FILTER_VALIDATE_EMAIL)) {
-                    Mail::to($presupuesto->empresa_receptora_correo)->send(
-                        new PresupuestoEnviadoMail($presupuesto, $enlacePublico, $nombreReceptor)
-                    );
-                }
-                $usuarios = $proveedor->usuariosActivos()->get();
-
-                foreach ($usuarios as $user) {
-                    $user->notify(new PresupuestoEnviadoNotification($presupuesto));
-                }
-
-                // 🔥 usar usuario principal, no el primero random
-                $usuarioPrincipal = $proveedor->usuarioPrincipal();
-
-                $primeraNotif = $usuarioPrincipal
-                    ? $usuarioPrincipal->notifications()
-                    ->where('type', PresupuestoEnviadoNotification::class)
-                    ->latest()
-                    ->first()
-                    : null;
-
-                $presupuesto->addNotification($primeraNotif?->id);
-
-                $this->notificarClienteProveedorRegistrado($presupuesto, false);
-            });
-
-            $presupuesto->refresh()->load(Presupuesto::eagerLodable());
-            $this->log('Presupuesto enviado', ['presupuesto_id' => $presupuesto->id]);
-
-            return $this->success(
-                new PresupuestoResource($presupuesto),
-                'Presupuesto enviado correctamente al cliente.'
-            );
-        } catch (Throwable $e) {
-            $this->log('Error al enviar presupuesto', [
-                'presupuesto_id' => $presupuesto->id,
-                'error' => $e->getMessage(),
-                'line' => $e->getLine(),
-                'file' => $e->getFile(),
-                'code' => $e->getCode(),
-            ]);
-
-            return $this->error('No fue posible enviar el presupuesto.', [$e->getMessage()], 500);
+        if (! $shouldApply) {
+            return $payload;
         }
+
+        $id = $payload['config_emisor_presupuesto_id'] ?? null;
+        if ($id === null || $id === '' || (int) $id <= 0) {
+            return array_merge($payload, [
+                'config_emisor_presupuesto_id' => null,
+                'empresa_emisora_nombre' => null,
+                'empresa_emisora_puesto' => null,
+                'empresa_emisora_telefono' => null,
+                'empresa_emisora_correo' => null,
+                'incluir_leyenda_atentamente' => true,
+                'empresa_emisora_nombre_comercial' => null,
+            ]);
+        }
+
+        $config = ConfigEmisorReceptorPresupuesto::query()
+            ->whereKey((int) $id)
+            ->where('proveedor_id', $proveedorId)
+            ->where('tipo', ConfigEmisorReceptorPresupuesto::TIPO_EMISOR)
+            ->whereIn('estado', [
+                ConfigEmisorReceptorPresupuesto::ESTADO_ACTIVO,
+                ConfigEmisorReceptorPresupuesto::ESTADO_DEFAULT,
+            ])
+            ->first();
+
+        if (! $config) {
+            throw new \InvalidArgumentException('La tarjeta de emisor seleccionada no es válida para este proveedor.');
+        }
+
+        $snap = $config->snapshotEmisorPersona();
+        $proveedor = Proveedor::query()->find($proveedorId);
+        $comercial = trim((string) ($proveedor->nombre_comercial ?? ''));
+        if ($comercial === '') {
+            $comercial = trim((string) ($proveedor->razon_social ?? ''));
+        }
+
+        return array_merge($payload, [
+            'config_emisor_presupuesto_id' => (int) $config->id,
+            'empresa_emisora_nombre' => $snap['nombre'],
+            'empresa_emisora_puesto' => $snap['puesto'],
+            'empresa_emisora_telefono' => $snap['telefono'],
+            'empresa_emisora_correo' => $snap['correo'],
+            'incluir_leyenda_atentamente' => (bool) ($config->incluir_leyenda_atentamente ?? true),
+            'empresa_emisora_nombre_comercial' => $comercial !== '' ? $comercial : null,
+        ]);
     }
 
     /**
-     * Reenvía el presupuesto por correo al cliente (solo si ya está enviado y tiene correo).
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
      */
-    public function reenviar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    private function normalizarPdfThemeEnPayload(array $payload): array
     {
-        try {
-            if (! $this->presupuestoEsEmisor($proveedor, $presupuesto)) {
-                return $this->error('Presupuesto no pertenece a este proveedor.', null, 403);
-            }
-
-            if (! $presupuesto->empresa_receptora_correo || ! filter_var($presupuesto->empresa_receptora_correo, FILTER_VALIDATE_EMAIL)) {
-                return $this->error('No hay correo del cliente para reenviar.', null, 422);
-            }
-
-            $presupuesto->load(Presupuesto::eagerLodable());
-            $presupuesto->asegurarTokenPublico();
-
-            $appUrl = config('app.frontend_url', config('app.url'));
-            $enlacePublico = $appUrl . '/public/presupuesto/' . $presupuesto->token_publico;
-            $nombreReceptor = $presupuesto->empresa_receptora_nombre
-                ?? $presupuesto->empresa_receptora_empresa
-                ?? 'Cliente';
-
-            Mail::to($presupuesto->empresa_receptora_correo)->send(
-                new PresupuestoEnviadoMail($presupuesto, $enlacePublico, $nombreReceptor)
-            );
-
-            $this->notificarClienteProveedorRegistrado($presupuesto, true);
-
-            $this->log('Presupuesto reenviado por correo', ['presupuesto_id' => $presupuesto->id]);
-
-            return $this->success(
-                new PresupuestoResource($presupuesto->fresh(Presupuesto::eagerLodable())),
-                'Presupuesto reenviado correctamente al cliente.'
-            );
-        } catch (Throwable $e) {
-            $this->log('Error al reenviar presupuesto', [
-                'presupuesto_id' => $presupuesto->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return $this->error('No fue posible reenviar el presupuesto.', [$e->getMessage()], 500);
+        if (! array_key_exists('pdf_theme', $payload)) {
+            return $payload;
         }
+
+        $payload['pdf_theme'] = $this->presupuestoThemeService->resolveThemeKey(
+            $payload['pdf_theme'] !== null && $payload['pdf_theme'] !== ''
+                ? (string) $payload['pdf_theme']
+                : null
+        );
+
+        return $payload;
     }
 
     /**
@@ -1255,101 +2296,6 @@ class ProveedorPresupuestoController extends Controller
         return $presupuesto->fecha_emision->copy()->addDays((int) $dias);
     }
 
-    /**
-     * Genera PDF desde datos del formulario (para borradores).
-     */
-    public function generarPdfDesdeFormulario(StorePresupuestoRequest $request, Proveedor $proveedor): Response
-    {
-        try {
-            $user = $request->user();
-
-            if (! $user || ! method_exists($user, 'tieneAccesoAProveedor') || ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El usuario autenticado no tiene acceso al proveedor indicado.',
-                ], 403);
-            }
-
-            $validated = $request->validated();
-
-            if ((int) $validated['proveedor_id'] !== (int) $proveedor->id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El proveedor del payload no coincide con el proveedor de la ruta.',
-                ], 422);
-            }
-
-            // Convertir logo del proveedor a base64
-            $logoProveedorBase64 = $this->convertirLogoProveedorABase64($proveedor);
-
-            $df = $proveedor->direccion_fiscal ?? null;
-            $estado = \Illuminate\Support\Arr::get((array) ($df ?? []), 'estado', $proveedor->estado ?? 'México');
-            $lugar = $proveedor->ciudad ? ($proveedor->ciudad . ', ' . $estado) : null;
-
-            $formData = array_merge($validated, [
-                'con_iva' => $validated['con_iva'] ?? true,
-                'iva_porcentaje' => $validated['iva_porcentaje'] ?? 16,
-            ]);
-
-            // Preparar datos para el PDF
-            $datosPresupuesto = [
-                'proveedor' => $proveedor,
-                'logo_proveedor_base64' => $logoProveedorBase64,
-                'numero_presupuesto' => $validated['numero_presupuesto'] ?? $this->formatearFolioSiguiente($proveedor),
-                'uuid' => null,
-                'clave_unica' => null,
-                'fecha_emision' => $validated['fecha_emision'],
-                'lugar' => $lugar,
-                'concepto_general' => $validated['concepto_general'],
-                'con_iva' => $validated['con_iva'] ?? true,
-                'iva_porcentaje' => $validated['iva_porcentaje'] ?? 16.00,
-                'empresa_receptora' => [
-                    'nombre' => $validated['empresa_receptora_nombre'] ?? null,
-                    'puesto' => $validated['empresa_receptora_puesto'] ?? null,
-                    'empresa' => $validated['empresa_receptora_empresa'] ?? null,
-                    'alias_empresa' => $validated['empresa_receptora_alias'] ?? null,
-                    'telefono' => $validated['empresa_receptora_telefono'] ?? null,
-                    'correo' => $validated['empresa_receptora_correo'] ?? null,
-                    'direccion' => $validated['empresa_receptora_direccion'] ?? null,
-                ],
-                'conceptos' => $validated['conceptos'] ?? [],
-                'terminos_enunciados' => Presupuesto::buildTerminosEnunciadosFromArray($formData),
-                'observaciones_enunciados' => Presupuesto::buildObservacionesEnunciadosFromArray($formData),
-                'qr_code' => null,
-            ];
-
-            // Calcular totales
-            $subtotal = collect($datosPresupuesto['conceptos'])->sum(function ($concepto) {
-                return ($concepto['cantidad'] ?? 0) * ($concepto['precio_unitario'] ?? 0);
-            });
-
-            $ivaTotal = $datosPresupuesto['con_iva']
-                ? $subtotal * ($datosPresupuesto['iva_porcentaje'] / 100)
-                : 0;
-
-            $datosPresupuesto['subtotal'] = round($subtotal, 2);
-            $datosPresupuesto['iva_total'] = round($ivaTotal, 2);
-            $datosPresupuesto['total'] = round($subtotal + $ivaTotal, 2);
-
-            $this->log('Generación de PDF desde formulario solicitada', [
-                'proveedor_id' => $proveedor->id,
-                'numero_presupuesto' => $datosPresupuesto['numero_presupuesto'],
-            ]);
-
-            return $this->generarPdfResponse($datosPresupuesto, $datosPresupuesto['numero_presupuesto']);
-        } catch (Throwable $e) {
-            $this->log('Error al generar PDF desde formulario', [
-                'proveedor_id' => $proveedor->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'No fue posible generar el PDF.',
-                'errors' => [$e->getMessage()],
-            ], 500);
-        }
-    }
 
     /**
      * Usuarios con cuenta en la plataforma, correo = cliente del presupuesto y proveedor activo distinto al emisor.
@@ -1378,9 +2324,37 @@ class ProveedorPresupuestoController extends Controller
      */
     private function notificarClienteProveedorRegistrado(Presupuesto $presupuesto, bool $esReenvio = false): void
     {
-        $usuarios = $this->usuariosClienteProveedorRegistrado($presupuesto);
+        $usuarios = $this->usuariosClienteProveedorRegistrado($presupuesto)->unique('id');
         foreach ($usuarios as $user) {
+            if ($this->usuarioDebeExcluirseDeNotificacionReceptor($presupuesto, $user)) {
+                continue;
+            }
+            if ($this->yaSeNotificoReceptorPresupuesto($user, (int) $presupuesto->id, $esReenvio)) {
+                continue;
+            }
             $user->notify(new PresupuestoRecibidoClienteProveedorNotification($presupuesto, $esReenvio));
+        }
+    }
+
+    private function despacharCorreoPresupuesto(Presupuesto $presupuesto, bool $incluirInvitacion = false): void
+    {
+        $appUrl = config('app.frontend_url', config('app.url'));
+        $enlacePublico = rtrim((string) $appUrl, '/') . '/public/presupuesto/' . $presupuesto->token_publico;
+        $nombreReceptor = $presupuesto->empresa_receptora_nombre
+            ?? $presupuesto->empresa_receptora_empresa
+            ?? 'Cliente';
+
+        Mail::to($presupuesto->empresa_receptora_correo)->send(
+            new PresupuestoEnviadoMail($presupuesto, $enlacePublico, $nombreReceptor, $incluirInvitacion)
+        );
+    }
+
+    private function despacharNotificacionesReceptor(Presupuesto $presupuesto, bool $esReenvio): void
+    {
+        if ($this->debeNotificarComoProveedorCatalogo($presupuesto)) {
+            $this->notificarUsuariosProveedorReceptor($presupuesto, $esReenvio);
+        } else {
+            $this->notificarClienteProveedorRegistrado($presupuesto, $esReenvio);
         }
     }
 }

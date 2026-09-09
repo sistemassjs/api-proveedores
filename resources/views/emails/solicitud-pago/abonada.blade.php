@@ -28,9 +28,9 @@
     }
     
     .header {
-      background: linear-gradient(135deg, #ff9800 0%, #ffb74d 100%);
-      color: #ffffff;
-      padding: 30px 20px;
+      background: transparent;
+      padding: 0;
+      margin: 0;
       text-align: center;
     }
     
@@ -164,8 +164,8 @@
     }
     
     .footer {
-      background-color: #343a40;
-      color: #ffffff;
+      background-color: #f1f5f9;
+      color: #475569;
       padding: 20px;
       text-align: center;
       font-size: 12px;
@@ -211,9 +211,7 @@
   <div class="email-container">
     <!-- Header -->
     <div class="header">
-      @include('emails.partials.logo-app')
-      <h1>Abono en solicitud de pago</h1>
-      <p>Sistema de Gestion de Proveedores</p>
+      @include('emails.partials.app-header', ['title' => 'Abono en solicitud de pago'])
     </div>
     
     <!-- Content -->
@@ -231,62 +229,12 @@
         Puedes revisar el detalle y el saldo restante en el sistema.
       </div>
       
-      <!-- Solicitud Card -->
-      <div class="solicitud-card">
-        <div class="solicitud-header">
-          <table class="solicitud-header-table" role="presentation" cellspacing="0" cellpadding="0">
-            <tr>
-              <td class="solicitud-folio">
-                Folio #{{ $solicitudPagoFolio }}
-              </td>
-              @if($montoAbonado)
-              <td class="solicitud-monto" align="right">
-                ${{ number_format($montoAbonado, 2) }}
-              </td>
-              @endif
-            </tr>
-          </table>
-        </div>
-        
-        <div class="details-grid">
-          <div class="detail-item">
-            <span class="detail-label">📅 Fecha:</span>
-            <span class="detail-value">{{ now()->format('d/m/Y') }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">🏢 Proveedor ID:</span>
-            <span class="detail-value">{{ $proveedorId }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">📊 Estado:</span>
-            <span class="detail-value">Abonada</span>
-          </div>
-          @if($montoAbonado)
-          <div class="detail-item">
-            <span class="detail-label">💰 Monto abonado:</span>
-            <span class="detail-value">${{ number_format($montoAbonado, 2) }}</span>
-          </div>
-          @endif
-          @if(!is_null($montoAcumulado))
-          <div class="detail-item">
-            <span class="detail-label">Monto acumulado:</span>
-            <span class="detail-value">${{ number_format($montoAcumulado, 2) }}</span>
-          </div>
-          @endif
-          @if(!is_null($saldoInicial))
-          <div class="detail-item">
-            <span class="detail-label">Saldo inicial:</span>
-            <span class="detail-value">${{ number_format($saldoInicial, 2) }}</span>
-          </div>
-          @endif
-          @if(!is_null($montoRestante))
-          <div class="detail-item">
-                        <span class="detail-label">Saldo restante:</span>
-            <span class="detail-value">${{ number_format($montoRestante, 2) }}</span>
-          </div>
-          @endif
-        </div>
-      </div>
+      @include('emails.partials.spp-summary', [
+        'sppFolio' => $solicitudPagoFolio,
+        'sppEstado' => 'Abonada',
+        'sppMonto' => $montoAbonado ?? null,
+        'sppFecha' => now(),
+      ])
       
       <div class="info-box">
         <div class="info-box-label">💡 Información:</div>
@@ -304,19 +252,13 @@
                 <p><strong>Gracias por tu paciencia.</strong> Si tienes alguna duda sobre este pago, no dudes en contactarnos.</p>
         
         <p style="margin-top: 15px;">
-                    Gracias por ser parte de nuestro sistema de proveedores.
+                    Gracias por ser parte de {{ config('app.name') }}.
           Tu colaboración es fundamental para el éxito de nuestros proyectos.
         </p>
       </div>
     </div>
     
-    <!-- Footer -->
-    <div class="footer">
-      <p>
-        © {{ date('Y') }} {{ config('app.name', 'Sistema de Proveedores') }} -
-        Este es un mensaje automático, por favor no responder directamente.
-      </p>
-    </div>
+    <div class="footer">@include('emails.partials.app-footer')</div>
   </div>
 </body>
 </html>

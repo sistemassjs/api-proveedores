@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Exceptions\Api\Auth\UnauthorizedProveedorAccessException;
+use App\Support\UserCuentaEstado;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -59,6 +60,17 @@ class ValidateApiAccess
 
         $user = Auth::user();
         $userId = $user->id;
+
+        $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($user);
+        if (! $cuentaCheck['ok']) {
+            return response()->json([
+                'status' => 'ERROR',
+                'code' => 403,
+                'message' => $cuentaCheck['message'],
+                'data' => null,
+                'errors' => ['codigo' => $cuentaCheck['codigo']],
+            ], 403, [], JSON_UNESCAPED_UNICODE);
+        }
 
         // Aplicar rate limiting
         $this->applyRateLimiting($request, $user);
@@ -222,7 +234,8 @@ class ValidateApiAccess
             ];
 
             // Log a archivo específico para análisis posterior
-            Log::channel('api_access')->info('API Access', $logData);
+            // Log::channel('api_access')->info('API Access', $logData);
+            Log::info('API Access', $logData);
         }
     }
 

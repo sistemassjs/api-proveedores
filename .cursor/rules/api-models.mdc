@@ -17,6 +17,8 @@ protected $casts = ['fecha' => 'datetime', 'activo' => 'boolean'];
 protected $hidden = ['created_at', 'updated_at']; // opcional
 ```
 
+`$fillable` y `$casts` deben reflejar **solo columnas que existen** en el esquema actual. Si una migración dropea o renombra columnas, actualizar el modelo en el mismo cambio (ver checklist en `api-database.mdc`). No dejar atributos `@deprecated` en fillable tras un `dropColumn`.
+
 ## Filtros para listados
 
 Los filtros se definen en el modelo y se usan en los endpoints de listado (index). El Controller extrae los params con `$request->only(Model::getFilters())` y aplica `->filter($filters)`.

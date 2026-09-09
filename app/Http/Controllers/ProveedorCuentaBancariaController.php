@@ -7,6 +7,7 @@ use App\Http\Requests\CuentaBancaria\UpdateCuentaBancariaRequest;
 use App\Http\Resources\CuentaBancaria\CuentaBancariaResource;
 use App\Models\CuentaBancaria;
 use App\Models\Proveedor;
+use App\Services\Proveedor\ProveedorPerfilCompletadoService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,11 @@ use Illuminate\Http\Request;
 class ProveedorCuentaBancariaController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(
+        private readonly ProveedorPerfilCompletadoService $perfilCompletadoService,
+    ) {
+    }
 
     /**
      * Lista cuentas bancarias del proveedor con filtros, ordenamiento y paginación
@@ -127,6 +133,7 @@ class ProveedorCuentaBancariaController extends Controller
         }
 
         $cuenta = $proveedor->cuentasBancarias()->create($data);
+        $this->perfilCompletadoService->sincronizarBandera($proveedor);
 
         return $this->success(
             new CuentaBancariaResource($cuenta),
@@ -156,6 +163,7 @@ class ProveedorCuentaBancariaController extends Controller
 
         $cuenta->fill($request->validated());
         $cuenta->save();
+        $this->perfilCompletadoService->sincronizarBandera($proveedor);
 
         return $this->success(
             new CuentaBancariaResource($cuenta),
@@ -169,6 +177,7 @@ class ProveedorCuentaBancariaController extends Controller
     public function destroy(Proveedor $proveedor, CuentaBancaria $cuenta)
     {
         $cuenta->delete();
+        $this->perfilCompletadoService->sincronizarBandera($proveedor);
 
         return $this->success('Cuenta bancaria eliminada exitosamente');
     }

@@ -46,36 +46,44 @@ class ConstruccProveedorSolicitudPagoController extends Controller
         try {
             $validated = $request->validated();
 
+            Log::info('🧪 VALIDATED DATA', [
+                'keys' => array_keys($validated),
+                'data' => $validated,
+            ]);
+
             // ============================================
             // PASO 1: Validar que el proveedor sea tipo_alta = 2
             // ============================================
-            if ($proveedor->tipo_alta !== 2) {
-                return $this->error(
-                    'Solo se pueden generar SPP con proveedores registrados por usuarios construcción (tipo_alta = 2).',
-                    [
-                        'proveedor_id' => $proveedor->id,
-                        'tipo_alta_actual' => $proveedor->tipo_alta,
-                    ],
-                    422
-                );
-            }
+            // if ($proveedor->tipo_alta !== 2) {
+            //     return $this->error(
+            //         'Solo se pueden generar SPP con proveedores registrados por usuarios construcción (tipo_alta = 2).',
+            //         [
+            //             'proveedor_id' => $proveedor->id,
+            //             'tipo_alta_actual' => $proveedor->tipo_alta,
+            //         ],
+            //         422
+            //     );
+            // }
 
             // ============================================
             // PASO 2: Validar que la cuenta bancaria pertenezca al proveedor
             // ============================================
-            $cuentaBancaria = CuentaBancaria::find($validated['cuenta_bancaria_id']);
+            $cuentaBancariaId = $validated['cuenta_bancaria_id'] ?? null;
 
-            if (!$cuentaBancaria || $cuentaBancaria->proveedor_id !== $proveedor->id) {
-                return $this->error(
-                    'La cuenta bancaria seleccionada no pertenece a este proveedor.',
-                    [
-                        'cuenta_bancaria_id' => $validated['cuenta_bancaria_id'],
-                        'proveedor_id' => $proveedor->id,
-                    ],
-                    422
-                );
+            if ($cuentaBancariaId) {
+                $cuentaBancaria = CuentaBancaria::find($cuentaBancariaId);
+
+                if (!$cuentaBancaria || $cuentaBancaria->proveedor_id !== $proveedor->id) {
+                    return $this->error(
+                        'La cuenta bancaria seleccionada no pertenece a este proveedor.',
+                        [
+                            'cuenta_bancaria_id' => $cuentaBancariaId,
+                            'proveedor_id' => $proveedor->id,
+                        ],
+                        422
+                    );
+                }
             }
-
             // ============================================
             // PASO 3: Almacenar archivos
             // ============================================
@@ -146,6 +154,7 @@ class ConstruccProveedorSolicitudPagoController extends Controller
 
             // Niveles que aprueban: DG, DT, PC
             $nivelesAprobadores = [0, 1, 2, 3, 5]; // Admin, DG, DT, DA, PC
+            // 4=SI, 6=RO, 7 → PENDIENTE (requieren aprobación)
 
             // // Director Administrativo: va directo a pago
             // $esDA = $nivelId === 3;
@@ -204,21 +213,28 @@ class ConstruccProveedorSolicitudPagoController extends Controller
                 $datosSP['fecha_aprobado'] = now();
                 $datosSP[$rolField] = EstadoSolicitud::AUTORIZADA->value;
                 $datosSP[$fechaField] = now();
-                // } elseif ($esDA) {
-                //     // Director Administrativo: Va directo a PARA_PAGO
-                //     $datosSP['verificada'] = true;
-                //     $datosSP['estado_solicitud'] = EstadoSP::AUTORIZADA->value;
-                //     $datosSP['fecha_registro_pendiente'] = now();
-                //     $datosSP['fecha_aprobado'] = now();
-                //     $datosSP['da'] = EstadoSolicitud::AUTORIZADA->value;
-                //     $datosSP['da_fecha'] = now();
-                //     // $datosSP['pc'] = EstadoSolicitud::AUTORIZADA->value;
-                //     // $datosSP['pc_fecha'] = now();
             } else {
                 // Residentes, Superintendentes, Admin, otros: Requiere validación y aprobación
                 $datosSP['verificada'] = true;
                 $datosSP['estado_solicitud'] = EstadoSP::PENDIENTE->value;
                 $datosSP['fecha_registro_pendiente'] = now();
+            }
+
+            $montoParcial = $validated['monto_parcial'] ?? null;
+            $motivoParcial = $validated['motivo_parcial'] ?? null;
+
+            if (!is_null($montoParcial) && (float) $montoParcial > 0 && !is_null($motivoParcial)) {
+                $datosSP['monto_autorizado'] = $montoParcial;
+                $datosSP['usuario_autorizo_parcial_id'] = $usuarioId;
+                $datosSP['usuario_autorizo_parcial_nombre'] = $usuarioNombre;
+                $datosSP['fecha_autorizacion_parcial'] = now();
+                $datosSP['motivo_autorizacion_parcial'] = $motivoParcial;
+
+                $datosSP['validacion_usuario_id'] = $usuarioId;
+                $datosSP['validacion_usuario_nombre'] = $usuarioNombre;
+                $datosSP['validacion_fecha'] = now();
+                $datosSP['validacion_monto'] = $montoParcial;
+                $datosSP['validacion_motivo'] = $motivoParcial;
             }
 
             DB::beginTransaction();
@@ -272,11 +288,10 @@ class ConstruccProveedorSolicitudPagoController extends Controller
             // PASO 5: Sincronizar cuenta bancaria con solicitud de pago
             // ============================================
             // $solicitud->sincronizarCuentasBancarias([$cuentaBancaria->id]);
-
-            Log::info('✅ Cuenta bancaria sincronizada con solicitud de pago', [
-                'solicitud_pago_id' => $solicitud->id,
-                'cuenta_bancaria_id' => $cuentaBancaria->id,
-            ]);
+            // Log::info('✅ Cuenta bancaria sincronizada con solicitud de pago', [
+            //     'solicitud_pago_id' => $solicitud->id,
+            //     'cuenta_bancaria_id' => $cuentaBancaria->id,
+            // ]);
 
             DB::commit();
 
@@ -295,7 +310,7 @@ class ConstruccProveedorSolicitudPagoController extends Controller
             }
 
             // Cargar relaciones para el resource
-            $solicitud->load(['proveedor', 'cuentasBancarias', 'empresaConstrucc']);
+            $solicitud->load(['proveedor', 'empresaConstrucc']);
 
             return $this->success(
                 new ConstruccProveedorSppResource($solicitud),

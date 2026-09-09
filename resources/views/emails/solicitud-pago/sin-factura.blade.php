@@ -21,10 +21,10 @@
   }
 
   .header {
-   background: linear-gradient(135deg, #ff9800, #ffc107);
-   color: #ffffff;
+   background: transparent;
+   padding: 0;
+   margin: 0;
    text-align: center;
-   padding: 30px 20px;
   }
 
   .header h1 {
@@ -61,8 +61,8 @@
   }
 
   .footer {
-   background-color: #343a40;
-   color: #ffffff;
+   background-color: #f1f5f9;
+   color: #475569;
    text-align: center;
    padding: 15px;
    font-size: 12px;
@@ -74,17 +74,21 @@
 
  <div class="email-container">
   <div class="header">
-   @include('emails.partials.logo-app')
-      <h1>Solicitud de pago sin factura</h1>
-      <p>Sistema de Gestion de Proveedores</p>
+   @include('emails.partials.app-header', ['title' => 'Solicitud de pago sin factura'])
   </div>
 
   <div class="content">
    <p>Hola <strong>{{ $notifiable->name }}</strong>,</p>
 
    <div class="alert-box">
-    Tu solicitud de pago <strong>#{{ $solicitudPagoFolio }}</strong> aún no cuenta con una factura asociada.
+    Tu solicitud de pago aún no cuenta con una factura asociada.
    </div>
+
+   @include('emails.partials.spp-summary', [
+    'sppFolio' => $solicitudPagoFolio,
+    'sppEstado' => 'Sin factura',
+    'sppFecha' => now(),
+   ])
 
    <p>
     Para continuar con el proceso de pago, es necesario que subas la factura correspondiente
@@ -102,9 +106,7 @@
    </p>
   </div>
 
-  <div class="footer">
-   © {{ date('Y') }} {{ config('app.name') }} · Mensaje automático
-  </div>
+  <div class="footer">@include('emails.partials.app-footer')</div>
  </div>
 
 </body>

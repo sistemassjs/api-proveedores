@@ -28,9 +28,9 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-            color: #ffffff;
-            padding: 30px 20px;
+            background: transparent;
+            padding: 0;
+            margin: 0;
             text-align: center;
         }
         
@@ -161,8 +161,8 @@
         }
         
         .footer {
-            background-color: #343a40;
-            color: #ffffff;
+            background-color: #f1f5f9;
+            color: #475569;
             padding: 20px;
             text-align: center;
             font-size: 12px;
@@ -209,9 +209,7 @@
     <div class="email-container">
         <!-- Header -->
         <div class="header">
-            @include('emails.partials.logo-app')
-            <h1>📦 Nueva Orden de Compra</h1>
-            <p>Sistema de Gestión de Proveedores</p>
+            @include('emails.partials.app-header', ['title' => 'Nueva orden de compra'])
         </div>
         
         <!-- Content -->
@@ -239,7 +237,7 @@
                 <div class="details-grid">
                     <div class="detail-item">
                         <span class="detail-label">📅 Fecha:</span>
-                        <span class="detail-value">{{ now()->format('d/m/Y') }}</span>
+                        <span class="detail-value">{{ now()->locale('es')->timezone('America/Mexico_City')->translatedFormat('j \\d\\e F \\d\\e Y') }} {{ now()->timezone('America/Mexico_City')->format('h:i') }} {{ now()->timezone('America/Mexico_City')->format('A') === 'AM' ? 'a.m.' : 'p.m.' }}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">🏢 Proveedor ID:</span>
@@ -272,19 +270,14 @@
                 <p><strong>¡Importante!</strong> Mantén la comunicación activa con el equipo de compras para cualquier consulta o aclaración sobre esta orden.</p>
                 
                 <p style="margin-top: 15px;">
-                    ¡Gracias por ser parte de nuestro sistema de proveedores! 
+                    ¡Gracias por ser parte de {{ config('app.name') }}! 
                     Tu colaboración es fundamental para el éxito de nuestros proyectos.
                 </p>
             </div>
         </div>
         
         <!-- Footer -->
-        <div class="footer">
-            <p>
-                © {{ date('Y') }} {{ config('app.name', 'Sistema de Proveedores') }} - 
-                Este es un mensaje automático, por favor no responder directamente.
-            </p>
-        </div>
+        <div class="footer">@include('emails.partials.app-footer')</div>
     </div>
 </body>
 </html>

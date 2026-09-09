@@ -13,8 +13,6 @@ use App\Models\Presupuesto;
 use App\Models\Proveedor;
 use App\Models\SolicitudPago;
 use App\Notifications\Presupuesto\PresupuestoRecibidoClienteProveedorNotification;
-use App\Notifications\SolicitudPago\SolicitudPagoComprobanteActualizadoNotification;
-use App\Notifications\SolicitudPago\SolicitudPagoFacturaSubidaNotification;
 use App\Services\InterApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,6 +57,39 @@ class ProveedorSolicitudPagoController extends Controller
             'sin_factura' => (int) (clone $baseQuery)->where('tiene_factura', false)->count(),
         ];
 
+        $unreadSegmentCountsFormatted = [
+            'pendiente' => (int) (clone $baseQuery)
+                ->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'rechazada' => (int) (clone $baseQuery)
+                ->where('estado_solicitud', EstadoSP::RECHAZADA->value)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'autorizada' => (int) (clone $baseQuery)
+                ->where('estado_solicitud', EstadoSP::AUTORIZADA->value)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'pagado' => (int) (clone $baseQuery)
+                ->where('estado_solicitud', EstadoSP::PAGADO->value)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+            'sin_factura' => (int) (clone $baseQuery)
+                ->where('tiene_factura', false)
+                ->where(function ($q) {
+                    $q->where('item_visto', false)->orWhereNull('item_visto');
+                })
+                ->count(),
+        ];
+
         if ($hasUltimas) {
             $ids = (clone $baseQuery)->pluck('id');
             $listQuery = SolicitudPago::query()
@@ -81,7 +112,15 @@ class ProveedorSolicitudPagoController extends Controller
 
         $data = SolicitudPagoResource::collection($query)->resolve();
 
-        return $this->paginated($query->setCollection(collect($data)), 'Datos paginados.', 200, ['segment_counts' => $segmentCountsFormatted]);
+        return $this->paginated(
+            $query->setCollection(collect($data)),
+            'Datos paginados.',
+            200,
+            [
+                'segment_counts' => $segmentCountsFormatted,
+                'unread_segment_counts' => $unreadSegmentCountsFormatted,
+            ]
+        );
     }
 
     /**
@@ -451,7 +490,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function actualizarCuentasBancarias(Request $request, Proveedor $proveedor, SolicitudPago $solicitudPago): JsonResponse
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         $request->validate([
@@ -487,7 +526,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function subirComprobantePago(Request $request, Proveedor $proveedor, SolicitudPago $solicitudPago): JsonResponse
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         $request->validate([
@@ -502,16 +541,7 @@ class ProveedorSolicitudPagoController extends Controller
             'fecha_con_comprobante' => now(),
         ]);
 
-        $proveedor->notify(
-            new SolicitudPagoComprobanteActualizadoNotification(
-                $solicitudPago->numero_folio_solicitud,
-                $solicitudPago->id,
-                $proveedor->id,
-                null,
-                $path,
-                'private'
-            )
-        );
+        $solicitudPago->enviarCorreoComprobantePagoAProveedor($path);
 
         return $this->success(
             new SolicitudPagoResource($solicitudPago->load(['proveedor', 'empresaConstrucc', 'cuentasBancarias'])),
@@ -525,7 +555,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function descargarFacturaPdf(Proveedor $proveedor, SolicitudPago $solicitudPago)
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         if (! $solicitudPago->ruta_archivo_factura_pdf || ! Storage::disk('private')->exists($solicitudPago->ruta_archivo_factura_pdf)) {
@@ -543,7 +573,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function descargarFacturaXml(Proveedor $proveedor, SolicitudPago $solicitudPago)
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         if (! $solicitudPago->ruta_archivo_factura_xml || ! Storage::disk('private')->exists($solicitudPago->ruta_archivo_factura_xml)) {
@@ -561,7 +591,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function descargarComprobantePago(Proveedor $proveedor, SolicitudPago $solicitudPago)
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         if (! $solicitudPago->ruta_archivo_comprobante_pago || ! Storage::disk('private')->exists($solicitudPago->ruta_archivo_comprobante_pago)) {
@@ -579,7 +609,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function descargarComprobantePagoParcial(Proveedor $proveedor, PagoSPP $pago)
     {
         if ($pago->proveedor_id !== $proveedor->id) {
-            return $this->error('El pago no pertenece a este proveedor', 403);
+            return $this->error('El pago no pertenece a la empresa en GestionPlus', 403);
         }
 
         if (! $pago->comprobante_pago || ! Storage::disk('private')->exists($pago->comprobante_pago)) {
@@ -597,7 +627,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function descargarCotizacion(Proveedor $proveedor, SolicitudPago $solicitudPago)
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         if (! $solicitudPago->ruta_archivo_cotizacion || ! Storage::disk('private')->exists($solicitudPago->ruta_archivo_cotizacion)) {
@@ -615,7 +645,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function autorizar(Request $request, Proveedor $proveedor, SolicitudPago $solicitudPago): JsonResponse
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         $solicitudPago->update([
@@ -635,7 +665,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function rechazar(Request $request, Proveedor $proveedor, SolicitudPago $solicitudPago): JsonResponse
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         $request->validate([
@@ -685,7 +715,7 @@ class ProveedorSolicitudPagoController extends Controller
     public function procesando(Request $request, Proveedor $proveedor, SolicitudPago $solicitudPago): JsonResponse
     {
         if ($solicitudPago->proveedor_id !== $proveedor->id) {
-            return $this->error('Solicitud no pertenece a este proveedor', 403);
+            return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
         if ($solicitudPago->estado_solicitud !== 'pendiente') {
@@ -1132,19 +1162,7 @@ class ProveedorSolicitudPagoController extends Controller
             'tiene_factura' => true,
         ]);
 
-        $solicitudPago->load('empresaConstrucc');
-        if ($solicitudPago->empresaConstrucc) {
-            $solicitudPago->empresaConstrucc->notify(
-                new SolicitudPagoFacturaSubidaNotification(
-                    $solicitudPago->numero_folio_solicitud,
-                    $solicitudPago->id,
-                    $solicitudPago->proveedor_id,
-                    null,
-                    $rutaPdf,
-                    $rutaXml
-                )
-            );
-        }
+        $solicitudPago->enviarCorreoFacturaAEmpresaConstrucc($rutaPdf, $rutaXml);
 
         return $this->success(
             new SolicitudPagoResource(
@@ -1351,6 +1369,8 @@ class ProveedorSolicitudPagoController extends Controller
         if (! $tienePdf || ! $tieneXml) {
             return false;
         }
+
+        $solicitudPago->enviarCorreoFacturaAEmpresaConstrucc($solicitudPago->ruta_archivo_factura_pdf, $solicitudPago->ruta_archivo_factura_xml);
 
         $solicitudPago->update(['tiene_factura' => true,]);
 

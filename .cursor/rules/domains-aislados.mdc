@@ -1,0 +1,22 @@
+---
+description: Tres dominios de negocio aislados - no mezclar catalogo, SP y presupuestos
+alwaysApply: true
+---
+
+# Dominios aislados
+
+El contexto operativo vive **solo en este repo**: `docs/context/`.
+
+Antes de implementar, identifica el dominio:
+
+1. **Catalogo** — productos, categorias, marcas, unidades, import
+2. **Solicitudes de pago** — SP, facturas, comprobantes, OC, Construcciones
+3. **Presupuestos** — presupuestos, PDF, cartera de presupuesto
+
+Reglas:
+
+- No mezclar modelos/servicios/flujos entre dominios.
+- No asumir puente presupuesto-SP ni producto-presupuesto (ver `docs/context/cross-domain.md`).
+- Auth / `proveedor_id` / ApiResponse / usuarios-roles = plataforma (core), no un dominio de negocio. Ver `docs/context/platform-users-roles.md`.
+- Front: descripcion en `docs/context/*/front.md` (no hay docs de dominio en app-proveedores).
+- Contexto: `@docs/context/README.md`

@@ -8,6 +8,7 @@ enum EstadoUsuario: string
     case VERIFICADO = 'verificado';
     case SUSPENDIDO = 'suspendido';
     case BLOQUEADO = 'bloqueado';
+    case REGISTRO_COMPLETADO = 'registro_completado';
 
     public static function values(): array
     {
@@ -21,6 +22,7 @@ enum EstadoUsuario: string
             self::VERIFICADO => 'Verificado',
             self::SUSPENDIDO => 'Suspendido',
             self::BLOQUEADO => 'Bloqueado',
+            self::REGISTRO_COMPLETADO => 'Registro completado',
         };
     }
 }

@@ -2,17 +2,18 @@
 
 namespace App\Notifications\Usuario;
 
+use App\Services\FcmService;
+use App\Traits\NotificationStyleTrait;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Services\FcmService;
-use App\Traits\NotificationCorrelationId;
 
 class UsuarioReasignadoNotification extends Notification implements ShouldBroadcastNow
 {
-    use NotificationCorrelationId;
+    use NotificationStyleTrait;
 
+    public $usuarioId;
     public $usuarioNombre;
     public $usuarioEmail;
     public $rolNombre;
@@ -21,12 +22,14 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
     public $fechaAsignacion;
 
     public function __construct(
+        int $usuarioId,
         string $usuarioNombre,
         string $usuarioEmail,
         string $rolNombre,
         string $tipoRelacion,
         string $proveedorNombre
     ) {
+        $this->usuarioId = $usuarioId;
         $this->usuarioNombre = $usuarioNombre;
         $this->usuarioEmail = $usuarioEmail;
         $this->rolNombre = $rolNombre;
@@ -42,7 +45,6 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
     {
         $via = ['broadcast', 'database'];
 
-        // Solo agregar email si el correo es válido
         if ($notifiable->email && filter_var($notifiable->email, FILTER_VALIDATE_EMAIL)) {
             $via[] = 'mail';
         }
@@ -59,21 +61,7 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
      */
     public function toBroadcast(object $notifiable): BroadcastMessage
     {
-        return new BroadcastMessage($this->withNotificationCorrelationId([
-            'tipo' => 'usuario',
-            'subtipo' => 'reasignado',
-            'titulo' => 'Nuevo Usuario Asignado',
-            'mensaje' => "Se ha asignado a {$this->usuarioNombre} como usuario {$this->tipoRelacion} de {$this->proveedorNombre}",
-            'action_url' => '/panel-admin/usuarios',
-            'data' => [
-                'usuario_nombre' => $this->usuarioNombre,
-                'usuario_email' => $this->usuarioEmail,
-                'rol_nombre' => $this->rolNombre,
-                'tipo_relacion' => $this->tipoRelacion,
-                'proveedor_nombre' => $this->proveedorNombre,
-            ],
-            'timestamp' => $this->fechaAsignacion,
-        ]));
+        return new BroadcastMessage($this->addStylesToData($this->baseData()));
     }
 
     public function broadcastType(): string
@@ -91,19 +79,7 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
      */
     public function toArray(object $notifiable): array
     {
-        return $this->withNotificationCorrelationId([
-            'tipo' => 'usuario',
-            'subtipo' => 'reasignado',
-            'titulo' => 'Nuevo Usuario Asignado',
-            'mensaje' => "Se ha asignado a {$this->usuarioNombre} como usuario {$this->tipoRelacion} de {$this->proveedorNombre}",
-            'action_url' => '/panel-admin/usuarios',
-            'usuario_nombre' => $this->usuarioNombre,
-            'usuario_email' => $this->usuarioEmail,
-            'rol_nombre' => $this->rolNombre,
-            'tipo_relacion' => $this->tipoRelacion,
-            'proveedor_nombre' => $this->proveedorNombre,
-            'timestamp' => $this->fechaAsignacion,
-        ]);
+        return $this->addStylesToData($this->baseData());
     }
 
     /**
@@ -112,19 +88,20 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
     public function toMail(object $notifiable): MailMessage
     {
         $frontendUrl = config('app.frontend_url', config('app.url'));
-        $urlUsuarios = $frontendUrl . '/panel-admin/usuarios';
+        $urlUsuarios = $frontendUrl . '/pages/panel-admin/usuarios/detail/' . $this->usuarioId;
 
         $tipoTexto = $this->tipoRelacion === 'PRINCIPAL' ? 'principal' : 'secundario';
 
         return (new MailMessage)
-            ->subject('Nuevo Usuario Asignado a ' . $this->proveedorNombre)
+            ->subject('Usuario asignado a ' . $this->proveedorNombre)
             ->greeting('¡Hola ' . $notifiable->name . '!')
-            ->line("Se ha asignado un nuevo usuario {$tipoTexto} a su empresa {$this->proveedorNombre}.")
-            ->line("**Usuario:** {$this->usuarioNombre}")
+            ->line("Se ha asignado un usuario {$tipoTexto} a su empresa \"{$this->proveedorNombre}\".")
+            ->line("**Nombre:** {$this->usuarioNombre}")
+            ->line("**Empresa:** {$this->proveedorNombre}")
             ->line("**Email:** {$this->usuarioEmail}")
             ->line("**Rol:** {$this->rolNombre}")
-            ->line("**Tipo:** " . ucfirst(strtolower($this->tipoRelacion)))
-            ->action('Ver Usuarios', $urlUsuarios)
+            ->line('**Tipo:** ' . ucfirst(strtolower($this->tipoRelacion)))
+            ->action('Ver usuario', $urlUsuarios)
             ->line('Gracias por usar nuestra aplicación.');
     }
 
@@ -142,25 +119,58 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
             return;
         }
 
-        $tipoTexto = $this->tipoRelacion === 'PRINCIPAL' ? 'principal' : 'secundario';
+        $payload = $this->baseData();
 
         $notification = [
-            'title' => '👤 Nuevo Usuario Asignado',
-            'body' => "Se ha asignado a {$this->usuarioNombre} como usuario {$tipoTexto} de {$this->proveedorNombre}",
+            'title' => $payload['titulo'],
+            'body' => $payload['mensaje'],
         ];
 
-        $data = $this->withNotificationCorrelationId([
-            'tipo' => 'usuario',
-            'subtipo' => 'reasignado',
-            'action_url' => '/panel-admin/usuarios',
+        $data = $this->addStylesToData([
+            'tipo' => $payload['tipo'],
+            'subtipo' => $payload['subtipo'],
+            'action_url' => $payload['action_url'],
+            'user_id' => (string) $this->usuarioId,
             'usuario_nombre' => $this->usuarioNombre,
             'usuario_email' => $this->usuarioEmail,
+            'empresa_nombre' => $this->proveedorNombre,
+            'proveedor_nombre' => $this->proveedorNombre,
             'rol_nombre' => $this->rolNombre,
             'tipo_relacion' => $this->tipoRelacion,
-            'proveedor_nombre' => $this->proveedorNombre,
             'timestamp' => $this->fechaAsignacion,
         ]);
 
         app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+    }
+
+    protected function getNotificationTipo(): string
+    {
+        return 'usuario';
+    }
+
+    protected function getNotificationSubtipo(): string
+    {
+        return 'reasignado';
+    }
+
+    private function baseData(): array
+    {
+        $tipoTexto = $this->tipoRelacion === 'PRINCIPAL' ? 'principal' : 'secundario';
+
+        return [
+            'tipo' => 'usuario',
+            'subtipo' => 'reasignado',
+            'titulo' => "Usuario asignado: {$this->usuarioNombre}",
+            'mensaje' => "El usuario \"{$this->usuarioNombre}\" ha sido asignado como usuario {$tipoTexto} de la empresa \"{$this->proveedorNombre}\".",
+            'action_url' => '/pages/panel-admin/usuarios/detail/' . $this->usuarioId,
+            'user_id' => $this->usuarioId,
+            'usuario_nombre' => $this->usuarioNombre,
+            'usuario_email' => $this->usuarioEmail,
+            'empresa_nombre' => $this->proveedorNombre,
+            'proveedor_nombre' => $this->proveedorNombre,
+            'rol_nombre' => $this->rolNombre,
+            'tipo_relacion' => $this->tipoRelacion,
+            'timestamp' => $this->fechaAsignacion,
+        ];
     }
 }

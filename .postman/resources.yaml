@@ -1,0 +1,28 @@
+workspace:
+  id: 51137a63-4840-4c5b-8720-bffc83d43038
+localResources:
+  collections:
+    - ..\public\docs\collection.json
+    - ..\storage\app\private\scribe\collection.json
+    - ../public/docs/collection.json
+  specs:
+    - ..\public\swagger.json
+    - ..\public\docs\openapi.yaml
+    - ..\storage\api-docs\api-docs.json
+    - ..\storage\app\private\scribe\openapi.yaml
+    - ../public/swagger.json
+    - ../public/docs/openapi.yaml
+    - ../storage/api-docs/api-docs.json
+    - ../storage/app/private/scribe/openapi.yaml
+cloudResources:
+  collections:
+    ..\postman\collections\api-purificadora: 82cdd9e3-561b-438d-b1c6-bd32773f62ff
+    ../public/docs/collection.json: 18748188-c80c72a6-4521-43ee-a6c4-2eb3b27fd4a3
+    ../postman/collections/api-purificadora: 18748188-0121a2e5-c881-4ba4-9974-a94a5404bfc9
+  environments:
+    ../postman/environments/api-purificadora — local.environment.yaml: 18748188-5befcc14-7dec-432f-9804-58bed247ceab
+  specs:
+    ../public/swagger.json: 779d6eb6-a919-4aad-801f-f64e5ab1fbad
+    ../public/docs/openapi.yaml: 6c5d9807-ff68-4785-8640-55f96c480907
+    ../storage/api-docs/api-docs.json: 3482cc1c-d4c6-44a9-b945-16b11ee98e55
+    ../storage/app/private/scribe/openapi.yaml: dbc40c92-0fce-4c9e-af83-e101ab95765d

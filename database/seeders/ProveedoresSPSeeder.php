@@ -51,7 +51,6 @@ class ProveedoresSPSeeder extends Seeder
                 'calificacion' => round(mt_rand(35, 50) / 10, 2),
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
 
@@ -94,7 +93,6 @@ class ProveedoresSPSeeder extends Seeder
                 'calificacion' => round(mt_rand(38, 50) / 10, 2),
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
 
@@ -137,7 +135,6 @@ class ProveedoresSPSeeder extends Seeder
                 'calificacion' => round(mt_rand(40, 50) / 10, 2),
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
 
@@ -179,7 +176,6 @@ class ProveedoresSPSeeder extends Seeder
                 'calificacion' => round(mt_rand(42, 50) / 10, 2),
                 'is_proveedor_sp' => true,
                 'is_proveedor_catalogo' => false,
-                'cambiar_pass_default' => true,
                 'perfil_empresa_completo' => true,
             ]);
 

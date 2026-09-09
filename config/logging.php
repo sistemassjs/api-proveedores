@@ -64,5 +64,12 @@ return [
             'level' => 'info',
             'replace_placeholders' => true,
         ],
+
+        'migrations' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/migrations.log'),
+            'level' => 'info',
+            'replace_placeholders' => true,
+        ],
     ],
 ];

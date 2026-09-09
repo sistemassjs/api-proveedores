@@ -16,6 +16,9 @@ use App\Http\Resources\UserResource;
 use App\Models\Proveedor;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Support\AdminListOrdering;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProveedorUsuarioController extends Controller
@@ -31,9 +34,11 @@ class ProveedorUsuarioController extends Controller
         $order = $request->input('order', 'asc');
         $perPage = $request->input('per_page', 10);
 
-        $usersPaginate = $proveedor->users()
+        $query = $proveedor->users()
             ->with(User::eagerLodable())
-            ->filter($filters)
+            ->filter($filters);
+        AdminListOrdering::applyProveedorUsuarioPriority($query);
+        $usersPaginate = $query
             ->orderBy($sortBy, $order)
             ->paginate($perPage);
 
@@ -50,122 +55,196 @@ class ProveedorUsuarioController extends Controller
         $this->authorizeAccess($request->user(), $proveedor);
 
         $validated = $request->validated();
+        $isAdmin = $request->user()->isUserAdmin();
 
-        // Extraer datos del usuario y de la relación
-        $tipoRelacion = $validated['tipo_relacion'] ?? 'SECUNDARIO';
-        $activo = $validated['activo'] ?? true;
+        // Empresa MVP: siempre secundario. Admin puede crear PRINCIPAL.
+        $tipoRelacion = $isAdmin
+            ? ($validated['tipo_relacion'] ?? 'SECUNDARIO')
+            : 'SECUNDARIO';
+        $activo = array_key_exists('activo', $validated) ? (bool) $validated['activo'] : true;
         $observaciones = $validated['observaciones'] ?? null;
+        $logo = $request->file('logo');
 
-        // Validar que no exista más de un usuario PRINCIPAL activo
-        if ($tipoRelacion === 'PRINCIPAL') {
+        if ($tipoRelacion === 'PRINCIPAL' && $activo) {
             $existePrincipal = $proveedor->users()
                 ->wherePivot('tipo_relacion', 'PRINCIPAL')
                 ->wherePivot('activo', true)
                 ->exists();
 
             if ($existePrincipal) {
-                return $this->error('Ya existe un usuario principal activo. Debe desactivarlo primero.', null, 409);
+                throw new MainUserDuplicateException(
+                    'Ya existe un usuario principal activo. Debe desactivarlo primero.'
+                );
             }
         }
 
-        // Crear el usuario
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => bcrypt($validated['password']),
-            'role_id' => $validated['role_id'],
-        ]);
+        $userId = DB::transaction(function () use ($proveedor, $validated, $tipoRelacion, $activo, $observaciones, $logo) {
+            // User vive en conexión `mysql`; Proveedor en `mysql5` (misma BD).
+            // El attach DEBE hacerse desde el User para compartir sesión/transacción;
+            // si se hace desde Proveedor, el FK a users espera el commit → lock wait timeout.
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'role_id' => $validated['role_id'],
+                'telefono' => $validated['telefono'] ?? null,
+                'telefono_codigo_pais' => $validated['telefono_codigo_pais'] ?? null,
+            ]);
 
-        // Asociar al proveedor con los datos pivot
-        $proveedor->users()->attach($user->id, [
-            'tipo_relacion' => $tipoRelacion,
-            'activo' => $activo,
-            'estado' => 'registrado',
-            'fecha_asignacion' => now(),
-            'observaciones' => $observaciones ?? "Usuario {$tipoRelacion} creado",
-        ]);
+            $user->proveedores()->attach($proveedor->id, [
+                'tipo_relacion' => $tipoRelacion,
+                'activo' => $activo,
+                'estado' => 'registrado',
+                'fecha_asignacion' => now(),
+                'observaciones' => $observaciones ?? "Usuario {$tipoRelacion} creado",
+            ]);
 
-        return $this->success(new UserResource($user->load(User::eagerLodable())), 'Usuario creado correctamente.', 201);
+            if ($logo instanceof UploadedFile) {
+                $user->update(['foto_perfil_url' => $this->storeUserLogo($user, $logo)]);
+            }
+
+            return $user->id;
+        });
+
+        // Cargar fuera de la transacción: el listado vía Proveedor usa mysql5
+        // y ya puede ver el user committed en mysql.
+        $user = $this->loadProveedorUser($proveedor, $userId);
+
+        return $this->success(
+            new UserResource($user),
+            'Usuario creado correctamente.',
+            201
+        );
     }
 
-    public function show(Request $request, Proveedor $proveedor, $user_id)
+    public function show(Request $request, Proveedor $proveedor, $user)
     {
         $this->authorizeAccess($request->user(), $proveedor);
-        $user = USer::findOrFail($user_id);
-        if (! $proveedor->users()->find($user->id)) {
-            throw new ResourceNotFoundException(404, 'Usuario no asociado al proveedor.');
-        }
+        $userModel = $this->loadProveedorUser($proveedor, $user);
 
-        return $this->success(new UserResource($user->load(User::eagerLodable())), 'Usuario obtenido correctamente.');
+        return $this->success(
+            new UserResource($userModel),
+            'Usuario obtenido correctamente.'
+        );
     }
 
-    public function update(ProveedorUsuairoUpdateRequest $request, Proveedor $proveedor, $user_id)
+    public function update(ProveedorUsuairoUpdateRequest $request, Proveedor $proveedor, $user)
     {
-        // 1. VALIDAR LA RELACION DEL USUARIO DE LA PETICON Y EL PROVEEDOR
-        // 2. VERIFICAR QUE EL USUARIO EN LOS PARAM QRY PERTENECE AL PROVEEDOR
         $this->authorizeAccess($request->user(), $proveedor);
-        $user = USer::findOrFail($user_id);
-        if (! $proveedor->users()->find($user->id)) {
-            throw new ResourceNotFoundException(404, 'Usuario no asociado al proveedor.');
-        }
+        $userModel = $this->loadProveedorUser($proveedor, $user);
         $validated = $request->validated();
-        $user->update($validated);
+        $isPrincipal = ($userModel->pivot->tipo_relacion ?? null) === 'PRINCIPAL';
+        $isAdmin = $request->user()->isUserAdmin();
 
-        return $this->success(new UserResource($user->fresh(User::eagerLodable())), 'Usuario actualizado correctamente.');
+        // El principal no cambia de rol ni de tipo_relación desde gestión empresa
+        if ($isPrincipal && ! $isAdmin) {
+            unset($validated['role_id'], $validated['tipo_relacion']);
+        }
+
+        DB::transaction(function () use ($request, $proveedor, $userModel, $validated, $isAdmin) {
+            $userData = [];
+            foreach (['name', 'email', 'password', 'role_id', 'telefono', 'telefono_codigo_pais'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $userData[$field] = $validated[$field] ?? null;
+                }
+            }
+
+            if (array_key_exists('password', $userData) && ($userData['password'] === null || $userData['password'] === '')) {
+                unset($userData['password']);
+            }
+
+            if (! empty($userData)) {
+                $userModel->update($userData);
+            }
+
+            $pivotData = [];
+            foreach (['tipo_relacion', 'activo', 'observaciones'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $pivotData[$field] = $validated[$field] ?? null;
+                }
+            }
+
+            if (! empty($pivotData)) {
+                if (
+                    $isAdmin
+                    && isset($pivotData['tipo_relacion'])
+                    && $pivotData['tipo_relacion'] === 'PRINCIPAL'
+                ) {
+                    $existePrincipalOtro = $proveedor->users()
+                        ->wherePivot('tipo_relacion', 'PRINCIPAL')
+                        ->wherePivot('activo', true)
+                        ->where('users.id', '!=', $userModel->id)
+                        ->exists();
+
+                    if ($existePrincipalOtro) {
+                        throw new MainUserDuplicateException(
+                            'Ya existe un usuario principal activo. Debe desactivarlo primero.'
+                        );
+                    }
+                }
+
+                $proveedor->users()->updateExistingPivot($userModel->id, $pivotData);
+            }
+
+            // Logo opcional: solo reemplaza si llega archivo
+            if ($request->hasFile('logo')) {
+                $userModel->update([
+                    'foto_perfil_url' => $this->storeUserLogo($userModel, $request->file('logo')),
+                ]);
+            }
+        });
+
+        return $this->success(
+            new UserResource($this->loadProveedorUser($proveedor, $userModel->id)),
+            'Usuario actualizado correctamente.'
+        );
     }
 
-    public function destroy(Request $request, Proveedor $proveedor, $user_id)
+    public function destroy(Request $request, Proveedor $proveedor, $user)
     {
-        $this->authorizeAccess($request->user(), $proveedor);
+        $this->authorizeDelete($request->user(), $proveedor);
 
-        $user = User::findOrFail($user_id);
-
-        $pivotData = $proveedor->users()->find($user->id);
+        $userModel = $this->resolveUserParam($user);
+        $pivotData = $proveedor->users()->find($userModel->id);
 
         if (! $pivotData) {
             throw new NotFoundRelationException('Usuario no asociado al proveedor.');
         }
 
-        if ($pivotData->proveedorPrincipal()) {
+        $tipoRelacion = $pivotData->pivot->tipo_relacion ?? null;
+        $isPrincipal = $tipoRelacion === 'PRINCIPAL';
+
+        if ($isPrincipal && ! $request->user()->isUserAdmin()) {
             throw new MainUserDuplicateException('No se puede eliminar al usuario principal.');
         }
 
-        $proveedor->users()->detach($user->id);
-        $user->delete();
+        $proveedor->users()->detach($userModel->id);
+        $userModel->delete();
 
         return $this->success(message: 'Usuario eliminado correctamente.');
     }
 
-    public function updateLogo(ProveedorUsuairoUpdateLogoRequest $request, Proveedor $proveedor, $user_id)
+    public function updateLogo(ProveedorUsuairoUpdateLogoRequest $request, Proveedor $proveedor, $user)
     {
         $this->authorizeAccess($request->user(), $proveedor);
-        $user = USer::findOrFail($user_id);
-        if (! $proveedor->users()->find($user->id)) {
-            throw new ResourceNotFoundException(404, 'Usuario no asociado al proveedor.');
-        }
-        // Eliminar logo anterior si existe
-        if ($user->foto_perfil_url) {
-            $rutaAnterior = str_replace(asset('storage').'/', '', $user->foto_perfil_url);
-            Storage::disk('public')->delete($rutaAnterior);
-        }
+        $userModel = $this->loadProveedorUser($proveedor, $user);
 
-        // Guardar nuevo archivo
-        $file = $request->file('logo');
-        $filename = "logo_user_{$user->id}_".time().'.'.$file->getClientOriginalExtension();
-        $path = $file->storeAs('uploads', $filename, 'public');
+        $userModel->update([
+            'foto_perfil_url' => $this->storeUserLogo($userModel, $request->file('logo')),
+        ]);
 
-        // Actualizar ruta en base de datos
-        $user->update(['foto_perfil_url' => $path]);
-
-        return $this->success(new UserResource($user->fresh(User::eagerLodable())));
+        return $this->success(
+            new UserResource($this->loadProveedorUser($proveedor, $userModel->id)),
+            'Foto de perfil actualizada correctamente.'
+        );
     }
 
-    public function updateRelacion(ProveedorUsuarioUpdateRelacionRequest $request, Proveedor $proveedor, $user_id)
+    public function updateRelacion(ProveedorUsuarioUpdateRelacionRequest $request, Proveedor $proveedor, $user)
     {
         $this->authorizeAccess($request->user(), $proveedor);
 
-        $user = User::findOrFail($user_id);
-        $pivotData = $proveedor->users()->find($user->id);
+        $userModel = $this->resolveUserParam($user);
+        $pivotData = $proveedor->users()->find($userModel->id);
 
         if (! $pivotData) {
             throw new ResourceNotFoundException(404, 'Usuario no asociado al proveedor.');
@@ -180,7 +259,7 @@ class ProveedorUsuarioController extends Controller
             $existePrincipalOtro = $proveedor->users()
                 ->wherePivot('tipo_relacion', 'PRINCIPAL')
                 ->wherePivot('activo', true)
-                ->where('users.id', '!=', $user_id)
+                ->where('users.id', '!=', $userModel->id)
                 ->exists();
 
             if ($existePrincipalOtro) {
@@ -189,7 +268,7 @@ class ProveedorUsuarioController extends Controller
         }
 
         // Validar que no se desactive el único usuario PRINCIPAL activo
-        if (isset($validated['activo']) && !$validated['activo']) {
+        if (isset($validated['activo']) && ! $validated['activo']) {
             if ($pivotData->pivot->tipo_relacion === 'PRINCIPAL') {
                 $countPrincipalesActivos = $proveedor->users()
                     ->wherePivot('tipo_relacion', 'PRINCIPAL')
@@ -202,43 +281,39 @@ class ProveedorUsuarioController extends Controller
             }
         }
 
-        // Preparar datos para actualizar
         $updateData = [];
         if (isset($validated['tipo_relacion'])) {
             $updateData['tipo_relacion'] = $validated['tipo_relacion'];
         }
         if (isset($validated['activo'])) {
             $updateData['activo'] = $validated['activo'];
-            // Si se desactiva, registrar fecha de desasignación
-            if (!$validated['activo']) {
+            if (! $validated['activo']) {
                 $updateData['fecha_desasignacion'] = now();
             } else {
                 $updateData['fecha_desasignacion'] = null;
             }
         }
         if (isset($validated['observaciones'])) {
-            // Agregar observación conservando las anteriores
             $observacionesAnteriores = $pivotData->pivot->observaciones ?? '';
             $nuevaObservacion = $validated['observaciones'];
             $timestamp = now()->format('Y-m-d H:i:s');
-            $updateData['observaciones'] = $observacionesAnteriores . "\n[{$timestamp}] {$nuevaObservacion}";
+            $updateData['observaciones'] = $observacionesAnteriores."\n[{$timestamp}] {$nuevaObservacion}";
         }
 
-        // Actualizar la relación pivot
-        $proveedor->users()->updateExistingPivot($user_id, $updateData);
+        $proveedor->users()->updateExistingPivot($userModel->id, $updateData);
 
         return $this->success(
-            new UserResource($user->fresh()->load(User::eagerLodable())),
+            new UserResource($this->loadProveedorUser($proveedor, $userModel->id)),
             'Relación actualizada correctamente.'
         );
     }
 
-    public function cambiarEstado(ProveedorUsuarioCambiarEstadoRequest $request, Proveedor $proveedor, $user_id)
+    public function cambiarEstado(ProveedorUsuarioCambiarEstadoRequest $request, Proveedor $proveedor, $user)
     {
         $this->authorizeAccess($request->user(), $proveedor);
 
-        $user = User::findOrFail($user_id);
-        $pivotData = $proveedor->users()->find($user->id);
+        $userModel = $this->resolveUserParam($user);
+        $pivotData = $proveedor->users()->find($userModel->id);
 
         if (! $pivotData) {
             throw new ResourceNotFoundException(404, 'Usuario no asociado al proveedor.');
@@ -248,19 +323,16 @@ class ProveedorUsuarioController extends Controller
         $nuevoEstado = $validated['estado'];
         $observacion = $validated['observaciones'] ?? "Estado cambiado a {$nuevoEstado}";
 
-        // Registrar el cambio en observaciones
         $observacionesAnteriores = $pivotData->pivot->observaciones ?? '';
         $timestamp = now()->format('Y-m-d H:i:s');
-        $observacionCompleta = $observacionesAnteriores . "\n[{$timestamp}] {$observacion}";
 
-        // Actualizar estado
-        $proveedor->users()->updateExistingPivot($user_id, [
+        $proveedor->users()->updateExistingPivot($userModel->id, [
             'estado' => $nuevoEstado,
-            'observaciones' => $observacionCompleta,
+            'observaciones' => $observacionesAnteriores."\n[{$timestamp}] {$observacion}",
         ]);
 
         return $this->success(
-            new UserResource($user->fresh()->load(User::eagerLodable())),
+            new UserResource($this->loadProveedorUser($proveedor, $userModel->id)),
             'Estado actualizado correctamente.'
         );
     }
@@ -269,6 +341,60 @@ class ProveedorUsuarioController extends Controller
      * Reasigna un usuario de un proveedor origen a un proveedor destino
      * Actualiza todas las referencias en tablas relacionadas y notifica al gerente del proveedor destino
      */
+    /**
+     * Vincula un usuario existente (sin crear cuenta nueva) a la empresa.
+     */
+    public function vincularExistente(Request $request, Proveedor $proveedor)
+    {
+        $this->authorizeAccess($request->user(), $proveedor);
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'tipo_relacion' => ['sometimes', 'string', 'in:PRINCIPAL,SECUNDARIO'],
+            'activo' => ['sometimes', 'boolean'],
+            'observaciones' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $user = User::findOrFail($validated['user_id']);
+
+        if ($proveedor->users()->where('users.id', $user->id)->exists()) {
+            return $this->error('El usuario ya está vinculado a esta empresa.', null, 409);
+        }
+
+        $tipoRelacion = $validated['tipo_relacion'] ?? 'SECUNDARIO';
+        $activo = $validated['activo'] ?? true;
+
+        if ($tipoRelacion === 'PRINCIPAL' && $activo) {
+            $existePrincipal = $proveedor->users()
+                ->wherePivot('tipo_relacion', 'PRINCIPAL')
+                ->wherePivot('activo', true)
+                ->exists();
+
+            if ($existePrincipal) {
+                return $this->error('Ya existe un usuario principal activo en esta empresa.', null, 409);
+            }
+        }
+
+        $observacion = $validated['observaciones']
+            ?? "Usuario vinculado por administración ({$tipoRelacion})";
+
+        $proveedor->users()->attach($user->id, [
+            'tipo_relacion' => $tipoRelacion,
+            'activo' => $activo,
+            'estado' => 'registrado',
+            'fecha_asignacion' => now(),
+            'observaciones' => '[' . now()->format('Y-m-d H:i:s') . '] ' . $observacion,
+        ]);
+
+        $vinculo = $proveedor->users()->where('users.id', $user->id)->first();
+
+        return $this->success(
+            new UserResource($vinculo->load(User::eagerLodable())),
+            'Usuario vinculado a la empresa correctamente.',
+            201
+        );
+    }
+
     public function reasignarUsuario(ReasignarUsuarioRequest $request, $user_id)
     {
         $validated = $request->validated();
@@ -366,6 +492,7 @@ class ProveedorUsuarioController extends Controller
             if ($usuarioPrincipalDestino) {
                 $usuarioPrincipalDestino->notify(
                     new \App\Notifications\Usuario\UsuarioReasignadoNotification(
+                        $user->id,
                         $user->name,
                         $user->email,
                         $rol->name ?? 'N/A',
@@ -401,16 +528,112 @@ class ProveedorUsuarioController extends Controller
         });
     }
 
+    /**
+     * CRU de usuarios del proveedor: admin, o GERENTE principal, o SUPERVISOR con acceso.
+     */
     protected function authorizeAccess(User $currentUser, Proveedor $proveedor)
     {
         if ($currentUser->isUserAdmin()) {
             return;
         }
 
-        $proveedorPrincipal = $currentUser->proveedorPrincipal();
-
-        if (! $proveedorPrincipal || $proveedorPrincipal->id !== $proveedor->id) {
+        if (! $currentUser->tieneAccesoAProveedor($proveedor->id)) {
             throw new UnauthorizedException;
         }
+
+        $roleNombre = $currentUser->role?->nombre
+            ?? $currentUser->role()->value('nombre');
+
+        $allowed = config('proveedor_gestion_mvp.roles_gestion_usuarios_cru', ['GERENTE', 'SUPERVISOR']);
+
+        if (! in_array($roleNombre, $allowed, true)) {
+            throw new UnauthorizedException;
+        }
+
+        if ($roleNombre === 'GERENTE'
+            && $currentUser->tipoRelacionConProveedor($proveedor->id) !== 'PRINCIPAL') {
+            throw new UnauthorizedException;
+        }
+    }
+
+    /**
+     * Borrar usuarios: admin, o GERENTE principal. Supervisor no puede.
+     */
+    protected function authorizeDelete(User $currentUser, Proveedor $proveedor): void
+    {
+        if ($currentUser->isUserAdmin()) {
+            return;
+        }
+
+        if (! $currentUser->tieneAccesoAProveedor($proveedor->id)) {
+            throw new UnauthorizedException;
+        }
+
+        $roleNombre = $currentUser->role?->nombre
+            ?? $currentUser->role()->value('nombre');
+
+        $allowed = config('proveedor_gestion_mvp.roles_gestion_usuarios_delete', ['GERENTE']);
+
+        if (! in_array($roleNombre, $allowed, true)) {
+            throw new UnauthorizedException;
+        }
+
+        if ($currentUser->tipoRelacionConProveedor($proveedor->id) !== 'PRINCIPAL') {
+            throw new UnauthorizedException;
+        }
+    }
+
+    protected function resolveUserParam(mixed $user): User
+    {
+        if ($user instanceof User) {
+            return $user;
+        }
+
+        return User::findOrFail($user);
+    }
+
+    protected function loadProveedorUser(Proveedor $proveedor, mixed $user): User
+    {
+        $userId = $user instanceof User ? $user->id : $user;
+
+        $userModel = $proveedor->users()
+            ->with(User::eagerLodable())
+            ->where('users.id', $userId)
+            ->first();
+
+        if (! $userModel) {
+            throw new ResourceNotFoundException(404, 'Usuario no asociado al proveedor.');
+        }
+
+        return $userModel;
+    }
+
+    protected function storeUserLogo(User $user, UploadedFile $file): string
+    {
+        $rutaAnterior = $this->relativePublicPath($user->foto_perfil_url);
+        if ($rutaAnterior) {
+            Storage::disk('public')->delete($rutaAnterior);
+        }
+
+        $extension = $file->getClientOriginalExtension() ?: 'jpg';
+        $filename = "logo_user_{$user->id}_".time().'.'.$extension;
+
+        return $file->storeAs('uploads', $filename, 'public');
+    }
+
+    protected function relativePublicPath(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        if (preg_match('/^https?:\/\//', $path)) {
+            $parsed = parse_url($path, PHP_URL_PATH) ?: '';
+            $parsed = preg_replace('#^/storage/#', '', $parsed);
+
+            return $parsed ? ltrim($parsed, '/') : null;
+        }
+
+        return ltrim(preg_replace('#^storage/#', '', $path) ?? $path, '/');
     }
 }

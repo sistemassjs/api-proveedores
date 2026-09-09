@@ -3,8 +3,6 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\SolicitudPago;
-use App\Models\Cotizacion;
 use App\Models\EmpresaConstrucc;
 use App\Models\Sucursal;
 use App\Models\Proveedor;
@@ -14,124 +12,170 @@ use Carbon\Carbon;
 
 class SolicitudPagoSeeder extends Seeder
 {
-    /**
-     * Seeder para generar solicitudes de pago relacionadas con cotizaciones SP
-     * Configurado para Los Mochis, Sinaloa, México
-     */
     public function run(): void
     {
         DB::transaction(function () {
-            // Obtener cotizaciones aceptadas de proveedores SP
-            $cotizacionesAceptadas = Cotizacion::where('estatus', 'aceptada')
-                ->whereHas('proveedor', fn($q) => $q->where('is_proveedor_sp', true))
-                ->with('proveedor')
-                ->get();
 
-            if ($cotizacionesAceptadas->isEmpty()) {
-                echo "⚠️ No se encontraron cotizaciones aceptadas de proveedores SP.\n";
+            // --- Dependencias ---
+            $proveedores = Proveedor::where('is_proveedor_sp', true)->get();
+
+            if ($proveedores->isEmpty()) {
+                echo "⚠️ No hay proveedores SP.\n";
                 return;
             }
 
-            // Empresas constructoras y sucursales
             $empresasConstrucc = EmpresaConstrucc::where('activo', true)->pluck('id')->toArray();
-            $sucursales = Sucursal::pluck('id')->toArray();
 
             if (empty($empresasConstrucc)) {
-                echo "⚠️ No se encontraron empresas constructoras.\n";
+                echo "⚠️ No hay empresas constructoras.\n";
                 return;
             }
 
-            $now = Carbon::now('America/Mazatlan');
+            $sucursales = Sucursal::pluck('id')->toArray();
+
+            // --- Rango abril 2026 ---
+            $inicio = Carbon::create(2026, 4, 1, 0, 0, 0, 'America/Mazatlan');
+            $fin = Carbon::create(2026, 4, 30, 23, 59, 59, 'America/Mazatlan');
+
+            // --- Control de folios ---
+            $consecutivos = $this->obtenerSiguienteConsecutivoPorProveedor();
+
             $solicitudes = [];
-            $totalSolicitudes = 0;
+            $totalSolicitudes = rand(80, 150);
 
-            // Seleccionar 70-80% de cotizaciones
-            $numCotizaciones = round($cotizacionesAceptadas->count() * (rand(70, 80) / 100));
-            $cotizacionesParaSolicitud = $cotizacionesAceptadas->shuffle()->take($numCotizaciones);
+            // Cachear usuario principal por proveedor
+            $usuariosPrincipales = [];
 
-            foreach ($cotizacionesParaSolicitud as $cotizacion) {
-                $fechaSolicitud = $cotizacion->fecha_cotizacion->copy()->addDays(rand(1, 15));
+            foreach ($proveedores as $prov) {
+                $usuariosPrincipales[$prov->id] = $prov->usuarioPrincipal()?->id;
+            }
+
+            for ($i = 0; $i < $totalSolicitudes; $i++) {
+
+                $proveedor = $proveedores->random();
+                $proveedorId = $proveedor->id;
+
+                if (!isset($consecutivos[$proveedorId])) {
+                    $consecutivos[$proveedorId] = 1;
+                }
+
+                $consecutivo = $consecutivos[$proveedorId]++;
+                $folio = str_pad($proveedorId, 4, '0', STR_PAD_LEFT) . '-' . $consecutivo;
+
+                $fechaSolicitud = Carbon::createFromTimestamp(
+                    rand($inicio->timestamp, $fin->timestamp)
+                )->setTimezone('America/Mazatlan');
+
                 $estadoSolicitud = $this->generarEstadoSolicitudAleatorio();
 
-                $solicitud = [
-                    'numero_folio_solicitud' => SolicitudPago::generarNumeroFolio($cotizacion->proveedor),
-                    'descripcion_concepto' => $this->generarDescripcionConcepto($cotizacion),
-                    'ruta_archivo_factura_xml' => $this->generarRutaArchivo('xml', $totalSolicitudes + 1),
-                    'ruta_archivo_factura_pdf' => $this->generarRutaArchivo('pdf', $totalSolicitudes + 1),
-                    'estado_solicitud' => $estadoSolicitud,
+                $solicitudes[] = [
+                    'numero_folio_solicitud' => $folio,
+                    'descripcion_concepto' => $this->generarDescripcionConceptoFake($proveedor),
+
+                    'ruta_archivo_factura_xml' => $this->generarRutaArchivo('xml', $i + 1, $fechaSolicitud),
+                    'ruta_archivo_factura_pdf' => $this->generarRutaArchivo('pdf', $i + 1, $fechaSolicitud),
+
                     'ruta_archivo_comprobante_pago' => $this->debeGenerarComprobante($estadoSolicitud)
-                        ? $this->generarRutaArchivo('comprobante', $totalSolicitudes + 1)
+                        ? $this->generarRutaArchivo('comprobante', $i + 1, $fechaSolicitud)
                         : null,
-                    'proveedor_id' => $cotizacion->proveedor_id,
+
+                    'estado_solicitud' => $estadoSolicitud,
+                    'usuario_creador_id' => $usuariosPrincipales[$proveedorId] ?? null,
+                    'proveedor_id' => $proveedorId,
                     'empresa_construcc_id' => $empresasConstrucc[array_rand($empresasConstrucc)],
                     'residente' => $this->generarNombreResidente(),
-                    'cotizacion_id' => $cotizacion->id,
-                    'sucursal_id' => !empty($sucursales) ? $sucursales[array_rand($sucursales)] : null,
+
+                    'cotizacion_id' => null,
+
+                    'sucursal_id' => !empty($sucursales)
+                        ? $sucursales[array_rand($sucursales)]
+                        : null,
+
                     'motivo_rechazo' => $estadoSolicitud === EstadoSP::RECHAZADA->value
                         ? $this->generarMotivoRechazo()
                         : null,
 
-                    // Campos de estados específicos
                     'dg' => $this->generarEstadoDepartamento($estadoSolicitud, 'dg'),
-                    'dg_fecha' => $this->generarFechaEstado($fechaSolicitud, 'dg', $estadoSolicitud),
+                    'dg_fecha' => $this->generarFechaEstado($fechaSolicitud, $estadoSolicitud),
+
                     'dt' => $this->generarEstadoDepartamento($estadoSolicitud, 'dt'),
-                    'dt_fecha' => $this->generarFechaEstado($fechaSolicitud, 'dt', $estadoSolicitud),
+                    'dt_fecha' => $this->generarFechaEstado($fechaSolicitud, $estadoSolicitud),
+
                     'pc' => $this->generarEstadoDepartamento($estadoSolicitud, 'pc'),
-                    'pc_fecha' => $this->generarFechaEstado($fechaSolicitud, 'pc', $estadoSolicitud),
+                    'pc_fecha' => $this->generarFechaEstado($fechaSolicitud, $estadoSolicitud),
+
                     'si' => $this->generarEstadoDepartamento($estadoSolicitud, 'si'),
-                    'si_fecha' => $this->generarFechaEstado($fechaSolicitud, 'si', $estadoSolicitud),
+                    'si_fecha' => $this->generarFechaEstado($fechaSolicitud, $estadoSolicitud),
+
                     'ro' => $this->generarEstadoDepartamento($estadoSolicitud, 'ro'),
-                    'ro_fecha' => $this->generarFechaEstado($fechaSolicitud, 'ro', $estadoSolicitud),
+                    'ro_fecha' => $this->generarFechaEstado($fechaSolicitud, $estadoSolicitud),
 
                     'created_at' => $fechaSolicitud,
                     'updated_at' => $fechaSolicitud->copy()->addDays(rand(0, 10)),
                 ];
-
-                $solicitudes[] = $solicitud;
-                $totalSolicitudes++;
             }
 
-            // Insertar en lotes
-            if (!empty($solicitudes)) {
-                foreach (array_chunk($solicitudes, 50) as $chunk) {
-                    DB::table('solicitudes_pago')->insert($chunk);
-                }
+            foreach (array_chunk($solicitudes, 50) as $chunk) {
+                DB::table('solicitudes_pago')->insert($chunk);
             }
 
-            echo "✅ Seeder SolicitudPagoSeeder ejecutado correctamente.\n";
-            echo "📊 Se generaron {$totalSolicitudes} solicitudes de pago.\n";
-            echo "🏗️  Basadas en " . $cotizacionesParaSolicitud->count() . " cotizaciones aceptadas.\n";
-            echo "📍 Configurado para Los Mochis, Sinaloa, México.\n";
+            echo "✅ Seeder ejecutado correctamente.\n";
+            echo "📊 Total solicitudes: {$totalSolicitudes}\n";
+            echo "📅 Abril 2026\n";
         });
     }
 
-    // --- Métodos auxiliares ---
+    // ----------- FOLIOS -----------
+
+    private function obtenerSiguienteConsecutivoPorProveedor(): array
+    {
+        $folios = DB::table('solicitudes_pago')
+            ->select('proveedor_id', DB::raw("MAX(numero_folio_solicitud) as ultimo"))
+            ->groupBy('proveedor_id')
+            ->get();
+
+        $map = [];
+
+        foreach ($folios as $row) {
+            if (!$row->ultimo) {
+                $map[$row->proveedor_id] = 1;
+                continue;
+            }
+
+            preg_match('/(\d+)$/', $row->ultimo, $matches);
+            $ultimoNumero = isset($matches[1]) ? (int) $matches[1] : 0;
+
+            $map[$row->proveedor_id] = $ultimoNumero + 1;
+        }
+
+        return $map;
+    }
+
+    // ----------- AUX -----------
 
     private function generarEstadoSolicitudAleatorio(): string
     {
-        $valores = EstadoSP::values(); // ['pendiente','rechazada','autorizada','pagado']
+        $valores = EstadoSP::values();
         return $valores[array_rand($valores)];
     }
 
-    // Método eliminado - ahora se usa SolicitudPago::generarNumeroFolio()
-
-    private function generarDescripcionConcepto($cotizacion): string
+    private function generarDescripcionConceptoFake($proveedor): string
     {
         $conceptos = [
-            "Pago por suministro de materiales - {$cotizacion->proveedor->nombre_comercial}",
-            "Solicitud de pago por servicios de construcción",
-            "Pago de facturación - Proyecto Los Mochis",
-            "Liquidación de servicios especializados",
-            "Pago por entrega de materiales según cotización #{$cotizacion->id}",
+            "Pago por suministro - {$proveedor->nombre_comercial}",
+            "Pago de servicios contratados",
+            "Pago operativo mensual",
+            "Liquidación de materiales",
+            "Pago administrativo interno",
         ];
 
         return $conceptos[array_rand($conceptos)];
     }
 
-    private function generarRutaArchivo(string $tipo, int $numero): string
+    private function generarRutaArchivo(string $tipo, int $numero, Carbon $fecha): string
     {
-        $año = date('Y');
-        $mes = date('m');
+        $año = $fecha->format('Y');
+        $mes = $fecha->format('m');
 
         return match ($tipo) {
             'xml' => "uploads/facturas/xml/{$año}/{$mes}/factura_{$numero}.xml",
@@ -143,7 +187,10 @@ class SolicitudPagoSeeder extends Seeder
 
     private function debeGenerarComprobante(string $estado): bool
     {
-        return in_array($estado, [EstadoSP::PAGADO->value, EstadoSP::AUTORIZADA->value]) && rand(1, 100) <= 80;
+        return in_array($estado, [
+            EstadoSP::PAGADO->value,
+            EstadoSP::AUTORIZADA->value
+        ]) && rand(1, 100) <= 80;
     }
 
     private function generarNombreResidente(): string
@@ -163,15 +210,15 @@ class SolicitudPagoSeeder extends Seeder
     {
         $motivos = [
             'Documentación incompleta',
-            'Factura no cumple con requisitos',
-            'Presupuesto excede monto autorizado',
-            'Requiere autorización adicional',
+            'Factura no cumple requisitos',
+            'Monto excede autorización',
+            'Requiere revisión adicional',
         ];
 
         return $motivos[array_rand($motivos)];
     }
 
-    private function generarEstadoDepartamento(string $estadoSolicitud, string $departamento): ?int
+    private function generarEstadoDepartamento(string $estadoSolicitud, string $departamento): int
     {
         if ($estadoSolicitud === EstadoSP::PENDIENTE->value) {
             return 0;
@@ -185,16 +232,19 @@ class SolicitudPagoSeeder extends Seeder
             'ro' => 70,
         ];
 
-        $probabilidad = $probabilidades[$departamento] ?? 70;
-        return rand(1, 100) <= $probabilidad ? rand(1, 3) : 0;
+        $p = $probabilidades[$departamento] ?? 70;
+
+        return rand(1, 100) <= $p ? rand(1, 3) : 0;
     }
 
-    private function generarFechaEstado(Carbon $fechaBase, string $departamento, string $estadoSolicitud): ?Carbon
+    private function generarFechaEstado(Carbon $base, string $estadoSolicitud): ?Carbon
     {
         if ($estadoSolicitud === EstadoSP::PENDIENTE->value) {
             return null;
         }
 
-        return rand(1, 100) <= 80 ? $fechaBase->copy()->addDays(rand(1, 30)) : null;
+        return rand(1, 100) <= 80
+            ? $base->copy()->addDays(rand(1, 20))
+            : null;
     }
 }

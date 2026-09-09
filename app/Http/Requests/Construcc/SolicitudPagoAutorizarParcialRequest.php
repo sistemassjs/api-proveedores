@@ -18,7 +18,7 @@ class SolicitudPagoAutorizarParcialRequest extends FormRequest
         return [
             'rol' => ['required', 'string', Rule::in(['DG', 'DT', 'PC', 'SI'])],
             'monto_autorizado' => ['required', 'numeric', 'gt:0'],
-            'notas_autorizacion' => ['required', 'string', 'min:10'],
+            'notas_autorizacion' => ['required', 'string', 'min:1'],
             'usuario_id' => ['required', 'integer'],
             'usuario_nombre' => ['required', 'string', 'max:255'],
         ];

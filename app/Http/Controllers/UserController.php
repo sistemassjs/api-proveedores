@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\Api\Crud\ResourceNotFoundException;
+use App\Enums\EstadoUsuario;
 use App\Http\Requests\User\UserStoreRequest;
+use App\Http\Requests\User\UserUpdateRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Support\MetricasPlataforma;
+use App\Support\AdminListOrdering;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 
 class UserController extends Controller
 {
@@ -33,17 +36,53 @@ class UserController extends Controller
      *     )
      * )
      */
+    /**
+     * Conteos para segmentos del listado admin (Todos / Activos / Inactivos / Pendientes).
+     * Respeta filtros del listado excepto filtros de segmento (grupo_*).
+     */
+    public function conteosListado(Request $request): JsonResponse
+    {
+        $filters = $request->only(User::getFilters());
+        unset(
+            $filters['grupo_activos'],
+            $filters['grupo_inactivos'],
+            $filters['grupo_pendientes'],
+            $filters['grupo_registro_completados'],
+        );
+
+        $base = User::query()->paraListadoAdminUsuarios()->filter($filters);
+        $estadoRegistroCompletado = EstadoUsuario::REGISTRO_COMPLETADO->value;
+
+        $todos = (clone $base)->count();
+        $activos = (clone $base)->where('status', true)->count();
+        $inactivos = (clone $base)->where('status', false)->count();
+        $pendientes = (clone $base)->whereNull('email_verified_at')->count();
+        $registroCompletados = (clone $base)->whereHas('userProveedores', function ($q) use ($estadoRegistroCompletado) {
+            $q->where('activo', true)->where('estado', $estadoRegistroCompletado);
+        })->count();
+
+        return $this->success([
+            'todos' => $todos,
+            'activos' => $activos,
+            'inactivos' => $inactivos,
+            'pendientes' => $pendientes,
+            'registro_completados' => $registroCompletados,
+        ], 'Conteos de usuarios para listado administrativo.');
+    }
+
     public function index(Request $request)
     {
         $filters = $request->only(User::getFilters());
 
-        $sortBy = $request->input('sort_by', 'created_at');
-        $order = $request->input('order', 'desc');
-        $perPage = $request->input('per_page', 10);
+        $sortBy = $request->input('sort_by', 'name');
+        $order = $request->input('order', 'asc');
+        $perPage = min(max(1, (int) $request->input('per_page', 10)), 100);
 
         $query = User::query()
+            ->paraListadoAdminUsuarios()
             ->with(User::eagerLodable())
             ->filter($filters);
+        AdminListOrdering::applyUserStatusPriority($query);
         $originalPaginator = $query
             ->orderBy($sortBy, $order)
             ->paginate($perPage);
@@ -84,11 +123,23 @@ class UserController extends Controller
      */
     public function store(UserStoreRequest $request)
     {
-        $user = User::create($request->validate());
+        $validated = $request->validated();
 
-        return $this->success([
-            'user' => new UserResource($user->load(['role'])),
-        ], 201);
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+            'role_id' => $validated['role_id'],
+            'telefono' => $validated['telefono'] ?? null,
+            'telefono_codigo_pais' => $validated['telefono_codigo_pais'] ?? null,
+            'status' => $validated['status'] ?? EstadoUsuario::REGISTRADO->value,
+        ]);
+
+        return $this->success(
+            new UserResource($user->load(User::eagerLodable())),
+            'Usuario creado correctamente.',
+            201
+        );
     }
 
     /**
@@ -109,7 +160,7 @@ class UserController extends Controller
             throw new ResourceNotFoundException('Usuario no encontrado.');
         }
 
-        return $this->success(new UserResource($user->load(['role'])));
+        return $this->success(new UserResource($user->load(User::eagerLodable())));
     }
 
     /**
@@ -131,25 +182,31 @@ class UserController extends Controller
      *     @OA\Response(response=404, description="Usuario no encontrado")
      * )
      */
-    public function update(Request $request, $id)
+    public function update(UserUpdateRequest $request, $id)
     {
         $user = User::findOrFail($id);
 
-        $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|string|max:255',
-            'password' => ['nullable', 'string', Password::min(8)],
-            // 'email' => 'sometimes|string|email|max:255|unique:users,email,'.$user->id,
-            //             'password' => ['nullable', 'string', Password::min(8)],
-        ]);
+        $validated = $request->validated();
 
-        $data = $request->only(['name', 'email']);
+        $data = collect($validated)->only([
+            'name',
+            'email',
+            'telefono',
+            'telefono_codigo_pais',
+            'role_id',
+            'status',
+            'es_cuenta_de_pruebas',
+        ])->filter(fn ($value) => $value !== null)->all();
 
         if ($request->filled('password')) {
-            $data['password'] = Hash::make($request->password);
+            $data['password'] = $request->password;
         }
 
         $user->update($data);
+
+        if (array_key_exists('es_cuenta_de_pruebas', $data) || array_key_exists('role_id', $data)) {
+            MetricasPlataforma::forgetCache();
+        }
 
         return $this->success(new UserResource($user->load(['role'])));
     }

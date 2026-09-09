@@ -11,6 +11,7 @@ class ValidaCorreoProveedorBasicoMail extends Mailable
     use Queueable, SerializesModels;
 
     public $url;
+
     public $nombreEmpresa;
 
     public function __construct($url, $nombreEmpresa = null)
@@ -21,7 +22,7 @@ class ValidaCorreoProveedorBasicoMail extends Mailable
 
     public function build()
     {
-        return $this->subject('Bienvenido a SJS Construcciones - Crea tu contraseña')
+        return $this->subject('Bienvenido a '.config('app.name').' - Crea tu contraseña')
             ->view('emails.valida-correo-proveedor-basico');
     }
 }

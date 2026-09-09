@@ -31,7 +31,7 @@ public function toArray(Request $request): array
 - Fechas: `->format('Y-m-d')` o `->format('Y-m-d H:i:s')`
 - Booleanos: `(bool) $this->campo`
 - Números: `(float) $this->campo`
-- URLs de archivos: `Storage::disk('public')->url($this->logo)`
+- URLs de archivos: `PublicStorageUrl::make($this->logo)` (usa `APP_URL` + disk `public`; no `asset('storage/...')`)
 - Relaciones: usar `whenLoaded()` para evitar N+1
 
 ## Collections

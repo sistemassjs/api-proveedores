@@ -11,6 +11,7 @@ class PasswordResetMail extends Mailable
     use Queueable, SerializesModels;
 
     public $url;
+
     public $userName;
 
     public function __construct($url, $userName = null)
@@ -22,7 +23,7 @@ class PasswordResetMail extends Mailable
     public function build()
     {
         return $this
-            ->subject('Recuperación de Contraseña - SJS Construcciones')
+            ->subject('Recuperación de contraseña - '.config('app.name'))
             ->view('emails.password-reset');
     }
 }

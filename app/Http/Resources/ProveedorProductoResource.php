@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,11 +27,7 @@ class ProveedorProductoResource extends JsonResource
             'precio_menudeo' => (float) $this->precio_menudeo,
 
             // Imagen principal optimizada
-            'imagen_principal' => $this->imagen_principal
-                ? (preg_match('/^https?:\/\//', $this->imagen_principal)
-                    ? $this->imagen_principal
-                    : asset('storage/'.$this->imagen_principal))
-                : null,
+            'imagen_principal' => PublicStorageUrl::make($this->imagen_principal),
             'marca_id' => $this->marca_id,
             'categoria_id' => $this->categoria_id,
             'subcategoria_id' => $this->subcategoria_id,
@@ -59,11 +56,7 @@ class ProveedorProductoResource extends JsonResource
                     'id' => $this->marca->id,
                     'nombre' => $this->marca->nombre,
                     'descripcion' => $this->marca->descripcion,
-                    'logo' => $this->marca->logo
-                        ? (preg_match('/^https?:\/\//', $this->marca->logo)
-                            ? $this->marca->logo
-                            : asset('storage/'.$this->marca->logo))
-                        : null,
+                    'logo' => PublicStorageUrl::make($this->marca->logo),
                 ] : null;
             }),
 

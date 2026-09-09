@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProveedorPublicResource extends JsonResource
@@ -26,16 +26,12 @@ class ProveedorPublicResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'logo' => $this->logo
-                ? Storage::disk('public')->url($this->logo)
-                : null,
+            'logo' => PublicStorageUrl::make($this->logo),
             'nombre_comercial' => self::upper($this->nombre_comercial),
             'email' => $this->email,
             'telefono' => $this->telefono,
             'direccion_empresa' => self::upper($this->direccion_empresa),
-            'constancia_fiscal' => $this->constancia_fiscal
-                ? Storage::disk('public')->url($this->constancia_fiscal)
-                : null,
+            'constancia_fiscal' => PublicStorageUrl::make($this->constancia_fiscal),
         ];
     }
 }

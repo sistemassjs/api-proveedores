@@ -3,90 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>Presupuesto recibido</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background-color: #f8f9fa; }
-    .email-container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%); color: #fff; padding: 30px 20px; text-align: center; }
-    .logo { max-width: 80px; height: auto; margin-bottom: 15px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
-    .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 5px; }
-    .header p { font-size: 14px; opacity: 0.9; }
-    .content { padding: 30px 20px; }
-    .greeting { font-size: 18px; font-weight: 500; margin-bottom: 20px; color: #2c3e50; }
-    .intro-text { font-size: 16px; margin-bottom: 25px; color: #555; }
-    .presupuesto-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 25px 0; }
-    .presupuesto-header { margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid #2196F3; }
-    .presupuesto-folio { font-size: 20px; font-weight: 600; color: #2196F3; }
-    .presupuesto-total { font-size: 18px; font-weight: 600; color: #28a745; }
-    .detail-item { margin: 8px 0; }
-    .detail-label { font-weight: 600; color: #495057; margin-right: 8px; }
-    .detail-value { color: #6c757d; }
-    .action-button { display: inline-block; background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%); color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; text-align: center; margin: 25px 0; }
-    .info-box { background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 0 6px 6px 0; }
-    .footer-text { font-size: 14px; color: #6c757d; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef; }
-    .footer { background: #343a40; color: #fff; padding: 20px; text-align: center; font-size: 12px; }
-  </style>
 </head>
-<body>
-  <div class="email-container">
-    <div class="header">
-      @php
-        $logoProveedorDataUri = \App\Support\EmailLogoHelper::proveedorDataUri($presupuesto->proveedor ?? null);
-      @endphp
-      <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
-        @if(!empty($logoProveedorDataUri))
-        <img src="{{ $logoProveedorDataUri }}" alt="" class="logo" style="max-width:72px;height:auto;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
-        @endif
-        @if(!empty($logoAppDataUri))
-        <img src="{{ $logoAppDataUri }}" alt="GestiónPro" class="logo" style="max-width:80px;height:auto;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
-        @endif
-      </div>
-      <h1>Presupuesto recibido</h1>
-      <p>Sistema de Gestión de Proveedores</p>
-    </div>
-    <div class="content">
-      <div class="greeting">Hola {{ $nombreReceptor }},</div>
-      <div class="intro-text">
-        {{ $presupuesto->proveedor?->nombre_comercial ?? $presupuesto->proveedor?->razon_social ?? 'Un proveedor' }} te ha enviado un presupuesto para tu revisión.
-      </div>
-      <div class="presupuesto-card">
-        <div class="presupuesto-header">
-          <div class="presupuesto-folio">Presupuesto #{{ $presupuesto->numero_presupuesto }}</div>
-          <div class="presupuesto-total" style="margin-top: 8px;">Total: ${{ number_format($presupuesto->total, 2) }}</div>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Concepto:</span>
-          <span class="detail-value">{{ Str::limit($presupuesto->concepto_general, 80) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Fecha emisión:</span>
-          <span class="detail-value">{{ $presupuesto->fecha_emision?->format('d/m/Y') }}</span>
-        </div>
-        @if($presupuesto->fecha_vencimiento)
-        <div class="detail-item">
-          <span class="detail-label">Vigencia hasta:</span>
-          <span class="detail-value">{{ $presupuesto->fecha_vencimiento->format('d/m/Y') }}</span>
-        </div>
-        @endif
-      </div>
-      <div style="text-align:left;margin:20px 0;">
-        @include('emails.presupuesto.partials.detalles-presupuesto', ['presupuesto' => $presupuesto])
-      </div>
-      <div class="info-box">
-        <strong>En este correo va adjunto el PDF del presupuesto.</strong> También puedes verlo, compartirlo, aceptarlo o rechazarlo desde el enlace seguro:
-      </div>
-      <div style="text-align: center;">
-        <a href="{{ $enlacePublico }}" class="action-button">Ver presupuesto</a>
-      </div>
-      <div class="footer-text">
-        <p>Este enlace es único y seguro. No compartas este correo con terceros si contiene información confidencial.</p>
-        <p style="margin-top: 15px;">Si tienes dudas, contacta directamente al proveedor.</p>
-      </div>
-    </div>
-    <div class="footer">
-      <p>Sistema de Gestión de Proveedores - Mensaje automático, no responder.</p>
-    </div>
-  </div>
+<body style="margin:0;padding:0;background-color:#f3f6fb;">
+  @php
+    $emisor = $presupuesto->proveedor?->nombre_comercial ?? $presupuesto->proveedor?->razon_social ?? 'Un proveedor';
+    $concepto = (string) ($presupuesto->concepto_general ?? '');
+    $conceptoCorto = mb_strlen($concepto) > 80 ? mb_substr($concepto, 0, 80) . '...' : $concepto;
+  @endphp
+
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f3f6fb;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e6ebf2;">
+          <tr>
+            <td style="padding:0;background-color:#ffffff;">
+              @include('emails.partials.app-header', ['title' => 'Presupuesto recibido'])
+            </td>
+          </tr>
+  
+          <tr>
+            <td style="padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:16px;line-height:24px;">
+              <p style="margin:0 0 12px 0;">Hola {{ $nombreReceptor }},</p>
+              <p style="margin:0 0 18px 0;">
+                {{ $emisor }} te ha enviado un presupuesto para tu revision.
+              </p>
+
+              @if(!empty($incluirInvitacion))
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:14px;border:1px solid #d6e4ff;background-color:#eef5ff;">
+                  <tr>
+                    <td style="padding:12px;font-size:14px;line-height:20px;color:#1e3a8a;">
+                      <strong>Invitación a la app:</strong> Te invitamos a autorizar este presupuesto desde la app de Proveedores. También podrás gestionar de forma profesional tus siguientes presupuestos y solicitudes de pago.
+                    </td>
+                  </tr>
+                </table>
+              @endif
+
+              @include('emails.partials.provider-card', ['proveedor' => $presupuesto->proveedor, 'proveedorLogo' => $proveedorLogo ?? null])
+              @include('emails.partials.presupuesto-summary', ['presupuesto' => $presupuesto])
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:18px;border:1px solid #d6e4ff;background-color:#eef5ff;">
+                <tr>
+                  <td style="padding:12px;font-size:14px;line-height:20px;color:#1e3a8a;">
+                    Puedes ver, compartir, aceptar o rechazar este presupuesto desde el siguiente enlace seguro:
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:20px auto 0 auto;">
+                <tr>
+                  <td align="center" bgcolor="#1e88e5" style="border-radius:4px;">
+                    <a href="{{ $enlacePublico }}" target="_blank" style="display:inline-block;padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;">
+                      Ver presupuesto
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:22px 0 0 0;font-size:13px;line-height:18px;color:#64748b;">
+                Este enlace es unico y seguro. Si tienes dudas, contacta directamente al proveedor.
+              </p>
+              <p style="margin:10px 0 0 0;font-size:13px;line-height:18px;color:#64748b;">
+                Adjuntamos el PDF del presupuesto para tu archivo.
+              </p>
+            </td>
+          </tr>
+
+          <tr><td>@include('emails.partials.app-footer')</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

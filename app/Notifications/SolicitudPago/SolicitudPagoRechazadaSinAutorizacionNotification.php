@@ -10,6 +10,7 @@ use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 
 class SolicitudPagoRechazadaSinAutorizacionNotification extends Notification implements ShouldBroadcastNow
 {
@@ -127,6 +128,7 @@ class SolicitudPagoRechazadaSinAutorizacionNotification extends Notification imp
                 'proveedorId' => $this->proveedorId,
                 'motivo' => $this->motivo,
                 'urlSolicitud' => $urlSolicitud,
+                'logoAppDataUri' => $this->resolverLogoProveedorBase64(),
             ]);
     }
 
@@ -178,5 +180,50 @@ class SolicitudPagoRechazadaSinAutorizacionNotification extends Notification imp
     protected function getNotificationSubtipo(): string
     {
         return 'rechazada-sin-autorizacion';
+    }
+
+    private function resolverLogoProveedorBase64(): ?string
+    {
+        $logo = SolicitudPago::query()
+            ->with('proveedor:id,logo')
+            ->find($this->solicitudPagoId)?->proveedor?->logo;
+
+        if (! is_string($logo) || trim($logo) === '') {
+            return null;
+        }
+        if (str_starts_with($logo, 'data:image')) {
+            return $logo;
+        }
+        if (filter_var($logo, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $logoPath = null;
+        if (str_starts_with($logo, '/') || str_starts_with($logo, 'storage/')) {
+            $logoPath = public_path($logo);
+        } elseif (Storage::disk('public')->exists($logo)) {
+            $logoPath = Storage::disk('public')->path($logo);
+        } else {
+            $logoPath = public_path('storage/' . $logo);
+        }
+
+        if (! $logoPath || ! is_readable($logoPath)) {
+            return null;
+        }
+
+        $binary = @file_get_contents($logoPath);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode($binary);
     }
 }

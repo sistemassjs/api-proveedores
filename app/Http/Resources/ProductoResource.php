@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,12 +19,7 @@ class ProductoResource extends JsonResource
             'sku' => $this->sku,
             'nombre' => $this->nombre,
             'descripcion' => $this->descripcion,
-            // 'imagen_principal' => $this->imagen_principal
-            //     ? (preg_match('/^https?:\/\//', $this->imagen_principal) ? $this->imagen_principal : asset('storage/' . $this->imagen_principal))
-            //     : null,
-            'imagen_principal' => $this->imagen_principal
-                ? asset('storage/'.$this->imagen_principal)
-                : null,
+            'imagen_principal' => PublicStorageUrl::make($this->imagen_principal),
             //
             'marca_id' => $this->marca_id,
             'categoria_id' => $this->categoria_id,

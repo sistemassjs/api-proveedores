@@ -77,7 +77,7 @@ class ConstruccPagosSPPRegistrarPagoRequest extends FormRequest
       'solicitudes.*.datos_facturacion_id' => ['nullable', 'numeric'],
 
       // Otros datos
-      'fecha_pago'      => ['required', 'date'],              // --> cambio por info_comprobante.fecha + info_comprobante.hora
+      'fecha_pago'      => ['nullable', 'date'],              // --> cambio por info_comprobante.fecha + info_comprobante.hora
 
       // // =========================
       // // datos de facturacion

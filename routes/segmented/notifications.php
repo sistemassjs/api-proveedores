@@ -30,13 +30,14 @@ Route::prefix('notifications')->group(function () {
     // GESTIÓN DE NOTIFICACIONES DEL USUARIO (protegidas con Sanctum)
     // -------------------------------------------------------------------------
     Route::middleware(['auth:sanctum'])->group(function () {
-        Route::get('/', [NotificationController::class, 'getNotifications'])->middleware(['audit']);
+        Route::get('/', [NotificationController::class, 'getNotifications']);
         Route::get('/poll', [NotificationController::class, 'poll']); // Sin audit para no llenar logs
-        Route::post('/test', [NotificationController::class, 'sendTest'])->middleware(['audit']);
-        Route::post('/send', [NotificationController::class, 'sendToCurrentUser'])->middleware(['audit']);
-        Route::post('/send/{userId}', [NotificationController::class, 'sendToUser'])->middleware(['audit']);
-        Route::patch('/{notificationId}/read', [NotificationController::class, 'markAsRead'])->middleware(['audit']);
-        Route::patch('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->middleware(['audit']);
-        Route::post('/marcar-leida/por-tipo-notificacion', [NotificationController::class, 'markAsReadByTipoAndSP'])->middleware(['audit']);
+        Route::post('/test', [NotificationController::class, 'sendTest']);
+        Route::post('/send', [NotificationController::class, 'sendToCurrentUser']);
+        Route::post('/send/{userId}', [NotificationController::class, 'sendToUser']);
+        Route::patch('/{notificationId}/read', [NotificationController::class, 'markAsRead']);
+        Route::delete('/{notificationId}', [NotificationController::class, 'destroy']);
+        Route::patch('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        Route::post('/marcar-leida/por-tipo-notificacion', [NotificationController::class, 'markAsReadByTipoAndSP']);
     });
 });

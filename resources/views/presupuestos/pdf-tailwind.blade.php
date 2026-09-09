@@ -1,8 +1,8 @@
 @php
-    $margenMm = 20;
-    $footerHeightMm = 25.4;
-    $terminosLista = $presupuesto['terminos_enunciados'] ?? [];
-    $observacionesLista = $presupuesto['observaciones_enunciados'] ?? [];
+    /** @var array<string, mixed> $presupuesto */
+    /** @var \App\Support\PresupuestoPdfDocumentConfig|null $pdf */
+    $pdf = $pdf ?? \App\Support\PresupuestoPdfDocumentConfig::fromPresupuestoPayload($presupuesto);
+    extract($pdf->bladeViewVariables($presupuesto), EXTR_SKIP);
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -14,694 +14,1014 @@
       Plantilla PDF alternativa (utilidades estilo Tailwind embebidas).
       Acento corporativo azul #3498db (alineado con pdf.blade.php). DomPDF: sin CDN.
     --}}
-    <style>
-        @page {
-            size: letter;
-            margin: 25.5mm;
-        }
-
-        :root {
-            --tw-slate-50: #f8fafc;
-            --tw-slate-100: #f1f5f9;
-            --tw-slate-200: #e2e8f0;
-            --tw-slate-400: #94a3b8;
-            --tw-slate-500: #64748b;
-            --tw-slate-600: #475569;
-            --tw-slate-700: #334155;
-            --tw-slate-800: #1e293b;
-            --tw-slate-900: #0f172a;
-            --accent: #3498db;
-            --accent-dark: #2980b9;
-            --accent-soft: #eaf4fc;
-            --accent-border: #d6eaf8;
-            --heading: #2c3e50;
-            --tw-white: #ffffff;
-            /* Interlineado unificado en bloques de texto del cuerpo */
-            --section-line-height: 1.05;
-        }
-
-        html,
-        body {
-            font-family: 'DejaVu Sans', Arial, sans-serif;
-            font-size: 8.5pt;
-            color: var(--tw-slate-800);
-            background: var(--tw-white);
-            line-height: 1.2;
-            margin: 0;
-            padding: 0;
-            padding-bottom: {{ $footerHeightMm }}mm;
-        }
-
-        body {
-            padding-top: {{ $margenMm }}mm;
-        }
-
-        .margin-sides {
-            padding-left: {{ $margenMm }}mm;
-            padding-right: {{ $margenMm }}mm;
-        }
-
-        .document-container {
-            width: 100%;
-            background: var(--tw-white);
-        }
-
-        /* —— Encabezado (rejilla 3 columnas, sin barra lateral) —— */
-        .tw-header-wrap {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 0;
-            page-break-inside: avoid;
-        }
-
-        .tw-header-main {
-            vertical-align: top;
-            padding: 0;
-            background: transparent;
-        }
-
-        /* Línea gris completa bajo el encabezado (como referencia) */
-        .tw-header-rule {
-            width: 100%;
-            height: 0;
-            margin: 3mm 0 4mm 0;
-            padding: 0;
-            border: 0;
-            border-top: 1px solid var(--tw-slate-200);
-            font-size: 0;
-            line-height: 0;
-            overflow: hidden;
-        }
-
-        .tw-header-top {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .tw-logo-cell {
-            width: 22%;
-            vertical-align: top;
-            /* 🔥 arriba */
-            text-align: left;
-            /* 🔥 izquierda */
-        }
-
-        .tw-logo-img {
-            max-width: 90%;
-            max-height: 18mm;
-            object-fit: contain;
-            display: block;
-            /* 🔥 evita centrados raros */
-        }
-
-        .tw-logo-fallback {
-            width: 20mm;
-            height: 20mm;
-            background: var(--accent);
-            border-radius: 1mm;
-            text-align: center;
-            line-height: 20mm;
-            color: var(--tw-white);
-            font-size: 11pt;
-            font-weight: bold;
-        }
-
-        .tw-emisor-cell {
-            vertical-align: top;
-            padding-left: 0;
-            width: 48%;
-        }
-
-        .tw-emisor-name {
-            font-size: 9.5pt;
-            font-weight: 700;
-            color: var(--heading);
-            text-transform: uppercase;
-            margin-bottom: 0.4mm;
-            letter-spacing: 0.03em;
-            line-height: var(--section-line-height);
-        }
-
-        .tw-emisor-line {
-            font-size: 7pt;
-            color: var(--tw-slate-600);
-            margin-bottom: 0.2mm;
-            line-height: var(--section-line-height);
-        }
-
-        .tw-folio-cell {
-            vertical-align: top;
-            text-align: right;
-            width: 30%;
-        }
-
-        .tw-badge-label {
-            font-size: 6pt;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--tw-slate-500);
-            margin-bottom: 0.6mm;
-        }
-
-        .tw-badge-folio {
-            display: block;
-            background: transparent;
-            border: none;
-            color: var(--accent);
-            font-size: 13pt;
-            font-weight: 700;
-            padding: 0;
-            margin: 0 0 1mm 0;
-            line-height: 1.1;
-        }
-
-        .tw-uuid {
-            font-size: 6pt;
-            color: var(--tw-slate-500);
-            word-break: break-all;
-            max-width: 100%;
-        }
-
-        .tw-date {
-            font-size: 7pt;
-            color: var(--tw-slate-800);
-            margin-top: 0.6mm;
-        }
-
-        /* Cajas grises (referencia): fondo claro, borde suave, sin acento lateral */
-        .tw-card {
-            margin-bottom: 3mm;
-            padding: 1mm 2mm;
-            /* background: var(--tw-slate-100); */
-            /* border: 1px solid var(--tw-slate-200); */
-            border-radius: 1mm;
-            page-break-inside: avoid;
-        }
-
-        .tw-card-title {
-            font-size: 6.5pt;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--accent);
-            margin: 0 0 1mm 0;
-            padding: 0;
-            border: none;
-        }
-
-        .tw-receptor-strong {
-            font-size: 9pt;
-            font-weight: 700;
-            color: var(--heading);
-            margin-bottom: 0.3mm;
-            line-height: var(--section-line-height);
-        }
-
-        .tw-receptor-line {
-            font-size: 7pt;
-            color: var(--tw-slate-600);
-            margin-bottom: 0.2mm;
-            line-height: var(--section-line-height);
-        }
-
-        /* Descripción */
-        .tw-desc-box {
-            margin-bottom: 3mm;
-            padding: 1mm 2mm;
-            /* background: var(--tw-slate-100); */
-            /* border: 1px solid var(--tw-slate-200); */
-            border-radius: 1mm;
-            page-break-inside: avoid;
-        }
-
-        .tw-desc-title {
-            font-size: 6.5pt;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--accent);
-            margin: 0 0 1mm 0;
-        }
-
-        .tw-desc-text {
-            font-size: 7pt;
-            color: var(--tw-slate-900);
-            text-align: justify;
-            line-height: var(--section-line-height);
-        }
-
-        /* Título bloque tabla (referencia: centrado, negro, sin subrayado azul) */
-        .tw-section-title {
-            font-size: 9.5pt;
-            font-weight: 700;
-            color: var(--heading);
-            text-transform: none;
-            letter-spacing: 0.02em;
-            text-align: center;
-            margin: 4mm 0 2mm 0;
-            padding: 0;
-            border: none;
-            width: 100%;
-        }
-
-        .tw-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 6mm;
-            table-layout: fixed;
-        }
-
-        .tw-table thead {
-            display: table-header-group;
-        }
-
-        .tw-table thead tr {
-            background: var(--accent) !important;
-            color: var(--tw-white) !important;
-        }
-
-        .tw-table thead th {
-            padding: 1mm 0.5mm;
-            font-size: 5.8pt;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            text-align: center;
-            color: var(--tw-white) !important;
-            background: var(--accent) !important;
-            border: 1px solid var(--accent-dark);
-            line-height: 1.12;
-        }
-
-        .tw-table thead th:nth-child(2) {
-            text-align: left;
-            padding-left: 1.5mm;
-        }
-
-        .tw-table thead th:nth-child(5),
-        .tw-table thead th:nth-child(6) {
-            text-align: right;
-            padding-right: 1mm;
-        }
-
-        .tw-table tbody td {
-            padding: 1.2mm 1mm;
-            font-size: 6.5pt;
-            border: 1px solid var(--tw-slate-200);
-            vertical-align: top;
-        }
-
-        .tw-table tbody tr:nth-child(odd) {
-            background: var(--tw-white);
-        }
-
-        .tw-table tbody tr:nth-child(even) {
-            background: #eef6fc;
-        }
-
-        .tw-table tbody td:first-child {
-            text-align: center;
-            color: var(--tw-slate-500);
-            font-weight: 600;
-        }
-
-        .tw-table tbody td:nth-child(2) {
-            text-align: left;
-            color: var(--heading);
-            padding-left: 1.2mm;
-        }
-
-        .tw-table tbody td:nth-child(3),
-        .tw-table tbody td:nth-child(4) {
-            text-align: center;
-            color: var(--tw-slate-600);
-            text-transform: uppercase;
-        }
-
-        .tw-table tbody td:nth-child(5),
-        .tw-table tbody td:nth-child(6) {
-            text-align: right;
-            color: var(--tw-slate-800);
-        }
-
-        .tw-table tbody td:nth-child(6) {
-            font-weight: 600;
-        }
-
-        .tw-no-rows {
-            text-align: center;
-            font-style: italic;
-            color: var(--tw-slate-400);
-            padding: 5mm !important;
-        }
-
-        /* Totales */
-        .tw-totals-wrap {
-            width: 100%;
-            page-break-inside: avoid;
-        }
-
-        .tw-totals-inner {
-            width: 52%;
-            margin-left: 48%;
-            border: 1px solid var(--tw-slate-200);
-            border-radius: 1mm;
-            overflow: hidden;
-            background: var(--tw-white);
-        }
-
-        .tw-totals-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .tw-totals-table td {
-            padding: 1mm 2mm;
-            font-size: 7pt;
-        }
-
-        .tw-totals-table td:first-child {
-            text-align: right;
-            color: var(--tw-slate-600);
-            background: var(--tw-slate-50);
-        }
-
-        .tw-totals-table td:last-child {
-            text-align: right;
-            font-weight: 600;
-            color: var(--tw-slate-800);
-        }
-
-        .tw-totals-table .tw-total-row td {
-            background: var(--tw-white);
-            border-top: 2px solid var(--accent);
-            font-size: 10pt;
-            font-weight: 700;
-        }
-
-        .tw-totals-table .tw-total-row td:first-child {
-            color: var(--heading);
-            text-transform: uppercase;
-        }
-
-        .tw-totals-table .tw-total-row td:last-child {
-            color: var(--accent);
-        }
-
-        .after-table-space {
-            height: 8mm;
-        }
-
-        /* Términos */
-        .terms-block {
-            margin-bottom: 3mm;
-            page-break-inside: auto;
-        }
-
-        .tw-terms+.tw-terms {
-            margin-top: 2mm;
-        }
-
-        .tw-terms {
-            margin-top: 3mm;
-            padding-top: 0;
-            border-top: none;
-        }
-
-        .tw-terms h3 {
-            font-size: 6.5pt;
-            font-weight: 700;
-            color: var(--heading);
-            text-transform: none;
-            letter-spacing: 0.02em;
-            margin: 0 0 1mm 0;
-            line-height: var(--section-line-height);
-        }
-
-        .tw-terms ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .tw-terms ul.tw-terms-num {
-            counter-reset: twi;
-        }
-
-        .tw-terms ul.tw-terms-num li {
-            font-size: 6.2pt;
-            color: var(--tw-slate-600);
-            line-height: var(--section-line-height);
-            margin-bottom: 0.6mm;
-            padding-left: 5mm;
-            position: relative;
-            text-align: justify;
-        }
-
-        .tw-terms ul.tw-terms-num li::before {
-            counter-increment: twi;
-            content: counter(twi) ".";
-            position: absolute;
-            left: 0;
-            font-weight: 600;
-            color: var(--tw-slate-800);
-        }
-
-        /* Observaciones: lista numerada (contador independiente de términos) */
-        .tw-terms ul.tw-obs-list {
-            counter-reset: twobs;
-        }
-
-        .tw-terms ul.tw-obs-list li {
-            font-size: 6.2pt;
-            color: var(--tw-slate-600);
-            line-height: var(--section-line-height);
-            margin-bottom: 0.6mm;
-            padding-left: 5mm;
-            position: relative;
-            text-align: justify;
-        }
-
-        .tw-terms ul.tw-obs-list li::before {
-            counter-increment: twobs;
-            content: counter(twobs) ".";
-            position: absolute;
-            left: 0;
-            font-weight: 600;
-            color: var(--tw-slate-800);
-        }
-
-        /* Footer fijo (igual que plantilla clásica) */
-        .footer {
-            position: fixed;
-            bottom: 6mm;
-            left: {{ $margenMm }}mm;
-            right: {{ $margenMm }}mm;
-            height: {{ $footerHeightMm - 2 }}mm;
-            min-height: {{ $footerHeightMm - 2 }}mm;
-            padding: 1mm 0 2mm;
-            font-size: 6.5pt;
-            color: var(--tw-slate-500);
-            line-height: 1.3;
-            overflow: visible;
-        }
-
-        .footer-table {
-            display: table;
-            width: 100%;
-        }
-
-        .footer-left {
-            display: table-cell;
-            width: 33%;
-            vertical-align: bottom;
-        }
-
-        .footer-center {
-            display: table-cell;
-            width: 34%;
-            text-align: center;
-            vertical-align: middle;
-        }
-
-        .footer-right {
-            display: table-cell;
-            width: 33%;
-            text-align: right;
-            vertical-align: middle;
-            padding-left: 2mm;
-        }
-
-        .footer-logos-row {
-            display: table;
-        }
-
-        .footer-logo-cell {
-            display: table-cell;
-            padding-right: 2.5mm;
-            vertical-align: middle;
-        }
-
-        .footer-logo-cell:last-child {
-            padding-right: 0;
-        }
-
-        .footer-logo-img {
-            width: 12mm;
-            height: 12mm;
-            object-fit: contain;
-            display: block;
-        }
-
-        .footer-logo-placeholder {
-            width: 12mm;
-            height: 12mm;
-            min-width: 12mm;
-            background: var(--tw-slate-200);
-            border-radius: 1.5mm;
-            font-size: 5pt;
-            font-weight: 700;
-            color: var(--tw-slate-500);
-            text-align: center;
-            line-height: 8mm;
-        }
-
-        .footer-center-content {
-            text-align: center;
-            width: 100%;
-        }
-
-        .footer-pages {
-            font-weight: 600;
-            color: var(--tw-slate-700);
-            font-size: 7pt;
-            margin-bottom: 0.6mm;
-            min-height: 3mm;
-        }
-
-        .footer-slogan {
-            font-style: italic;
-            color: var(--accent);
-            font-size: 6pt;
-        }
-
-        .footer-webs {
-            font-size: 6pt;
-        }
-
-        .footer-webs-link {
-            color: var(--accent);
-            text-decoration: none;
-        }
-
-        .footer-webs-sep {
-            color: var(--tw-slate-400);
-            margin: 0 1mm;
-        }
-
-        .footer-qr {
-            display: inline-block;
-            width: 12mm;
-            height: 12mm;
-            vertical-align: middle;
-        }
-
-        .footer-qr img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
-        /* ===== DEBUG VISUAL (TW VERSION) ===== */
-
-        /* .tw-header-wrap {
-            outline: 2px solid red;
-        }
-
-        .tw-header-main {
-            outline: 1px solid purple;
-        }
-
-        .tw-header-top {
-            outline: 1px dashed gray;
-        }
-
-        .tw-logo-cell {
-            outline: 2px solid blue;
-        }
-
-        .tw-emisor-cell {
-            outline: 2px solid green;
-        }
-
-        .tw-folio-cell {
-            outline: 2px solid orange;
-        }
-
-        .tw-header-rule {
-            outline: 1px solid black;
-        }
-
-        .tw-card {
-            outline: 2px solid purple;
-        }
-
-        .tw-desc-box {
-            outline: 2px solid teal;
-        }
-
-        .tw-section-title {
-            outline: 1px solid brown;
-        }
-
-        .tw-table {
-            outline: 2px solid black;
-        }
-
-        .tw-table thead {
-            outline: 2px solid red;
-        }
-
-        .tw-table tbody {
-            outline: 2px solid blue;
-        }
-
-        .tw-totals-wrap {
-            outline: 2px solid darkgreen;
-        }
-
-        .tw-totals-inner {
-            outline: 2px dashed green;
-        }
-
-        .after-table-space {
-            outline: 1px solid red;
-        }
-        .terms-block {
-            outline: 2px solid magenta;
-        }
-
-        .tw-terms {
-            outline: 1px solid pink;
-        }
-
-        .footer {
-            outline: 2px dashed red;
-        }
-
-        .footer-left {
-            outline: 2px solid blue;
-        }
-
-        .footer-center {
-            outline: 2px solid green;
-        }
-
-        .footer-right {
-            outline: 2px solid orange;
-        } */
-    </style>
+<style>
+    @page {
+        size: letter;
+        margin: {{ $margenPaginaMm }}mm;
+    }
+
+    {!! $presupuestoThemeCss !!}
+
+    {!! $presupuestoTableHeaderCss !!}
+
+    :root {
+        /* =========================
+           VARIABLES SEMÁNTICAS
+        ========================== */
+
+        --bg-body: var(--color-white);
+
+        --text-primary: var(--color-slate-800);
+        --text-secondary: var(--color-slate-600);
+        --text-muted: var(--color-slate-500);
+        --text-soft: var(--color-slate-500);
+
+        --text-heading: var(--color-heading);
+
+        --primary: var(--color-primary);
+        --primary-dark: var(--color-primary-dark);
+        --primary-soft: var(--color-primary-soft);
+        --primary-border: var(--color-primary-border);
+
+        --table-header-bg: var(--primary);
+        --table-header-border: var(--primary-dark);
+        --table-header-text: var(--color-on-primary, var(--color-white));
+
+        --table-row-even-bg: var(--color-row-even);
+        --table-row-odd-bg: var(--color-white);
+
+        --paragraph-row-bg: var(--color-paragraph-bg);
+
+        --border-soft: var(--color-slate-100);
+        --border-default: var(--color-slate-200);
+
+        --footer-accent: var(--primary);
+
+        --importe-label-bg: var(--color-importe-label-bg);
+        --importe-value-bg: var(--color-importe-value-bg);
+    }
+
+    html,
+    body {
+        font-family: 'DejaVu Sans', Arial, sans-serif;
+        font-size: 8.5pt;
+        color: var(--text-primary);
+        background: var(--bg-body);
+        line-height: 1.2;
+        margin: 0;
+        padding: 0;
+        padding-bottom: {{ $bodyPaddingBottomMm }}mm;
+    }
+
+    body {
+        padding-top: {{ $margenSuperiorMm }}mm;
+    }
+
+    .margin-sides {
+        padding-left: {{ $margenMm }}mm;
+        padding-right: {{ $margenMm }}mm;
+    }
+
+    .document-container {
+        width: 100%;
+        background: var(--bg-body);
+    }
+
+    .document-main {
+        display: block;
+    }
+
+    .pdf-seccion--presupuesto {
+        width: 100%;
+    }
+
+    .presupuesto-reserva-atentamente-pie {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        page-break-inside: avoid;
+        page-break-after: avoid;
+        margin: 0;
+        padding: 0;
+        min-height: 0;
+    }
+
+    .pdf-seccion-presupuesto__atentamente {
+        margin-top: 0;
+        margin-bottom: {{ $gapAtentamenteFooterMm }}mm;
+        page-break-inside: auto;
+        page-break-before: avoid;
+    }
+
+    .pdf-seccion--anexos,
+    .pdf-seccion--documentacion {
+        page-break-before: auto;
+        width: 100%;
+    }
+
+    .pdf-seccion-documentacion__pagina {
+        width: 100%;
+    }
+
+    .document-main-spacer {
+        flex: 1 1 auto;
+        min-height: 2mm;
+    }
+
+    .document-main-spacer--atentamente {
+        min-height: 28mm;
+    }
+
+    .document-closing {
+        flex: 0 0 auto;
+        width: 100%;
+    }
+
+    .document-closing-atentamente {
+        flex: 0 0 auto;
+        width: 100%;
+        page-break-inside: auto;
+        page-break-before: avoid;
+        page-break-after: avoid;
+    }
+
+    .presupuesto-cierre-terminos-atentamente {
+        width: 100%;
+    }
+
+    .terms-block--after-presupuesto {
+        flex: 0 0 auto;
+        width: 100%;
+        margin-bottom: 2mm;
+        page-break-inside: auto;
+    }
+
+    .terms-block--after-presupuesto .tw-terms:first-child {
+        margin-top: 2mm;
+    }
+
+    .terms-block--after-presupuesto .tw-terms {
+        page-break-inside: auto;
+    }
+
+    .atentamente-plain {
+        width: 100%;
+        margin: 0;
+        padding: 0 0 {{ $gapAtentamenteFooterMm }}mm 0;
+        background: transparent;
+        border: none;
+        page-break-inside: auto;
+        max-width: 90mm;
+    }
+
+    .document-closing-atentamente .atentamente-plain {
+        margin-top: 0;
+        padding-top: 0;
+    }
+
+    .atentamente-plain .atentamente-spacer {
+        height: {{ $espacioTrasTituloAtentamenteMm }}mm;
+        margin: 0;
+        padding: 0;
+        line-height: 0;
+        font-size: 0;
+    }
+
+    .atentamente-plain .atentamente-title {
+        margin-bottom: 0;
+    }
+
+    .atentamente-plain .tw-receptor-strong {
+        margin-bottom: 0.35mm;
+        line-height: 1.05;
+    }
+
+    .atentamente-plain .tw-receptor-line {
+        margin-bottom: 0.2mm;
+        line-height: 1.05;
+    }
+
+    .tw-header-wrap {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+        page-break-inside: avoid;
+    }
+
+    .tw-header-main {
+        vertical-align: top;
+        padding: 0;
+        background: transparent;
+    }
+
+    .tw-header-rule {
+        width: 100%;
+        height: 0;
+        margin: {{ $gapHeaderRuleMm ?? 3 }}mm 0 {{ $gapHeaderRuleMm ?? 3 }}mm 0;
+        padding: 0;
+        border: 0;
+        border-top: 3px solid var(--primary);
+        font-size: 0;
+        line-height: 0;
+        overflow: hidden;
+    }
+
+    .tw-header-top {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .tw-logo-cell {
+        box-sizing: border-box;
+        padding: 0 {{ $gapLogoInfoMm ?? 7 }}mm 0 0;
+        vertical-align: top;
+        text-align: left;
+    }
+
+    .tw-logo-box {
+        overflow: hidden;
+        display: block;
+        box-sizing: border-box;
+        min-width: 20mm;
+        min-height: 20mm;
+        max-width: 40mm;
+        max-height: 30mm;
+    }
+
+    .tw-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: left center;
+        display: block;
+    }
+
+    .tw-logo-fallback {
+        width: 100%;
+        height: 100%;
+        min-height: 20mm;
+        background: var(--primary);
+        border-radius: 1mm;
+        text-align: center;
+        line-height: normal;
+        color: var(--color-on-primary, var(--color-white));
+    }
+
+    .tw-logo-fallback span {
+        display: table-cell;
+        vertical-align: middle;
+    }
+
+    .tw-emisor-cell {
+        vertical-align: top;
+        padding-left: 0;
+        width: auto;
+    }
+
+    .tw-emisor-name {
+        font-size: 9.5pt;
+        font-weight: 700;
+        color: #111827;
+        text-transform: uppercase;
+        margin-bottom: 0.4mm;
+        letter-spacing: 0.03em;
+        line-height: var(--section-line-height);
+    }
+
+    .tw-emisor-line {
+        font-size: 7pt;
+        color: #111827;
+        margin-bottom: 0.2mm;
+        line-height: var(--section-line-height);
+    }
+
+    .tw-folio-cell {
+        vertical-align: top;
+        text-align: right;
+        width: 30%;
+    }
+
+    .tw-badge-label {
+        font-size: 6pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--primary);
+        margin-bottom: 0.6mm;
+    }
+
+    .tw-badge-folio {
+        display: block;
+        background: transparent;
+        border: none;
+        color: var(--primary);
+        font-size: 13pt;
+        font-weight: 700;
+        padding: 0;
+        margin: 0 0 1mm 0;
+        line-height: 1.1;
+    }
+
+    .tw-uuid {
+        font-size: 6pt;
+        color: var(--text-muted);
+        word-break: break-all;
+        max-width: 100%;
+    }
+
+    .tw-date {
+        font-size: 7pt;
+        color: var(--text-primary);
+        margin-top: 0.6mm;
+    }
+
+    .tw-header-wrap--compact + .tw-header-rule {
+        margin: 2mm 0 3mm 0;
+    }
+
+    .tw-header-wrap--compact .tw-logo-box {
+        min-width: 0 !important;
+        min-height: 0 !important;
+    }
+
+    .tw-header-wrap--compact .tw-emisor-name {
+        font-size: 7.5pt;
+        margin-bottom: 0.15mm;
+    }
+
+    .tw-header-wrap--compact .tw-emisor-line {
+        font-size: 6pt;
+        margin-bottom: 0.1mm;
+    }
+
+    .tw-header-wrap--compact .tw-badge-label {
+        font-size: 5.5pt;
+        margin-bottom: 0.25mm;
+    }
+
+    .tw-header-wrap--compact .tw-badge-folio {
+        font-size: 10pt;
+        margin: 0 0 0.4mm 0;
+    }
+
+    .tw-header-wrap--compact .tw-date {
+        font-size: 6pt;
+        margin-top: 0.25mm;
+    }
+
+    .tw-card,
+    .tw-desc-box {
+        width: 100%;
+        margin-bottom: 3mm;
+        padding-bottom: 2mm;
+        padding-left: 0;
+        padding-right: 0;
+        padding-top: 0;
+        page-break-inside: avoid;
+    }
+
+    .tw-card-title {
+        font-size: 6pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--primary);
+        margin: 0 0 1mm 0;
+        padding: 0;
+        border: none;
+        line-height: 1.1;
+    }
+
+    .tw-card-title.tw-desc-general-title {
+        letter-spacing: 0.5px;
+    }
+
+    .tw-receptor-strong {
+        font-size: 9pt;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 1mm;
+        line-height: 1.15;
+    }
+
+    .tw-receptor-line {
+        font-size: 7pt;
+        color: var(--color-receptor-line);
+        margin-bottom: 0.8mm;
+        line-height: 1.15;
+    }
+
+    .tw-desc-text {
+        font-size: 9pt;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.15;
+        text-align: left;
+        white-space: pre-wrap;
+    }
+
+    .tw-section-title {
+        font-size: 9.5pt;
+        font-weight: 700;
+        color: var(--text-heading);
+        text-transform: none;
+        letter-spacing: 0.02em;
+        text-align: center;
+        margin: 4mm 0 2mm 0;
+        padding: 0;
+        border: none;
+        width: 100%;
+    }
+
+    .tw-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 6mm;
+        table-layout: fixed;
+    }
+
+    .tw-totals-wrap {
+        width: 100%;
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .tw-page-break {
+        page-break-before: always;
+    }
+
+    .tw-table thead {
+        display: table-header-group;
+    }
+
+    .tw-table thead tr {
+        background: var(--table-header-bg) !important;
+        color: var(--table-header-text) !important;
+    }
+
+    .tw-table thead th {
+        padding: 1.4mm 0.8mm;
+        font-size: 6.2pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        text-align: center;
+        line-height: 1.2;
+        vertical-align: middle;
+    }
+
+    .tw-table thead th:nth-child(2) {
+        text-align: left;
+        padding-left: 1.5mm;
+    }
+
+    .tw-table thead th:nth-child(5),
+    .tw-table thead th:nth-child(6) {
+        text-align: right;
+        padding-right: 1mm;
+    }
+
+    .tw-table tbody td {
+        padding: 1.2mm 1mm;
+        font-size: 6.5pt;
+        border: 1px solid var(--border-default);
+        vertical-align: top;
+    }
+
+    .tw-table tbody tr:nth-child(odd) {
+        background: var(--table-row-odd-bg);
+    }
+
+    .tw-table tbody tr:nth-child(even) {
+        background: var(--table-row-even-bg);
+    }
+
+    .tw-table tbody td:first-child {
+        text-align: center;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .tw-table tbody td:nth-child(2) {
+        text-align: left;
+        color: #111827;
+        padding-left: 1.2mm;
+    }
+
+    .tw-table tbody td:nth-child(3),
+    .tw-table tbody td:nth-child(4) {
+        text-align: center;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+    }
+
+    .tw-table tbody td:nth-child(5),
+    .tw-table tbody td:nth-child(6) {
+        text-align: right;
+        color: var(--text-primary);
+    }
+
+    .tw-table tbody td:nth-child(6) {
+        font-weight: 600;
+    }
+
+    .tw-no-rows {
+        text-align: center;
+        font-style: italic;
+        color: var(--text-soft);
+        padding: 5mm !important;
+    }
+
+    .tw-table tbody tr.tw-linea-parrafo {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .tw-table tbody tr.tw-linea-parrafo td {
+        text-align: left;
+        font-weight: 400;
+        color: #111827;
+        padding: 2mm 2.5mm;
+        line-height: 1.45;
+        white-space: normal;
+        word-wrap: break-word;
+        box-sizing: border-box;
+        vertical-align: top;
+        background: var(--paragraph-row-bg);
+    }
+
+    .tw-table tbody tr.tw-linea-parrafo td:first-child {
+        text-align: center;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .tw-table tbody tr.tw-linea-parrafo td[colspan] {
+        text-align: left;
+        font-weight: 400;
+    }
+
+    .tw-table tbody tr.linea-con-imagen {
+        height: 18mm;
+    }
+
+    .concepto-imagen-wrap {
+        margin-top: 1mm;
+    }
+
+    .concepto-imagen {
+        width: 15mm;
+        height: 15mm;
+        object-fit: cover;
+        border: 1px solid var(--border-default);
+        border-radius: 1mm;
+    }
+
+    .concepto-proveedor-origen {
+        display: flex;
+        align-items: center;
+        gap: 1.5mm;
+        margin-top: 1mm;
+    }
+
+    .concepto-proveedor-logo {
+        width: 5mm;
+        height: 5mm;
+        object-fit: contain;
+        border-radius: 0.5mm;
+        background: #fff;
+    }
+
+    .concepto-proveedor-nombre {
+        font-size: 7pt;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .tw-totals-inner {
+        width: 52%;
+        margin-left: 48%;
+        border: 1px solid var(--border-default);
+        border-radius: 1mm;
+        overflow: hidden;
+        background: var(--bg-body);
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .tw-totals-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .tw-totals-table td {
+        padding: 1mm 2mm;
+        font-size: 7pt;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+    .tw-totals-table td:first-child {
+        width: 58%;
+        text-align: right;
+        color: var(--text-secondary);
+        background: var(--color-slate-50);
+    }
+
+    .tw-totals-table .tw-totals-meta-value {
+        text-align: right;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .tw-totals-table .tw-totals-money-sign-col {
+        width: 12%;
+        text-align: right;
+        font-weight: 600;
+        color: var(--text-muted);
+        padding-right: 1mm;
+    }
+
+    .tw-totals-table .tw-totals-money-amount-col {
+        width: 30%;
+        text-align: right;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .tw-totals-table .tw-total-row td {
+        background: var(--bg-body);
+        border-top: 2px solid var(--primary);
+        font-size: 10pt;
+        font-weight: 700;
+    }
+
+    .tw-totals-table .tw-total-row td:first-child {
+        color: var(--text-heading);
+        text-transform: uppercase;
+    }
+
+    .tw-totals-table .tw-total-row td:last-child {
+        color: var(--primary);
+    }
+
+    .tw-totals-table .tw-total-row .tw-totals-money-sign-col,
+    .tw-totals-table .tw-total-row .tw-totals-money-amount-col {
+        color: inherit;
+        font-weight: inherit;
+    }
+
+    .importe-con-letra {
+        margin-top: 2mm;
+        width: 100%;
+        border: 1px solid var(--border-soft);
+        border-radius: 1mm;
+        background: var(--bg-body);
+        page-break-inside: avoid;
+        overflow: hidden;
+    }
+
+    .importe-con-letra-label {
+        background: var(--importe-label-bg);
+        text-align: center;
+        font-size: 6pt;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: none;
+        color: var(--color-heading, #111827);
+        padding: 1mm 2mm;
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    .importe-con-letra-valor {
+        text-align: center;
+        font-size: 6.5pt;
+        font-weight: 400;
+        color: #111827;
+        padding: 1.8mm 2.5mm;
+        line-height: 1.3;
+        background: var(--importe-value-bg);
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .after-table-space {
+        height: 8mm;
+    }
+
+    .after-table-space--compact {
+        height: 3mm;
+    }
+
+    .pdf-pagina-con-subencabezado {
+        padding-top: 2mm;
+        box-sizing: border-box;
+    }
+
+    .tw-anexos-page {
+        width: 100%;
+    }
+
+    .tw-anexos-header {
+        margin-bottom: 2.5mm;
+        padding-bottom: 1.5mm;
+        border-bottom: 1px solid var(--border-default);
+    }
+
+    .tw-anexos-title {
+        font-size: 11pt;
+        font-weight: 700;
+        color: var(--text-heading);
+        line-height: 1.15;
+        margin: 0;
+    }
+
+    .tw-anexos-list {
+        width: 100%;
+    }
+
+    .tw-anexo-simple {
+        width: 100%;
+        padding: 2.8mm 0;
+        border-bottom: 1px solid var(--border-default);
+        page-break-inside: avoid;
+    }
+
+    .tw-anexo-simple:last-child {
+        border-bottom: none;
+    }
+
+    .tw-anexo-simple-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .tw-anexo-simple-media,
+    .tw-anexo-simple-text {
+        vertical-align: top;
+    }
+
+    .tw-anexo-simple-media {
+        width: 52mm;
+        padding-right: 3.5mm;
+    }
+
+    .tw-anexo-simple-image-wrap {
+        height: 40mm;
+        overflow: hidden;
+        background: var(--color-slate-50);
+        text-align: center;
+    }
+
+    .tw-anexo-simple-image {
+        display: block;
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        margin: 0 auto;
+    }
+
+    .tw-anexo-simple-heading {
+        font-size: 8.4pt;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.2;
+        margin-bottom: 1.1mm;
+    }
+
+    .tw-anexo-simple-desc {
+        font-size: 7.1pt;
+        color: #111827;
+        line-height: 1.3;
+        word-break: break-word;
+        white-space: pre-wrap;
+        margin-bottom: 1.1mm;
+    }
+
+    .tw-anexo-simple-price {
+        font-size: 7.8pt;
+        font-weight: 700;
+        color: var(--primary);
+    }
+
+    .terms-block {
+        margin-bottom: 3mm;
+        page-break-inside: auto;
+    }
+
+    .terms-block--after-presupuesto .tw-terms,
+    .terms-block--after-presupuesto .tw-terms ul {
+        page-break-inside: auto;
+    }
+
+    .terms-block--after-presupuesto .tw-terms h3 {
+        page-break-after: avoid;
+    }
+
+    .terms-block--after-presupuesto .tw-terms ul li {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .tw-terms + .tw-terms {
+        margin-top: 2mm;
+    }
+
+    .tw-terms {
+        margin-top: 3mm;
+        padding-top: 0;
+        border-top: none;
+    }
+
+    .tw-terms h3 {
+        font-size: 6.5pt;
+        font-weight: 700;
+        color: var(--text-heading);
+        text-transform: none;
+        letter-spacing: 0.02em;
+        margin: 0 0 1mm 0;
+        line-height: var(--section-line-height);
+    }
+
+    .tw-terms ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tw-terms ul.tw-terms-num {
+        counter-reset: twi;
+    }
+
+    .tw-terms ul.tw-terms-num li {
+        font-size: 6.2pt;
+        color: #111827;
+        line-height: var(--section-line-height);
+        margin-bottom: 0.6mm;
+        padding-left: 5mm;
+        position: relative;
+        text-align: justify;
+    }
+
+    .tw-terms ul.tw-terms-num li::before {
+        counter-increment: twi;
+        content: counter(twi) ".";
+        position: absolute;
+        left: 0;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .tw-terms ul.tw-obs-list {
+        counter-reset: twobs;
+    }
+
+    .tw-terms ul.tw-obs-list li {
+        font-size: 6.2pt;
+        color: #111827;
+        line-height: var(--section-line-height);
+        margin-bottom: 0.6mm;
+        padding-left: 5mm;
+        position: relative;
+        text-align: justify;
+    }
+
+    .tw-terms ul.tw-obs-list li::before {
+        counter-increment: twobs;
+        content: counter(twobs) ".";
+        position: absolute;
+        left: 0;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .footer {
+        position: fixed;
+        bottom: 6mm;
+        left: {{ $margenMm }}mm;
+        right: {{ $margenMm }}mm;
+        height: {{ $footerHeightMm - 2 }}mm;
+        min-height: {{ $footerHeightMm - 2 }}mm;
+        padding: 1mm 0 2mm;
+        font-size: 6.5pt;
+        color: #111827;
+        line-height: 1.3;
+        overflow: visible;
+    }
+
+    .footer-table {
+        display: table;
+        width: 100%;
+    }
+
+    .footer-left {
+        display: table-cell;
+        width: 33%;
+        vertical-align: bottom;
+    }
+
+    .footer-center {
+        display: table-cell;
+        width: 34%;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .footer-right {
+        display: table-cell;
+        width: 33%;
+        text-align: right;
+        vertical-align: middle;
+        padding-left: 2mm;
+    }
+
+    .footer-logos-row {
+        display: table;
+    }
+
+    .footer-logo-cell {
+        display: table-cell;
+        padding-right: 2.5mm;
+        vertical-align: middle;
+    }
+
+    .footer-logo-cell:last-child {
+        padding-right: 0;
+    }
+
+    .footer-logo-img {
+        width: 12mm;
+        height: 12mm;
+        object-fit: contain;
+        display: block;
+    }
+
+    .footer-logo-placeholder {
+        width: 12mm;
+        height: 12mm;
+        min-width: 12mm;
+        background: var(--border-default);
+        border-radius: 1.5mm;
+        font-size: 5pt;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-align: center;
+        line-height: 8mm;
+    }
+
+    .footer-center-content {
+        text-align: center;
+        width: 100%;
+    }
+
+    .footer-pages {
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 7pt;
+        margin-bottom: 0.6mm;
+        min-height: 3mm;
+    }
+
+    .footer-slogan {
+        font-style: italic;
+        color: var(--footer-accent);
+        font-size: 6pt;
+    }
+
+    .footer-webs {
+        font-size: 6pt;
+    }
+
+    .footer-webs-link {
+        color: var(--footer-accent);
+        text-decoration: none;
+    }
+
+    .footer-webs-sep {
+        color: var(--text-soft);
+        margin: 0 1mm;
+    }
+
+    .footer-qr {
+        display: inline-block;
+        width: 15mm;
+        height: 15mm;
+        vertical-align: middle;
+    }
+
+    .footer-qr img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    @include('presupuestos.partials.presupuesto-pdf-debug-bordes-css')
+</style>
 </head>
 
 <body>
@@ -710,7 +1030,7 @@
             <div class="footer-left">
                 @php
                     $logos = $presupuesto['logos_base64'] ?? [];
-                    $appKeys = ['gestionpro'];
+                    $appKeys = ['gestionplus'];
                 @endphp
                 <div class="footer-logos-row">
                     @foreach ($appKeys as $key)
@@ -726,11 +1046,11 @@
             </div>
             <div class="footer-center">
                 <div class="footer-center-content">
-                    <div class="footer-slogan">"Calidad y compromiso en cada proyecto"</div>
+                    <div class="footer-slogan">"Creador de presupuestos"</div>
                     <div class="footer-webs">
-                        <a href="https://heventec.com" class="footer-webs-link">heventec.com</a><span
-                            class="footer-webs-sep">|</span><a href="https://gestionpro.com"
-                            class="footer-webs-link">gestionpro.com</a>
+                        <a href="https://heventec.com" class="footer-webs-link" target="_blank">heventec.com</a><span
+                            class="footer-webs-sep">|</span><a href="https://gestion.heventec.com/" target="_blank"
+                            class="footer-webs-link">gestion.heventec.com</a>
                         <div class="footer-pages">&nbsp;</div>
                     </div>
                 </div>
@@ -746,88 +1066,9 @@
     </div>
 
     <div class="margin-sides">
-        <div class="document-container">
-            <table class="tw-header-wrap" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td class="tw-header-main">
-                        <table class="tw-header-top">
-                            <tr>
-                                <td class="tw-logo-cell">
-                                    @php
-                                        $logoProveedorBase64 = $presupuesto['logo_proveedor_base64'] ?? null;
-                                        $nombreEmpresa =
-                                            $presupuesto['proveedor']->razon_social ??
-                                            ($presupuesto['proveedor']->nombre_comercial ?? 'P');
-                                        $inicial = strtoupper(substr($nombreEmpresa, 0, 1));
-                                    @endphp
-                                    @if ($logoProveedorBase64)
-                                        <img src="{{ $logoProveedorBase64 }}" alt="Logo" class="tw-logo-img" />
-                                    @else
-                                        <div class="tw-logo-fallback">{{ $inicial }}</div>
-                                    @endif
-                                </td>
-                                <td class="tw-emisor-cell">
-                                    @php
-                                        $p = $presupuesto['proveedor'];
-                                        $emisorNombre =
-                                            $p->razon_social ??
-                                            ($p->nombre_comercial ?? 'Empresa Proveedora S.A. de C.V.');
-                                        $emisorRfc = $p->rfc ?? null;
-                                        $emisorDireccion = $p->direccion_empresa ?? null;
-                                        $df = $p->direccion_fiscal ?? null;
-                                        $ciudad =
-                                            $p->ciudad ??
-                                            (is_array($df)
-                                                ? $df['ciudad'] ?? 'Ciudad de México'
-                                                : $df->ciudad ?? 'Ciudad de México');
-                                        $estado = is_array($df) ? $df['estado'] ?? 'CDMX' : $df->estado ?? 'CDMX';
-                                        $emisorCiudad = $ciudad . ', ' . $estado . ', México';
-                                        $emisorTel = $p->telefono ?? null;
-                                        $emisorEmail = $p->email ?? null;
-                                    @endphp
-                                    <div class="tw-emisor-name">{{ $emisorNombre }}</div>
-                                    @if ($emisorRfc)
-                                        <div class="tw-emisor-line">{{ $emisorRfc }}</div>
-                                    @endif
-                                    @if ($emisorDireccion)
-                                        <div class="tw-emisor-line">{{ $emisorDireccion }}</div>
-                                    @endif
-                                    @if ($emisorCiudad)
-                                        <div class="tw-emisor-line">{{ $emisorCiudad }}</div>
-                                    @endif
-                                    @if ($emisorTel)
-                                        <div class="tw-emisor-line">Tel. {{ $emisorTel }}</div>
-                                    @endif
-                                    @if ($emisorEmail)
-                                        <div class="tw-emisor-line">{{ $emisorEmail }}</div>
-                                    @endif
-                                </td>
-                                <td class="tw-folio-cell">
-                                    <div class="tw-badge-label">Presupuesto</div>
-                                    <div class="tw-badge-folio">
-                                        {{ $presupuesto['numero_presupuesto'] ?? 'PRES-000001' }}</div>
-                                    @if (!empty($presupuesto['uuid']))
-                                        <div class="tw-uuid">{{ $presupuesto['uuid'] }}</div>
-                                    @endif
-                                    <div class="tw-date">
-                                        @php
-                                            $fecha = $presupuesto['fecha_emision'] ?? now();
-                                            if (is_string($fecha)) {
-                                                $fecha = \Carbon\Carbon::parse($fecha);
-                                            }
-                                            $fechaFormateada = $fecha
-                                                ->locale('es')
-                                                ->translatedFormat('d \d\e F \d\e\l Y');
-                                        @endphp
-                                        {{ $fechaFormateada }}
-                                    </div>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-            <div class="tw-header-rule" role="presentation"></div>
+        <div class="pdf-seccion pdf-seccion--presupuesto">
+        <div class="document-container document-main">
+            @include('presupuestos.partials.presupuesto-pdf-header-tailwind')
 
             <div class="tw-card">
                 <div class="tw-card-title">Dirigido a:</div>
@@ -836,121 +1077,168 @@
                 @endforeach
             </div>
 
-            @if ($presupuesto['concepto_general'] ?? null)
+            @if (($presupuesto['nombre_presupuesto'] ?? null) || ($presupuesto['concepto_general'] ?? null))
                 <div class="tw-desc-box">
-                    <div class="tw-desc-title">Descripción general</div>
-                    <div class="tw-desc-text">{{ $presupuesto['concepto_general'] }}</div>
+                    @if ($presupuesto['nombre_presupuesto'] ?? null)
+                        <div class="tw-card-title tw-desc-general-title">{{ $presupuesto['nombre_presupuesto'] }}</div>
+                    @else
+                        <div class="tw-card-title tw-desc-general-title">Descripción general</div>
+                    @endif
+                    @if ($presupuesto['concepto_general'] ?? null)
+                        <div class="tw-desc-text">{{ $presupuesto['concepto_general'] }}</div>
+                    @endif
                 </div>
             @endif
 
             <div class="tw-section-title">Presupuesto</div>
             <table class="tw-table">
                 <thead>
-                    <tr>
-                        <th scope="col" style="width:5%;background:#3498db;color:#ffffff;">#</th>
-                        <th scope="col" style="width:36%;background:#3498db;color:#ffffff;">Descripción</th>
-                        <th scope="col" style="width:10%;background:#3498db;color:#ffffff;">Cantidad</th>
-                        <th scope="col" style="width:10%;background:#3498db;color:#ffffff;">Unidad</th>
-                        <th scope="col" style="width:19%;background:#3498db;color:#ffffff;">Precio unitario</th>
-                        <th scope="col" style="width:20%;background:#3498db;color:#ffffff;">Importe</th>
-                    </tr>
+                    @include('presupuestos.partials.presupuesto-pdf-tabla-conceptos-thead', [
+                        'variant' => 'tailwind',
+                        'thCellStyle' => $thCellStyle,
+                    ])
                 </thead>
                 <tbody>
                     @php
-                        $conceptos = $presupuesto['conceptos'] ?? [];
+                        $conceptos = $conceptosListaPdf;
                         $subtotal = 0;
+                        foreach ($conceptosListaPdf as $conceptoSubtotal) {
+                            if (! is_array($conceptoSubtotal)) {
+                                continue;
+                            }
+                            if (! \App\Support\PresupuestoParrafoPdf::esLineaParrafo($conceptoSubtotal)) {
+                                $cant = $conceptoSubtotal['cantidad'] ?? 1;
+                                $precio = $conceptoSubtotal['precio_unitario'] ?? 0;
+                                $subtotal += $cant * $precio;
+                            }
+                        }
                     @endphp
                     @if (count($conceptos) > 0)
                         @foreach ($conceptos as $index => $concepto)
-                            @php
-                                $cantidad = $concepto['cantidad'] ?? 1;
-                                $precioUnitario = $concepto['precio_unitario'] ?? 0;
-                                $importe = $cantidad * $precioUnitario;
-                                $subtotal += $importe;
-                            @endphp
-                            <tr>
-                                <td>{{ $index + 1 }}</td>
-                                <td>{{ $concepto['descripcion'] ?? 'Sin descripción' }}</td>
-                                <td>{{ number_format($cantidad, 2, '.', ',') }}</td>
-                                <td>{{ strtoupper($concepto['unidad'] ?? 'PZA') }}</td>
-                                <td>${{ number_format($precioUnitario, 2, '.', ',') }}</td>
-                                <td>${{ number_format($importe, 2, '.', ',') }}</td>
-                            </tr>
+                            @include('presupuestos.partials.presupuesto-pdf-fila-concepto', [
+                                'concepto' => $concepto,
+                                'numeroFila' => $index + 1,
+                                'variant' => 'tailwind',
+                            ])
                         @endforeach
                     @else
                         <tr>
                             <td colspan="6" class="tw-no-rows">No hay conceptos registrados</td>
                         </tr>
                     @endif
-                </tbody>
+                </tbody>    
             </table>
 
+            @if ($presupuesto['config_mostrar_totales'] ?? true)
             <div class="tw-totals-wrap">
                 @php
-                    $subtotalCalculado = $presupuesto['subtotal'] ?? $subtotal;
-                    $conIva = $presupuesto['con_iva'] ?? false;
-                    $ivaPorcentaje = $presupuesto['iva_porcentaje'] ?? 16;
-                    $ivaTotal = $conIva ? $subtotalCalculado * ($ivaPorcentaje / 100) : 0;
-                    $total = $subtotalCalculado + $ivaTotal;
+                    $subtotalCalculado = (float) ($presupuesto['subtotal'] ?? $subtotal);
+                    $conIva = (bool) ($presupuesto['con_iva'] ?? false);
+                    $ivaPorcentaje = (float) ($presupuesto['iva_porcentaje'] ?? 16);
+                    $pctDescuento = array_key_exists('porcentaje_descuento', $presupuesto)
+                        ? ($presupuesto['porcentaje_descuento'] !== null ? (int) $presupuesto['porcentaje_descuento'] : null)
+                        : null;
+                    $cantidadDescuento = array_key_exists('cantidad_descuento', $presupuesto)
+                        ? ($presupuesto['cantidad_descuento'] !== null ? (float) $presupuesto['cantidad_descuento'] : null)
+                        : null;
+                    $totalesDoc = \App\Models\Presupuesto::calcularTotalesDocumento(
+                        $subtotalCalculado,
+                        $pctDescuento,
+                        $cantidadDescuento,
+                        $conIva,
+                        $ivaPorcentaje
+                    );
+                    $ivaTotal = $totalesDoc['iva_total'];
+                    $total = $totalesDoc['total'];
+                    $monedaCodigo = strtoupper((string) ($presupuesto['term_cond_moneda'] ?? 'MXN'));
+                    if (!in_array($monedaCodigo, ['MXN', 'USD', 'EUR'], true)) {
+                        $monedaCodigo = 'MXN';
+                    }
+                    $monedaPrefijo = $monedaCodigo === 'EUR' ? '€' : '$';
                 @endphp
                 <div class="tw-totals-inner">
                     <table class="tw-totals-table">
                         <tr>
                             <td>Subtotal</td>
-                            <td>${{ number_format($subtotalCalculado, 2, '.', ',') }}</td>
+                            <td class="tw-totals-money-sign-col">{{ $monedaPrefijo }}</td>
+                            <td class="tw-totals-money-amount-col">{{ number_format($totalesDoc['subtotal'], 2, '.', ',') }}</td>
                         </tr>
+                        @if ($totalesDoc['mostrar_descuento'])
+                            <tr>
+                                <td>Descuento ({{ $totalesDoc['porcentaje_descuento'] }}%)</td>
+                                <td class="tw-totals-money-sign-col">- {{ $monedaPrefijo }}</td>
+                                <td class="tw-totals-money-amount-col">{{ number_format($totalesDoc['monto_descuento'], 2, '.', ',') }}</td>
+                            </tr>
+                        @endif
                         @if ($conIva)
                             <tr>
                                 <td>IVA ({{ number_format($ivaPorcentaje, 0) }}%)</td>
-                                <td>${{ number_format($ivaTotal, 2, '.', ',') }}</td>
+                                <td class="tw-totals-money-sign-col">{{ $monedaPrefijo }}</td>
+                                <td class="tw-totals-money-amount-col">{{ number_format($ivaTotal, 2, '.', ',') }}</td>
                             </tr>
                         @endif
                         <tr class="tw-total-row">
                             <td>Total</td>
-                            <td>${{ number_format($total, 2, '.', ',') }}</td>
+                            <td class="tw-totals-money-sign-col">{{ $monedaPrefijo }}</td>
+                            <td class="tw-totals-money-amount-col">{{ number_format($total, 2, '.', ',') }}</td>
                         </tr>
                     </table>
+                    <div class="importe-con-letra">
+                        <div class="importe-con-letra-label">Importe con letra:</div>
+                        <div class="importe-con-letra-valor">
+                            {{ \App\Support\PresupuestoPdf::formatMontoLegal($total, $monedaCodigo) }}
+                        </div>
+                    </div>
                 </div>
-                <div class="after-table-space"></div>
+                <div class="after-table-space after-table-space--compact"></div>
             </div>
+            @endif
 
-            <div class="terms-block">
-                @if (count($terminosLista) > 0)
-                    <div class="tw-terms">
-                        <h3>Términos y Condiciones</h3>
-                        <ul class="tw-terms-num">
-                            @foreach ($terminosLista as $texto)
-                                <li>{{ $texto }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-                @if (count($observacionesLista) > 0)
-                    <div class="tw-terms">
-                        <h3>Observaciones Generales</h3>
-                        <ul class="tw-obs-list">
-                            @foreach ($observacionesLista as $obs)
-                                <li>{{ $obs }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-            </div>
+            @if ($tieneBloqueTerminos || $mostrarAtentamente)
+                <div class="presupuesto-cierre-terminos-atentamente">
+            @if ($tieneBloqueTerminos)
+                <div class="terms-block terms-block--after-presupuesto">
+                    @include('presupuestos.partials.presupuesto-pdf-terminos', [
+                        'variant' => 'tailwind',
+                        'terminosLista' => $terminosLista,
+                        'validacionesLista' => $validacionesLista,
+                        'observacionesLista' => $observacionesLista,
+                    ])
+                </div>
+            @endif
+
+            @if ($mostrarAtentamente && ($cierreAtentamente['salto_pagina_antes'] ?? false))
+                <div class="tw-page-break"></div>
+            @endif
+            @if ($mostrarAtentamente && (float) ($cierreAtentamente['reserva_pie_html_mm'] ?? 0) > 0)
+                <div
+                    class="presupuesto-reserva-atentamente-pie"
+                    style="height: {{ number_format((float) $cierreAtentamente['reserva_pie_html_mm'], 2, '.', '') }}mm;"
+                    aria-hidden="true"></div>
+            @endif
+                </div>
+            @endif
         </div>
+        </div>
+
+        @include('presupuestos.partials.presupuesto-pdf-seccion-anexos', [
+            'anexosLista' => $anexosLista,
+            'tituloAnexos' => $tituloAnexos ?? 'Anexos',
+            'variant' => $pdfVariant === 'tailwind' ? 'tailwind' : 'default',
+        ])
+
+        @include('presupuestos.partials.presupuesto-pdf-seccion-documentacion', [
+            'documentacionLista' => $documentacionLista,
+            'variant' => 'tailwind',
+        ])
     </div>
 
-    <script type="text/php">
-        if (isset($pdf) && isset($fontMetrics)) {
-            $text = "Página {PAGE_NUM} de {PAGE_COUNT}";
-            $size = 7;
-            $font = $fontMetrics->getFont("DejaVu Sans", "normal");
-            $sample = "Página 99 de 99";
-            $width = $fontMetrics->getTextWidth($sample, $font, $size);
-            $x = ($pdf->get_width() - $width) / 2 + 5;
-            $y = $pdf->get_height() - 45;
-            $pdf->page_text($x, $y, $text, $font, $size);
-        }
-    </script>
+    @include('presupuestos.partials.presupuesto-pdf-page-scripts', [
+        'pdf' => $pdf,
+        'presupuesto' => $presupuesto,
+        'paginaAtentamente' => (int) ($cierreAtentamente['pagina_atentamente'] ?? 0),
+        'paginasTrasSeccionPresupuesto' => $paginasTrasSeccionPresupuesto,
+    ])
 </body>
 
 </html>

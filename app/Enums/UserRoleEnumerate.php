@@ -12,4 +12,5 @@ enum UserRoleEnumerate: string
     case USUARIO = 'USUARIO';
     case CLIENTE = 'CLIENTE';
     case CONSTUCC_APP = 'CONSTRUCC_APP';
+    case VENTAS_PURIFICADORA_COLIBRI = 'ventas_purificadora_colibri';
 }

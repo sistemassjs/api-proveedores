@@ -11,3 +11,5 @@ alwaysApply: true
 - Prefijo recurso: proveedores/{proveedor}/recurso
 - Validar acceso con tieneAccesoAProveedor antes de operaciones
 - Responder en español en mensajes de usuario
+- Cambios de esquema o datos versionados: **solo** vía `php artisan make:migration` (ver regla `api-database.mdc`); no inventar archivos de migración manualmente
+- **Contexto operativo (solo este repo):** `docs/context/README.md`, `AGENTS.md`, regla `domains-aislados.mdc`

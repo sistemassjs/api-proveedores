@@ -28,6 +28,20 @@ class ProveedorStorePresupuestoCarteraClienteRequest extends FormRequest
             'alias_empresa' => ['nullable', 'string', 'max:255'],
             'telefono' => ['nullable', 'string', 'max:30'],
             'correo' => ['nullable', 'email', 'max:255'],
+            'logo_base64' => ['nullable', 'string'],
+            'eliminar_logo' => ['nullable', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'nombre.required' => 'El nombre del contacto es obligatorio.',
+            'empresa.required' => 'El nombre de la empresa es obligatorio.',
+            'correo.email' => 'Ingrese un correo válido.',
         ];
     }
 }

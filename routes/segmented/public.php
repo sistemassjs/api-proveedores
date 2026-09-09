@@ -11,11 +11,10 @@ use App\Http\Controllers\UnidadMedidaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\MarcaController;
 use App\Http\Controllers\PedidoController;
-use App\Notifications\PushNotification;
-use App\Models\User;
-use Illuminate\Support\Facades\Request;
 use App\Http\Controllers\ProveedorPublicController;
 use App\Http\Controllers\ContactoController;
+use App\Http\Controllers\MetricasLookerstudioController;
+use App\Http\Controllers\ApiStatusController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,62 +23,23 @@ use App\Http\Controllers\ContactoController;
 | Estas rutas no requieren autenticación
 */
 
-
-Route::get('status', function (Request $request) {
-    // $userId = $request->query('id'); // o $request->get('id')
-    // $user = User::find($userId);
-
-
-    // if (!$user) {
-    //     return response()->json([
-    //         'status' => 'error',
-    //         'message' => 'Usuario no encontrado',
-    //     ], 404);
-    // }
-
-    // // Crear la notificación CON el canal push
-    // $notification = new PushNotification(
-    //     'Título de prueba',
-    //     'Este es un mensaje de prueba',
-    //     'info',
-    //     [
-    //         'channel' => 'push',  // ← AGREGAR ESTO
-    //         'extra' => 'datos opcionales',
-    //         // Opcional: agregar deep-link
-    //         'type' => 'product',
-    //         'entityId' => '123',
-    //         'action' => 'view'
-    //     ]
-    // );
-
-    // // Enviar la notificación
-    // $user->notify($notification);
-
-    return response()->json([
-        'status' => 'ok',
-        'message' => 'Notificación push enviada al usuario 14',
-        // 'user' => [
-        //     'id' => $user->id,
-        //     'name' => $user->name
-        // ]
-    ]);
-});
+Route::get('status', ApiStatusController::class);
 
 /**
  * CATÁLOGOS PÚBLICOS
  */
 Route::get('roles-index', [RoleController::class, 'index']);
 Route::get('tipos-empresa-index', [TipoEmpresaController::class, 'index']);
- 
+
 // // Catálogos generales
-Route::get('proveedores', [ProveedorController::class, 'index'])->middleware(['audit']);
-Route::get('sucursales', [SucursalController::class, 'index'])->middleware(['audit']);
-Route::get('productos', [ProductoController::class, 'index'])->middleware(['audit']);
-Route::get('imagenes', [ProductoImagenController::class, 'index'])->middleware(['audit']);
-Route::get('unidades-medida', [UnidadMedidaController::class, 'index'])->middleware(['audit']);
-Route::get('categorias', [CategoriaController::class, 'index'])->middleware(['audit']);
-Route::get('marcas', [MarcaController::class, 'index'])->middleware(['audit']);
-Route::get('tipos-empresa', [TipoEmpresaController::class, 'index'])->middleware(['audit']);
+Route::get('proveedores', [ProveedorController::class, 'index']);
+Route::get('sucursales', [SucursalController::class, 'index']);
+Route::get('productos', [ProductoController::class, 'index']);
+Route::get('imagenes', [ProductoImagenController::class, 'index']);
+Route::get('unidades-medida', [UnidadMedidaController::class, 'index']);
+Route::get('categorias', [CategoriaController::class, 'index']);
+Route::get('marcas', [MarcaController::class, 'index']);
+Route::get('tipos-empresa', [TipoEmpresaController::class, 'index']);
 
 /**
  * CONSULTAS PÚBLICAS ESPECIALIZADAS
@@ -100,6 +60,16 @@ Route::get(
     'public/proveedor/{id}/compartir-constancia',
     [ProveedorPublicController::class, 'compartirConstancia']
 );
+
+/**
+ * PERFIL PÚBLICO DE EMPRESA (enlace compartido sin autenticación)
+ */
+Route::middleware(['throttle:60,1'])->group(function () {
+    Route::get(
+        'public/perfil/{token}',
+        [ProveedorPublicController::class, 'perfilPublico']
+    );
+});
 
 /**
  * PRESUPUESTOS PÚBLICOS (enlace compartido sin autenticación)
@@ -136,3 +106,22 @@ Route::get(
 Route::post('contacto/enviar', [ContactoController::class, 'enviarContacto'])
     ->name('contacto.enviar')
     ->middleware(['throttle:5,1']); // Máximo 5 envíos por minuto por IP
+
+
+/**
+ * Metricas públicas para dashboard (sin autenticación)
+ */
+Route::get('metricas/lookerstudio', [MetricasLookerstudioController::class, 'metricasLookerstudio'])
+    ->name('metricas.lookerstudio');
+
+
+// Route::get('test', function () {
+
+//     $numero = '5216688564515';
+//     $correoSms = $numero . '@itelcel.com';
+
+//     Mail::raw('Tu código es 1234', function ($message) use ($correoSms) {
+//         $message->to($correoSms)
+//             ->subject('SMS');
+//     });
+// });

@@ -13,6 +13,12 @@ class CuentaBancaria extends BaseModel
 
     protected $table = 'cuentas_bancarias';
 
+    /**
+     * Campos de identificación bancaria:
+     * - cuenta: número de cuenta; solo dígitos. Longitud libre en validación (columna BD string(255)).
+     * - clabe: 18 dígitos.
+     * - tarjeta: 16 dígitos.
+     */
     protected $fillable = [
         'proveedor_id',
         'alias',

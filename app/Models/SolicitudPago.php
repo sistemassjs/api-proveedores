@@ -13,7 +13,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
+use App\Models\PagoSolicitudPago;
+use Illuminate\Support\Facades\Log;
 
 class SolicitudPago extends BaseModel
 {
@@ -156,7 +161,7 @@ class SolicitudPago extends BaseModel
         'estado_solicitud' => 'EstadoSolicitud',
         'proveedor_id' => 'ProveedorId',
         'empresa_construcc_id' => 'EmpresaConstruccId',
-        // 'usuario_id' => 'UsuarioId',
+        'usuario_id' => 'UsuarioId',
         'usuario_nombre' => 'UsuarioNombre',
         'cotizacion_id' => 'CotizacionId',
 
@@ -273,7 +278,8 @@ class SolicitudPago extends BaseModel
             'cotizacion',
             'cuentasBancarias',
             'ordenCompra',
-            'usuarioCreador'
+            'usuarioCreador',
+            'pagos',
         ];
     }
 
@@ -318,6 +324,22 @@ class SolicitudPago extends BaseModel
 
     // [2026-01-28 19:35:14] local.ERROR: Error al listar SPP del proveedor {"proveedor_id":8,"error":"Call to undefined relationship [pagos] on model [App\\Models\\SolicitudPago].","trace":"#0 C:\\repositorio\\app\\api-proveedores\\vendor\\laravel\\framework\\src\\Illuminate\\Database\\Eloquent\\Builder.php(939): Illuminate\\Database\\Eloquent\\RelationNotFoundException::make(Object(App\\Models\\SolicitudPago), 'pagos')
 
+    // public function pagos(): BelongsToMany
+    // {
+    //     return $this->belongsToMany(
+    //         PagoSPP::class,
+    //         'pago_solicitud_pago',
+    //         'solicitud_pago_id',
+    //         'pago_spp_id'
+    //     )
+    //         ->withPivot([
+    //             'monto_aplicado',
+    //             'estado_pago',
+    //             'notas',
+    //             'fecha_aplicacion'
+    //         ])
+    //         ->withTimestamps();
+    // }
     public function pagos(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -326,11 +348,17 @@ class SolicitudPago extends BaseModel
             'solicitud_pago_id',
             'pago_spp_id'
         )
+            ->using(PagoSolicitudPago::class) // 🔥 IMPORTANTE
             ->withPivot([
                 'monto_aplicado',
                 'estado_pago',
                 'notas',
-                'fecha_aplicacion'
+                'fecha_aplicacion',
+                'usuario_autorizo_id',
+                'usuario_autorizo_nombre',
+                'monto_autorizado',
+                'motivo_autorizacion',
+                'fecha_autorizacion',
             ])
             ->withTimestamps();
     }
@@ -650,10 +678,25 @@ class SolicitudPago extends BaseModel
         $nuevoSaldoPendiente = $this->monto_total - $nuevoMontoAbonado;
         $pagoCompleto = $nuevoSaldoPendiente <= 0;
 
+        // si viene con monot_autprizado este se va a 0
+
+        // la spp pasa a pewndiente
+
+        //agregar bandrera de abonada 
+
         $this->update([
             'monto_abonado' => $nuevoMontoAbonado,
             'saldo_pendiente' => max(0, $nuevoSaldoPendiente),
-            'estado_solicitud' => $pagoCompleto ? EstadoSP::PAGADO->value : EstadoSP::AUTORIZADA->value,
+            // 'estado_solicitud' => $pagoCompleto ? EstadoSP::PAGADO->value : EstadoSP::AUTORIZADA->value,
+            // si es un abono la spp passa a estado pendiente y se activa la bandera de abono
+            'estado_solicitud' => $pagoCompleto ? EstadoSP::PAGADO->value : EstadoSP::PENDIENTE->value,
+            // ESTO PASA AL REGISTRO DEL PAGO
+            'notas_abono' => "Abono de $montoAbono aplicado. Total abonado: $nuevoMontoAbonado. Saldo pendiente: $nuevoSaldoPendiente.",
+            'monto_autorizado' => null, // Si se está aplicando un abono, se limpia el monto autorizado para evitar confusiones
+            'usuario_autorizo_parcial_id' => null,
+            'usuario_autorizo_parcial_nombre' => null,
+            'motivo_autorizacion_parcial' => null,
+            'fecha_autorizacion_parcial' => null,
         ]);
 
         return $pagoCompleto;
@@ -977,5 +1020,230 @@ class SolicitudPago extends BaseModel
         }
 
         return $errores;
+    }
+
+    /**
+     * Envía por correo el comprobante de pago al usuario principal del proveedor.
+     */
+    public function enviarCorreoComprobantePagoAProveedor(
+        ?string $rutaComprobante = null,
+        string $diskComprobante = 'private'
+    ): void {
+        $this->loadMissing('proveedor');
+
+        $usuarioPrincipal = $this->proveedor?->usuarioPrincipal();
+        if (! $usuarioPrincipal || ! filter_var($usuarioPrincipal->email, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $rutaComprobante = $rutaComprobante ?: $this->ruta_archivo_comprobante_pago;
+        if (! $rutaComprobante || ! Storage::disk($diskComprobante)->exists($rutaComprobante)) {
+            return;
+        }
+
+        $frontendUrl = config('app.frontend_url', config('app.url'));
+        $urlSolicitud = rtrim($frontendUrl, '/') . '/pages/proveedor/sp/detalle/' . $this->id;
+        $extension = strtolower(pathinfo($rutaComprobante, PATHINFO_EXTENSION));
+        $mimeTypes = [
+            'pdf' => 'application/pdf',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+        ];
+
+        Mail::send('emails.solicitud-pago.comprobante-actualizado', [
+            'notifiable' => $usuarioPrincipal,
+            'solicitudPagoFolio' => $this->numero_folio_solicitud,
+            'solicitudPagoId' => $this->id,
+            'proveedorId' => $this->proveedor_id,
+            'urlSolicitud' => $urlSolicitud,
+            'logoAppDataUri' => $this->resolverLogoProveedorBase64(),
+        ], function ($message) use ($usuarioPrincipal, $rutaComprobante, $diskComprobante, $extension, $mimeTypes) {
+            $message->to($usuarioPrincipal->email, $usuarioPrincipal->name ?? null)
+                ->subject('Comprobante de pago actualizado #' . $this->numero_folio_solicitud)
+                ->attach(Storage::disk($diskComprobante)->path($rutaComprobante), [
+                    'as' => 'comprobante_' . $this->numero_folio_solicitud . '.' . $extension,
+                    'mime' => $mimeTypes[$extension] ?? 'application/octet-stream',
+                ]);
+        });
+    }
+
+    /**
+     * Envía por correo la factura (PDF/XML) al correo de la empresa de Construcc.
+     */
+    public function enviarCorreoFacturaAEmpresaConstrucc(
+        ?string $rutaFacturaPdf = null,
+        ?string $rutaFacturaXml = null,
+        string $diskArchivos = 'private'
+    ): void {
+        Log::info('🟢 ENVIAR CORREO FACTURA A EMPRESA CONSTRUCC: ', [
+            'rutaFacturaPdf' => $rutaFacturaPdf,
+            'rutaFacturaXml' => $rutaFacturaXml,
+            'diskArchivos' => $diskArchivos,
+            'empresaConstrucc' => $this->empresaConstrucc->razon_social,
+            'empresaConstrucc' => $this->empresaConstrucc->email,
+        ]);
+
+        $this->loadMissing('empresaConstrucc');
+
+        $emailEmpresa = $this->empresaConstrucc?->email;
+        if (! $emailEmpresa || ! filter_var($emailEmpresa, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $rutaFacturaPdf = $rutaFacturaPdf ?: $this->ruta_archivo_factura_pdf;
+        $rutaFacturaXml = $rutaFacturaXml ?: $this->ruta_archivo_factura_xml;
+
+        if (
+            (! $rutaFacturaPdf || ! Storage::disk($diskArchivos)->exists($rutaFacturaPdf)) &&
+            (! $rutaFacturaXml || ! Storage::disk($diskArchivos)->exists($rutaFacturaXml))
+        ) {
+            return;
+        }
+
+        $frontendUrl = config('app.frontend_url', config('app.url'));
+        $urlSolicitud = rtrim($frontendUrl, '/') . '/pages/proveedor/sp/detalle/' . $this->id;
+        $empresaNotifiable = (object) [
+            'name' => $this->empresaConstrucc->razon_social ?: $this->empresaConstrucc->nombre ?: 'Empresa',
+        ];
+
+        Mail::send('emails.solicitud-pago.factura-subida', [
+            'notifiable' => $empresaNotifiable,
+            'solicitudPagoFolio' => $this->numero_folio_solicitud,
+            'urlSolicitud' => $urlSolicitud,
+            'logoAppDataUri' => $this->resolverLogoProveedorBase64(),
+        ], function ($message) use ($emailEmpresa, $rutaFacturaPdf, $rutaFacturaXml, $diskArchivos) {
+            $message->to($emailEmpresa)->subject('Factura subida - Solicitud de pago #' . $this->numero_folio_solicitud);
+
+            if ($rutaFacturaPdf && Storage::disk($diskArchivos)->exists($rutaFacturaPdf)) {
+                $message->attach(Storage::disk($diskArchivos)->path($rutaFacturaPdf), [
+                    'as' => 'factura_' . $this->numero_folio_solicitud . '.pdf',
+                    'mime' => 'application/pdf',
+                ]);
+            }
+
+            if ($rutaFacturaXml && Storage::disk($diskArchivos)->exists($rutaFacturaXml)) {
+                $message->attach(Storage::disk($diskArchivos)->path($rutaFacturaXml), [
+                    'as' => 'factura_' . $this->numero_folio_solicitud . '.xml',
+                    'mime' => 'application/xml',
+                ]);
+            }
+        });
+    }
+
+    private function resolverLogoProveedorBase64(): ?string
+    {
+        $logo = $this->proveedor?->logo;
+        if (! is_string($logo) || trim($logo) === '') {
+            return null;
+        }
+        if (str_starts_with($logo, 'data:image')) {
+            return $logo;
+        }
+        if (filter_var($logo, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $logoPath = null;
+        if (str_starts_with($logo, '/') || str_starts_with($logo, 'storage/')) {
+            $logoPath = public_path($logo);
+        } elseif (Storage::disk('public')->exists($logo)) {
+            $logoPath = Storage::disk('public')->path($logo);
+        } else {
+            $logoPath = public_path('storage/' . $logo);
+        }
+
+        if (! $logoPath || ! is_readable($logoPath)) {
+            return null;
+        }
+
+        $binary = @file_get_contents($logoPath);
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            default => 'image/png',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode($binary);
+    }
+
+
+
+    /**
+     * 
+     */
+
+
+
+
+    /**
+     * Último mes (basado en fecha_registro_pendiente)
+     */
+    public function scopeUltimoMes($query)
+    {
+        return $query->where('fecha_registro_pendiente', '>=', Carbon::now()->subMonth());
+    }
+
+    /**
+     * Autorizadas
+     */
+    public function scopeAutorizadas($query)
+    {
+        return $query->where('estado_solicitud', EstadoSP::AUTORIZADA->value);
+    }
+
+    /**
+     * Pendientes SIN pagos
+     */
+    public function scopePendientesSinPago($query)
+    {
+        return $query->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+            ->whereDoesntHave('pagos');
+    }
+
+    /**
+     * Abonadas (pendientes CON pagos válidos)
+     */
+    public function scopeAbonadas($query)
+    {
+        return $query->where('estado_solicitud', EstadoSP::PENDIENTE->value)
+            ->whereHas('pagos', function ($q) {
+                $q->whereIn('estado_pago', [
+                    PagoSolicitudPago::ESTADO_APLICADO,
+                    PagoSolicitudPago::ESTADO_PARCIAL,
+                    PagoSolicitudPago::ESTADO_COMPLETADO,
+                ]);
+            });
+    }
+
+    /**
+     * Rechazadas
+     */
+    public function scopeRechazadas($query)
+    {
+        return $query->where('estado_solicitud', EstadoSP::RECHAZADA->value);
+    }
+
+    /**
+     * Rechazadas del último mes (por fecha_rechazo)
+     */
+    public function scopeRechazadasUltimoMes($query)
+    {
+        return $query->where('estado_solicitud', EstadoSP::RECHAZADA->value)
+            ->where('fecha_rechazo', '>=', Carbon::now()->subMonth());
+    }
+
+    /**
+     * Todas del último mes
+     */
+    public function scopeTodasUltimoMes($query)
+    {
+        return $query->where('fecha_registro_pendiente', '>=', Carbon::now()->subMonth(2));
     }
 }

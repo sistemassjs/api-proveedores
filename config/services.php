@@ -39,7 +39,34 @@ return [
         'site' => env('RECAPTCHA_SITE_KEY'),
     ],
     'frontend' => [
-        'url' => env('APP_FRONTEND_URL', 'http://localhost:8100'), // Valor por defecto
+        'url' => env('APP_FRONTEND_URL', 'http://localhost:4300'), // Valor por defecto
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | OAuth / Socialite (login social PWA)
+    |--------------------------------------------------------------------------
+    | Providers habilitados en oauth.providers. Credenciales por driver abajo.
+    | Redirect URI debe incluir el prefijo /api (rutas api.php).
+    */
+    'oauth' => [
+        'providers' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('OAUTH_PROVIDERS', 'google'))
+        ))),
+        'frontend_callback' => env(
+            'OAUTH_FRONTEND_CALLBACK',
+            rtrim((string) env('APP_FRONTEND_URL', 'http://localhost:4300'), '/') . '/auth/callback'
+        ),
+    ],
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env(
+            'GOOGLE_REDIRECT_URI',
+            rtrim((string) env('APP_URL', 'http://localhost'), '/') . '/api/auth/google/callback'
+        ),
     ],
 
     /**

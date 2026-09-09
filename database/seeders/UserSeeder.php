@@ -27,7 +27,7 @@ class UserSeeder extends Seeder
 
         $ususarioConstrucc = [
             'email' => 'constucc@constucc.com.mx',
-            'name' => 'Construcc App',
+            'name' => config('app.name'),
             'role_id' => $idRolConstruccApp,
         ];
 

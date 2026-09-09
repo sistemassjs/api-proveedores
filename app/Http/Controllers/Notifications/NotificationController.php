@@ -128,19 +128,57 @@ class NotificationController extends Controller
     }
 
     /**
-     * Obtener las notificaciones del usuario autenticado
+     * Obtener las notificaciones del usuario autenticado.
+     *
+     * Query `read`:
+     * - omitido / `0` / `unread` → solo no leídas (default)
+     * - `1` / `read` → solo leídas
+     * - `all` → todas
      */
     public function getNotifications(Request $request)
     {
         $user = Auth::user();
+        $readParam = strtolower(trim((string) $request->input('read', 'unread')));
 
-        $notifications = $user->notifications()
-            ->latest()
-            ->paginate($request->input('per_page', 15));
+        $query = $user->notifications()->latest();
+
+        if (in_array($readParam, ['1', 'true', 'read', 'leidas', 'leídas'], true)) {
+            $query->whereNotNull('read_at');
+        } elseif (in_array($readParam, ['all', 'todas', '*'], true)) {
+            // sin filtro de lectura
+        } else {
+            // Default: no leídas
+            $query->whereNull('read_at');
+        }
+
+        $notifications = $query->paginate($request->input('per_page', 15));
 
         return response()->json([
             'success' => true,
             'notifications' => $notifications,
+        ]);
+    }
+
+    /**
+     * Eliminar una notificación del usuario autenticado.
+     */
+    public function destroy(string $notificationId)
+    {
+        $user = Auth::user();
+        $notification = $user->notifications()->find($notificationId);
+
+        if (! $notification) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Notificación no encontrada',
+            ], 404);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notificación eliminada',
         ]);
     }
 

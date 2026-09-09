@@ -1,8 +1,8 @@
         @php
-            $margenMm = 25.4;
-            $footerHeightMm = 25.4; // Espacio reservado para pie de página en cada hoja (carta)
-            $terminosLista = $presupuesto['terminos_enunciados'] ?? [];
-            $observacionesLista = $presupuesto['observaciones_enunciados'] ?? [];
+            /** @var array<string, mixed> $presupuesto */
+            /** @var \App\Support\PresupuestoPdfDocumentConfig|null $pdf */
+            $pdf = $pdf ?? \App\Support\PresupuestoPdfDocumentConfig::fromPresupuestoPayload($presupuesto);
+            extract($pdf->bladeViewVariables($presupuesto), EXTR_SKIP);
         @endphp
         <!DOCTYPE html>
         <html lang="es">
@@ -22,11 +22,11 @@
 
                 @page {
                     size: letter;
-                    margin: 25.5mm;
+                    margin: {{ $margenPaginaMm }}mm;
                 }
 
                 .page-top-spacing {
-                    padding-top: {{ $margenMm }}mm;
+                    padding-top: {{ $margenSuperiorMm }}mm;
                 }
 
                 .content-wrapper {
@@ -44,7 +44,7 @@
                     line-height: 1.15;
                     margin: 0;
                     padding: 0;
-                    padding-bottom: {{ $footerHeightMm }}mm;
+                    padding-bottom: {{ $bodyPaddingBottomMm }}mm;
                     /* 🔥 clave */
                 }
 
@@ -55,7 +55,7 @@
                     background: #ffffff;
                     line-height: 1.15;
                     /* margin: 0; */
-                    padding-top: {{ $margenMm }}mm;
+                    padding-top: {{ $margenSuperiorMm }}mm;
                 }
 
                 /* Elementos de margen (cuando @page margin no funciona) */
@@ -76,16 +76,147 @@
                 }
 
                 .document-main {
-                    margin-bottom: 6mm;
+                    margin-bottom: 0;
+                    display: block;
+                }
+
+                .pdf-seccion--presupuesto {
+                    width: 100%;
+                }
+
+                .presupuesto-reserva-atentamente-pie {
+                    display: block;
+                    width: 100%;
+                    box-sizing: border-box;
+                    page-break-inside: avoid;
+                    page-break-after: avoid;
+                    margin: 0;
+                    padding: 0;
+                    min-height: 0;
+                }
+
+                .pdf-seccion-presupuesto__atentamente {
+                    margin-top: 0;
+                    margin-bottom: {{ $gapAtentamenteFooterMm }}mm;
+                    page-break-inside: auto;
+                    page-break-before: avoid;
+                }
+
+                .pdf-seccion--anexos,
+                .pdf-seccion--documentacion {
+                    page-break-before: auto;
+                    width: 100%;
+                }
+
+                .pdf-seccion-documentacion__pagina {
+                    width: 100%;
+                }
+
+                .document-main-spacer {
+                    flex: 1 1 auto;
+                    min-height: 2mm;
+                }
+
+                .document-main-spacer--atentamente {
+                    min-height: 28mm;
+                }
+
+                .document-closing {
+                    flex: 0 0 auto;
+                    width: 100%;
+                }
+
+                .document-closing-atentamente {
+                    flex: 0 0 auto;
+                    width: 100%;
+                    page-break-inside: auto;
+                    page-break-before: avoid;
+                    page-break-after: avoid;
+                }
+
+                .presupuesto-cierre-terminos-atentamente {
+                    width: 100%;
+                }
+
+                .terms-block--after-presupuesto {
+                    flex: 0 0 auto;
+                    width: 100%;
+                    margin-bottom: 2mm;
+                    page-break-inside: auto;
+                }
+
+                .terms-block--after-presupuesto .terminos-section:first-child {
+                    margin-top: 2mm;
+                    padding-top: 1mm;
+                }
+
+                .terms-block--after-presupuesto .terminos-section {
+                    page-break-inside: auto;
+                }
+
+                .terms-block--after-presupuesto .terminos-list li,
+                .terms-block--after-presupuesto .observaciones-list li {
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+
+                .atentamente-plain {
+                    width: 100%;
+                    margin: 0;
+                    padding: 0 0 {{ $gapAtentamenteFooterMm }}mm 0;
+                    background: transparent;
+                    border: none;
+                    page-break-inside: auto;
+                    max-width: 90mm;
+                }
+
+                .document-closing-atentamente .atentamente-plain {
+                    margin-top: 0;
+                    padding-top: 0;
+                }
+
+                .atentamente-plain .atentamente-spacer {
+                    height: {{ $espacioTrasTituloAtentamenteMm }}mm;
+                    margin: 0;
+                    padding: 0;
+                    line-height: 0;
+                    font-size: 0;
+                }
+
+                .atentamente-plain .atentamente-title {
+                    margin-bottom: 0;
+                }
+
+                .atentamente-plain .receptor-name {
+                    margin-bottom: 0.35mm;
+                    line-height: 1.05;
+                }
+
+                .atentamente-plain .receptor-info {
+                    margin-bottom: 0.2mm;
+                    line-height: 1.05;
                 }
 
 
                 /* ========== 1) ENCABEZADO ========== */
                 .header {
-                    margin-bottom: 4mm;
-                    padding-bottom: 3.5mm;
-                    border-bottom: 2px solid var(--accent);
+                    margin-bottom: 0;
+                    padding-bottom: 2mm;
+                    border-bottom: none;
                     page-break-inside: avoid;
+                }
+
+                /* Misma línea que en encabezado compacto (hojas 2+) */
+                .header-rule {
+                    width: 100%;
+                    height: 0;
+                    margin: {{ $gapHeaderRuleMm ?? 3 }}mm 0 {{ $gapHeaderRuleMm ?? 3 }}mm 0;
+                    padding: 0;
+                    border: 0;
+                    border-top: 3px solid var(--accent);
+                    font-size: 0;
+                    line-height: 0;
+                    overflow: hidden;
                 }
 
                 .header-content {
@@ -103,7 +234,7 @@
 
                 .header-info {
                     vertical-align: top;
-                    padding-left: 4mm;
+                    padding-left: {{ $gapLogoInfoMm ?? 7 }}mm;
                     width: 55%;
                     min-width: 0;
                     overflow: hidden;
@@ -187,6 +318,68 @@
                     font-size: 7pt;
                     color: #171a1d;
                     line-height: 1.15;
+                }
+
+                .header.header--compact {
+                    margin-bottom: 0;
+                    padding-bottom: 1mm;
+                    border-bottom: none;
+                }
+
+                .header.header--compact .logo-section {
+                    width: auto;
+                    max-width: 28%;
+                    vertical-align: middle;
+                }
+
+                .header.header--compact .logo-img {
+                    max-width: 26mm;
+                    max-height: 14mm;
+                    width: auto;
+                    height: auto;
+                    object-fit: contain;
+                    object-position: left center;
+                    display: block;
+                }
+
+                .header.header--compact .logo-fallback {
+                    width: 11mm;
+                    height: 11mm;
+                    font-size: 8pt;
+                    line-height: 11mm;
+                }
+
+                .header.header--compact .header-info {
+                    padding-left: 2mm;
+                }
+
+                .header.header--compact .company-header-name {
+                    font-size: 7.2pt;
+                    margin-bottom: 0.3mm;
+                    line-height: 1.1;
+                }
+
+                .header.header--compact .company-header-info {
+                    font-size: 6.5pt;
+                    margin-bottom: 0.2mm;
+                }
+
+                .header.header--compact .folio-section {
+                    padding-left: 1mm;
+                }
+
+                .header.header--compact .folio-label {
+                    font-size: 5.5pt;
+                    margin-bottom: 0.3mm;
+                }
+
+                .header.header--compact .folio-number {
+                    font-size: 7.5pt;
+                    margin-bottom: 0.3mm;
+                }
+
+                .header.header--compact .folio-date {
+                    font-size: 6pt;
                 }
 
                 /* ========== 2) DATOS DEL RECEPTOR ========== */
@@ -375,15 +568,111 @@
                     font-size: 7pt;
                 }
 
+                .presupuesto-table tbody tr.linea-parrafo {
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+
+                .presupuesto-table tbody tr.linea-parrafo td {
+                    text-align: left;
+                    font-weight: 400;
+                    color: #334155;
+                    padding: 2mm 2.5mm;
+                    line-height: 1.45;
+                    white-space: normal;
+                    word-wrap: break-word;
+                    background: #f8fafc;
+                    box-sizing: border-box;
+                    vertical-align: top;
+                }
+
+                .presupuesto-table tbody tr.linea-parrafo td:first-child {
+                    text-align: center;
+                    color: #6b7280;
+                    font-weight: 600;
+                }
+
+                .presupuesto-table tbody tr.linea-con-imagen {
+                    height: 18mm;
+                }
+
+                .concepto-imagen-wrap {
+                    margin-top: 1mm;
+                }
+
+                .concepto-imagen {
+                    width: 15mm;
+                    height: 15mm;
+                    object-fit: cover;
+                    border: 1px solid #e9ecef;
+                    border-radius: 1mm;
+                }
+
+                .concepto-proveedor-origen {
+                    display: flex;
+                    align-items: center;
+                    gap: 1.5mm;
+                    margin-top: 1mm;
+                }
+
+                .concepto-proveedor-logo {
+                    width: 5mm;
+                    height: 5mm;
+                    object-fit: contain;
+                    border-radius: 0.5mm;
+                    background: #fff;
+                }
+
+                .concepto-proveedor-nombre {
+                    font-size: 7pt;
+                    font-weight: 600;
+                    color: #475569;
+                }
+
                 /* ========== 5) TOTALES (alineado con tabla) ========== */
                 .terms-block {
                     margin-bottom: 4mm;
-                    page-break-inside: avoid;
+                    page-break-inside: auto;
                     page-break-before: auto;
                 }
 
                 .totales-section {
                     page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+
+                .importe-con-letra {
+                    margin-top: 2mm;
+                    width: 100%;
+                    border: 1px solid #e8eef4;
+                    border-radius: 1mm;
+                    background: #ffffff;
+                    page-break-inside: avoid;
+                    overflow: hidden;
+                }
+
+                .importe-con-letra-label {
+                    background: #fafbfc;
+                    text-align: center;
+                    font-size: 6pt;
+                    font-weight: 400;
+                    letter-spacing: 0.02em;
+                    text-transform: none;
+                    color: #94a3b8;
+                    padding: 1mm 2mm;
+                    border-bottom: 1px solid #eef2f6;
+                }
+
+                .importe-con-letra-valor {
+                    text-align: center;
+                    font-size: 6.5pt;
+                    font-weight: 400;
+                    color: #64748b;
+                    padding: 1.8mm 2.5mm;
+                    line-height: 1.3;
+                    background: #fcfdfe;
+                    white-space: normal;
+                    word-break: break-word;
                 }
 
                 .totales-table {
@@ -396,21 +685,39 @@
                     padding: 1mm 1mm 1.5mm 1mm;
                     font-size: 7pt;
                     vertical-align: middle;
+                    white-space: nowrap;
+                    overflow: hidden;
                 }
 
                 .totales-table td:first-child {
-                    width: 82%;
+                    width: 58%;
                     text-align: right;
                     color: #5f6f89;
                     padding-right: 2mm;
                 }
 
-                .totales-table td:last-child {
-                    width: 18%;
+                .totales-table .totales-meta-value {
                     text-align: right;
                     color: #2c3e50;
                     font-weight: 600;
                     padding-right: 0;
+                }
+
+                .totales-table .totales-money-sign-col {
+                    width: 12%;
+                    text-align: right;
+                    color: #64748b;
+                    font-weight: 600;
+                    padding-right: 1mm;
+                }
+
+                .totales-table .totales-money-amount-col {
+                    width: 30%;
+                    text-align: right;
+                    color: #2c3e50;
+                    font-weight: 600;
+                    padding-right: 0;
+                    font-variant-numeric: tabular-nums;
                 }
 
                 .totales-table .total-line-final td {
@@ -428,6 +735,12 @@
                     font-size: 10pt;
                     font-weight: 700;
                     color: var(--accent);
+                }
+
+                .totales-table .total-line-final .totales-money-sign-col,
+                .totales-table .total-line-final .totales-money-amount-col {
+                    color: var(--accent);
+                    font-weight: 700;
                 }
 
                 /* ========== 6) TÉRMINOS Y CONDICIONES (al final de la última página) ========== */
@@ -654,27 +967,104 @@
                     height: {{ $footerHeightMm + 5 }}mm;
                 }
 
-                /* ===== DEBUG VISUAL SIN MODIFICAR HTML =====
+                .after-table-space--compact {
+                    height: 3mm;
+                }
 
-                .header { border: 1px solid red; }
-                .logo-section { border: 1px solid blue; }
-                .header-info { border: 1px solid green; }
-                .folio-section { border: 1px solid orange; }
+                .pdf-pagina-con-subencabezado {
+                    padding-top: 2mm;
+                    box-sizing: border-box;
+                }
 
-                .descripcion-section { border: 1px solid teal; }
+                .page-break {
+                    page-break-before: always;
+                }
 
-                .presupuesto-title { border: 1px solid brown; }
-                .presupuesto-table { border: 1px solid black; }
+                .anexos-page {
+                    width: 100%;
+                }
 
-                .totales-section { border: 1px solid darkgreen; }
+                .anexos-preview-header {
+                    margin-bottom: 2.5mm;
+                    padding-bottom: 1.5mm;
+                    border-bottom: 1px solid #d1d5db;
+                }
 
-                .terminos-section { border: 1px solid magenta; }
-                .observaciones-section { border: 1px solid cyan; }
+                .anexos-preview-title {
+                    font-size: 11pt;
+                    font-weight: 700;
+                    color: var(--text-heading);
+                    line-height: 1.15;
+                    margin: 0;
+                }
 
-                .footer { border: 2px dashed red; }
-                .footer-left { border: 1px solid blue; }
-                .footer-center { border: 1px solid green; }
-                .footer-right { border: 1px solid orange; } */
+                .anexo-simple {
+                    width: 100%;
+                    padding: 2.8mm 0;
+                    border-bottom: 1px solid #e5e7eb;
+                    page-break-inside: avoid;
+                }
+
+                .anexo-simple:last-child {
+                    border-bottom: none;
+                }
+
+                .anexo-simple-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                }
+
+                .anexo-simple-media,
+                .anexo-simple-text {
+                    vertical-align: top;
+                }
+
+                .anexo-simple-media {
+                    width: 52mm;
+                    padding-right: 3.5mm;
+                }
+
+                .anexo-simple-image-wrap {
+                    height: 29mm;
+                    overflow: hidden;
+                    background: #f8fafc;
+                    text-align: center;
+                }
+
+                .anexo-simple-image {
+                    display: block;
+                    width: auto;
+                    height: auto;
+                    max-width: 100%;
+                    max-height: 100%;
+                    margin: 0 auto;
+                }
+
+                .anexo-simple-heading {
+                    font-size: 8.4pt;
+                    font-weight: 700;
+                    color: var(--text-heading);
+                    line-height: 1.2;
+                    margin-bottom: 1.1mm;
+                }
+
+                .anexo-simple-desc {
+                    font-size: 7.1pt;
+                    color: #475569;
+                    line-height: 1.3;
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    margin-bottom: 1.1mm;
+                }
+
+                .anexo-simple-price {
+                    font-size: 7.8pt;
+                    font-weight: 700;
+                    color: var(--accent);
+                }
+
+                @include('presupuestos.partials.presupuesto-pdf-debug-bordes-css')
             </style>
         </head>
 
@@ -685,7 +1075,7 @@
                     <div class="footer-left">
                         @php
                             $logos = $presupuesto['logos_base64'] ?? [];
-                            $appKeys = ['gestionpro'];
+                            $appKeys = ['gestionplus'];
                         @endphp
                         <div class="footer-logos-row">
                             @foreach ($appKeys as $key)
@@ -702,11 +1092,11 @@
                     </div>
                     <div class="footer-center">
                         <div class="footer-center-content">
-                            <div class="footer-slogan">"Calidad y compromiso en cada proyecto"</div>
+                            <div class="footer-slogan">"Creador de presupuestos"</div>
                             <div class="footer-webs">
                                 <a href="https://heventec.com" class="footer-webs-link">heventec.com</a><span
-                                    class="footer-webs-sep">|</span><a href="https://gestionpro.com"
-                                    class="footer-webs-link">gestionpro.com</a>
+                                    class="footer-webs-sep">|</span><a href="https://gestion.heventec.com/"
+                                    class="footer-webs-link">gestion.heventec.com</a>
                                 <div class="footer-pages">&nbsp;</div>
                             </div>
                         </div>
@@ -723,86 +1113,11 @@
             </div>
 
             <div class="margin-sides">
+                <div class="pdf-seccion pdf-seccion--presupuesto">
                 <div class="document-container">
                     <div class="document-main">
                         <!-- 1) ENCABEZADO -->
-                        <div class="header">
-                            <table class="header-content">
-                                <tr>
-                                    <td class="logo-section">
-                                        @php
-                                            $logoProveedorBase64 = $presupuesto['logo_proveedor_base64'] ?? null;
-                                            $nombreEmpresa =
-                                                $presupuesto['proveedor']->razon_social ??
-                                                ($presupuesto['proveedor']->nombre_comercial ?? 'P');
-                                            $inicial = strtoupper(substr($nombreEmpresa, 0, 1));
-                                        @endphp
-                                        @if ($logoProveedorBase64)
-                                            <img src="{{ $logoProveedorBase64 }}" alt="Logo" class="logo-img" />
-                                        @else
-                                            <div class="logo-fallback">{{ $inicial }}</div>
-                                        @endif
-                                    </td>
-                                    <td class="header-info">
-                                        @php
-                                            $p = $presupuesto['proveedor'];
-                                            $emisorNombre =
-                                                $p->razon_social ??
-                                                ($p->nombre_comercial ?? 'Empresa Proveedora S.A. de C.V.');
-                                            $emisorRfc = $p->rfc ?? null;
-                                            $emisorDireccion = $p->direccion_empresa ?? null;
-                                            $df = $p->direccion_fiscal ?? null;
-                                            $ciudad =
-                                                $p->ciudad ??
-                                                (is_array($df)
-                                                    ? $df['ciudad'] ?? 'Ciudad de México'
-                                                    : $df->ciudad ?? 'Ciudad de México');
-                                            $estado = is_array($df) ? $df['estado'] ?? 'CDMX' : $df->estado ?? 'CDMX';
-                                            $emisorCiudad = $ciudad . ', ' . $estado . ', México';
-                                            $emisorTel = $p->telefono ?? null;
-                                            $emisorEmail = $p->email ?? null;
-                                        @endphp
-                                        <div class="company-header-name">{{ $emisorNombre }}</div>
-                                        @if ($emisorRfc)
-                                            <div class="company-header-info">{{ $emisorRfc }}</div>
-                                        @endif
-                                        @if ($emisorDireccion)
-                                            <div class="company-header-info">{{ $emisorDireccion }}</div>
-                                        @endif
-                                        @if ($emisorCiudad)
-                                            <div class="company-header-info">{{ $emisorCiudad }}</div>
-                                        @endif
-                                        @if ($emisorTel)
-                                            <div class="company-header-info">Tel. {{ $emisorTel }}</div>
-                                        @endif
-                                        @if ($emisorEmail)
-                                            <div class="company-header-info">{{ $emisorEmail }}</div>
-                                        @endif
-                                    </td>
-                                    <td class="folio-section">
-                                        <div class="folio-label">Presupuesto</div>
-                                        <div class="folio-number">
-                                            {{ $presupuesto['numero_presupuesto'] ?? 'PRES-000001' }}
-                                        </div>
-                                        @if (!empty($presupuesto['uuid']))
-                                            <div class="folio-uuid">{{ $presupuesto['uuid'] }}</div>
-                                        @endif
-                                        <div class="folio-date">
-                                            @php
-                                                $fecha = $presupuesto['fecha_emision'] ?? now();
-                                                if (is_string($fecha)) {
-                                                    $fecha = \Carbon\Carbon::parse($fecha);
-                                                }
-                                                $fechaFormateada = $fecha
-                                                    ->locale('es')
-                                                    ->translatedFormat('d \d\e F \d\e\l Y');
-                                            @endphp
-                                            {{ $fechaFormateada }}
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
+                        @include('presupuestos.partials.presupuesto-pdf-header-default')
 
                         <!-- 2) DATOS DEL RECEPTOR -->
                         <div class="receptor-section">
@@ -813,11 +1128,17 @@
                             @endforeach
                         </div>
 
-                        <!-- 3) DESCRIPCIÓN GENERAL -->
-                        @if ($presupuesto['concepto_general'] ?? null)
+                        <!-- 3) NOMBRE / DESCRIPCIÓN GENERAL -->
+                        @if (($presupuesto['nombre_presupuesto'] ?? null) || ($presupuesto['concepto_general'] ?? null))
                             <div class="descripcion-section">
-                                <div class="descripcion-title">Descripción general</div>
-                                <div class="descripcion-text">{{ $presupuesto['concepto_general'] }}</div>
+                                @if ($presupuesto['nombre_presupuesto'] ?? null)
+                                    <div class="descripcion-title">{{ $presupuesto['nombre_presupuesto'] }}</div>
+                                @else
+                                    <div class="descripcion-title">Descripción general</div>
+                                @endif
+                                @if ($presupuesto['concepto_general'] ?? null)
+                                    <div class="descripcion-text">{{ $presupuesto['concepto_general'] }}</div>
+                                @endif
                             </div>
                         @endif
 
@@ -825,36 +1146,32 @@
                         <div class="presupuesto-title">Presupuesto</div>
                         <table class="presupuesto-table">
                             <thead>
-                                <tr>
-                                    <th scope="col">#</th>
-                                    <th scope="col">Descripción</th>
-                                    <th scope="col">Cantidad</th>
-                                    <th scope="col">Unidad</th>
-                                    <th scope="col">Precio Unitario</th>
-                                    <th scope="col">Importe</th>
-                                </tr>
+                                @include('presupuestos.partials.presupuesto-pdf-tabla-conceptos-thead', [
+                                    'variant' => 'default',
+                                ])
                             </thead>
                             <tbody>
                                 @php
-                                    $conceptos = $presupuesto['conceptos'] ?? [];
+                                    $conceptos = $conceptosListaPdf;
                                     $subtotal = 0;
+                                    foreach ($conceptosListaPdf as $conceptoSubtotal) {
+                                        if (! is_array($conceptoSubtotal)) {
+                                            continue;
+                                        }
+                                        if (! \App\Support\PresupuestoParrafoPdf::esLineaParrafo($conceptoSubtotal)) {
+                                            $cant = $conceptoSubtotal['cantidad'] ?? 1;
+                                            $precio = $conceptoSubtotal['precio_unitario'] ?? 0;
+                                            $subtotal += $cant * $precio;
+                                        }
+                                    }
                                 @endphp
                                 @if (count($conceptos) > 0)
                                     @foreach ($conceptos as $index => $concepto)
-                                        @php
-                                            $cantidad = $concepto['cantidad'] ?? 1;
-                                            $precioUnitario = $concepto['precio_unitario'] ?? 0;
-                                            $importe = $cantidad * $precioUnitario;
-                                            $subtotal += $importe;
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $index + 1 }}</td>
-                                            <td>{{ $concepto['descripcion'] ?? 'Sin descripción' }}</td>
-                                            <td>{{ number_format($cantidad, 2, '.', ',') }}</td>
-                                            <td>{{ strtoupper($concepto['unidad'] ?? 'PZA') }}</td>
-                                            <td>${{ number_format($precioUnitario, 2, '.', ',') }}</td>
-                                            <td>${{ number_format($importe, 2, '.', ',') }}</td>
-                                        </tr>
+                                        @include('presupuestos.partials.presupuesto-pdf-fila-concepto', [
+                                            'concepto' => $concepto,
+                                            'numeroFila' => $index + 1,
+                                            'variant' => 'default',
+                                        ])
                                     @endforeach
                                 @else
                                     <tr>
@@ -866,79 +1183,114 @@
                         </table>
 
                         <!-- 5) TOTALES -->
+                        @if ($presupuesto['config_mostrar_totales'] ?? true)
                         <div class="totales-section">
                             @php
-                                $subtotalCalculado = $presupuesto['subtotal'] ?? $subtotal;
-                                $conIva = $presupuesto['con_iva'] ?? false;
-                                $ivaPorcentaje = $presupuesto['iva_porcentaje'] ?? 16;
-                                $ivaTotal = $conIva ? $subtotalCalculado * ($ivaPorcentaje / 100) : 0;
-                                $total = $subtotalCalculado + $ivaTotal;
+                                $subtotalCalculado = (float) ($presupuesto['subtotal'] ?? $subtotal);
+                                $conIva = (bool) ($presupuesto['con_iva'] ?? false);
+                                $ivaPorcentaje = (float) ($presupuesto['iva_porcentaje'] ?? 16);
+                                $pctDescuento = array_key_exists('porcentaje_descuento', $presupuesto)
+                                    ? ($presupuesto['porcentaje_descuento'] !== null ? (int) $presupuesto['porcentaje_descuento'] : null)
+                                    : null;
+                                $cantidadDescuento = array_key_exists('cantidad_descuento', $presupuesto)
+                                    ? ($presupuesto['cantidad_descuento'] !== null ? (float) $presupuesto['cantidad_descuento'] : null)
+                                    : null;
+                                $totalesDoc = \App\Models\Presupuesto::calcularTotalesDocumento(
+                                    $subtotalCalculado,
+                                    $pctDescuento,
+                                    $cantidadDescuento,
+                                    $conIva,
+                                    $ivaPorcentaje
+                                );
+                                $ivaTotal = $totalesDoc['iva_total'];
+                                $total = $totalesDoc['total'];
+                                $monedaCodigo = strtoupper((string) ($presupuesto['term_cond_moneda'] ?? 'MXN'));
+                                if (!in_array($monedaCodigo, ['MXN', 'USD', 'EUR'], true)) {
+                                    $monedaCodigo = 'MXN';
+                                }
+                                $monedaPrefijo = $monedaCodigo === 'EUR' ? '€' : '$';
                             @endphp
                             <table class="totales-table">
                                 <tr>
                                     <td>Subtotal:</td>
-                                    <td>${{ number_format($subtotalCalculado, 2, '.', ',') }}</td>
+                                    <td class="totales-money-sign-col">{{ $monedaPrefijo }}</td>
+                                    <td class="totales-money-amount-col">{{ number_format($totalesDoc['subtotal'], 2, '.', ',') }}</td>
                                 </tr>
+                                @if ($totalesDoc['mostrar_descuento'])
+                                    <tr>
+                                        <td>Descuento ({{ $totalesDoc['porcentaje_descuento'] }}%):</td>
+                                        <td class="totales-money-sign-col">- {{ $monedaPrefijo }}</td>
+                                        <td class="totales-money-amount-col">{{ number_format($totalesDoc['monto_descuento'], 2, '.', ',') }}</td>
+                                    </tr>
+                                @endif
                                 @if ($conIva)
                                     <tr>
                                         <td>IVA ({{ number_format($ivaPorcentaje, 0) }}%):</td>
-                                        <td>${{ number_format($ivaTotal, 2, '.', ',') }}</td>
+                                        <td class="totales-money-sign-col">{{ $monedaPrefijo }}</td>
+                                        <td class="totales-money-amount-col">{{ number_format($ivaTotal, 2, '.', ',') }}</td>
                                     </tr>
                                 @endif
                                 <tr class="total-line-final">
                                     <td>TOTAL:</td>
-                                    <td>${{ number_format($total, 2, '.', ',') }}</td>
+                                    <td class="totales-money-sign-col">{{ $monedaPrefijo }}</td>
+                                    <td class="totales-money-amount-col">{{ number_format($total, 2, '.', ',') }}</td>
                                 </tr>
                             </table>
-                            <div class="after-table-space"></div>
+                            <div class="importe-con-letra">
+                                <div class="importe-con-letra-label">Importe con letra:</div>
+                                <div class="importe-con-letra-valor">
+                                    {{ \App\Support\PresupuestoPdf::formatMontoLegal($total, $monedaCodigo) }}
+                                </div>
+                            </div>
+                            <div class="after-table-space after-table-space--compact"></div>
                         </div>
-
-                    </div>
-                    <div class="terms-block">
-                        <!-- 6) TÉRMINOS Y CONDICIONES -->
-                        @if (count($terminosLista) > 0)
-                            <div class="terminos-section">
-                                <div class="terminos-main-title">Términos y Condiciones</div>
-                                <ul class="terminos-list">
-                                    @foreach ($terminosLista as $texto)
-                                        <li>{{ $texto }}</li>
-                                    @endforeach
-                                </ul>
-                            </div>
                         @endif
 
-                        <!-- 7) OBSERVACIONES GENERALES -->
-                        @if (count($observacionesLista) > 0)
-                            <div class="terminos-section observaciones-section">
-                                <div class="terminos-title observaciones-title">Observaciones Generales</div>
-                                <ul class="observaciones-list">
-                                    @foreach ($observacionesLista as $obs)
-                                        <li>{{ $obs }}</li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
+                    @if ($tieneBloqueTerminos || $mostrarAtentamente)
+                        <div class="presupuesto-cierre-terminos-atentamente">
+                    @if ($tieneBloqueTerminos)
+                        <div class="terms-block terms-block--after-presupuesto">
+                            @include('presupuestos.partials.presupuesto-pdf-terminos', [
+                                'variant' => 'default',
+                                'terminosLista' => $terminosLista,
+                                'validacionesLista' => $validacionesLista,
+                                'observacionesLista' => $observacionesLista,
+                            ])
+                        </div>
+                    @endif
+
+                    @if ($mostrarAtentamente && ($cierreAtentamente['salto_pagina_antes'] ?? false))
+                        <div class="page-break"></div>
+                    @endif
+                    @if ($mostrarAtentamente && (float) ($cierreAtentamente['reserva_pie_html_mm'] ?? 0) > 0)
+                        <div
+                            class="presupuesto-reserva-atentamente-pie"
+                            style="height: {{ number_format((float) $cierreAtentamente['reserva_pie_html_mm'], 2, '.', '') }}mm;"
+                            aria-hidden="true"></div>
+                    @endif
+                        </div>
+                    @endif
                     </div>
                 </div>
+                </div>
+
+                @include('presupuestos.partials.presupuesto-pdf-seccion-anexos', [
+                    'anexosLista' => $anexosLista,
+                    'tituloAnexos' => $tituloAnexos ?? 'Anexos',
+                    'variant' => 'default',
+                ])
+
+                @include('presupuestos.partials.presupuesto-pdf-seccion-documentacion', [
+                    'documentacionLista' => $documentacionLista,
+                    'variant' => 'default',
+                ])
             </div>
-            <script type="text/php">
-                if (isset($pdf) && isset($fontMetrics)) {
-                    $text = "Página {PAGE_NUM} de {PAGE_COUNT}";
-                    $size = 7;
-                    $font = $fontMetrics->getFont("DejaVu Sans", "normal");
-            
-                    // 🔥 usar un ejemplo REAL para medir
-                    $sample = "Página 99 de 99";
-                    $width = $fontMetrics->getTextWidth($sample, $font, $size);
-            
-                    $x = ($pdf->get_width() - $width) / 2 + 5;
-            
-                    // 🔥 ya ajustado para no encimarse con footer
-                    $y = $pdf->get_height() - 45;
-            
-                    $pdf->page_text($x, $y, $text, $font, $size);
-                }
-            </script>
+            @include('presupuestos.partials.presupuesto-pdf-page-scripts', [
+                'pdf' => $pdf,
+                'presupuesto' => $presupuesto,
+                'paginaAtentamente' => (int) ($cierreAtentamente['pagina_atentamente'] ?? 0),
+                'paginasTrasSeccionPresupuesto' => $paginasTrasSeccionPresupuesto,
+            ])
         </body>
 
         </html>
