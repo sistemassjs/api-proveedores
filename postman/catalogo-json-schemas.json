@@ -1,0 +1,1467 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://api-proveedores.local/schemas/catalogo",
+  "title": "Catálogo de productos — esquemas API (api-proveedores)",
+  "description": "Esquemas JSON Schema del dominio catálogo (productos, taxonomía local, unidades globales, OPUS, CSV/bulk, catálogo público). Alineados con Form Requests, Resources y ApiResponse. Base: /api. Usar con Catalogo.postman_collection.json.",
+  "definitions": {
+    "ApiResponseSuccess": {
+      "type": "object",
+      "required": [
+        "status",
+        "code",
+        "message",
+        "data",
+        "errors"
+      ],
+      "properties": {
+        "status": {
+          "const": "SUCCESS"
+        },
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "description": "Payload; null en delete sin cuerpo"
+        },
+        "errors": {
+          "type": "null"
+        }
+      }
+    },
+    "ApiResponseError": {
+      "type": "object",
+      "required": [
+        "status",
+        "code",
+        "message",
+        "data",
+        "errors"
+      ],
+      "properties": {
+        "status": {
+          "const": "ERROR"
+        },
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {},
+        "errors": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ApiResponsePaginated": {
+      "type": "object",
+      "required": [
+        "status",
+        "code",
+        "message",
+        "meta",
+        "data",
+        "errors"
+      ],
+      "properties": {
+        "status": {
+          "const": "SUCCESS"
+        },
+        "code": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "current_page": {
+                  "type": "integer"
+                },
+                "from": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "last_page": {
+                  "type": "integer"
+                },
+                "per_page": {
+                  "type": "integer"
+                },
+                "to": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "total": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "data": {
+          "type": "array"
+        },
+        "errors": {
+          "type": "null"
+        }
+      }
+    },
+    "EspecificacionInput": {
+      "type": "object",
+      "required": [
+        "valor"
+      ],
+      "properties": {
+        "atributo": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "clave": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "valor": {
+          "type": "string"
+        },
+        "unidad": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "orden": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "ProductoCamposUniversales": {
+      "type": "object",
+      "properties": {
+        "tipo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "producto",
+            "servicio",
+            "renta",
+            null
+          ]
+        },
+        "modelo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "codigo_fabricante": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "codigo_barras": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "presentacion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        },
+        "cantidad_contenida": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unidad_contenido_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unidad_base_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "factor_conversion": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "disponibilidad": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "tiempo_entrega": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "url_producto": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "familia_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "subfamilia_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "especificaciones": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/EspecificacionInput"
+          }
+        }
+      }
+    },
+    "StoreProductoBody": {
+      "allOf": [
+        {
+          "type": "object",
+          "required": [
+            "nombre",
+            "descripcion",
+            "codigo_interno",
+            "unidad_medida_id",
+            "categoria_id",
+            "subcategoria_id",
+            "marca_id"
+          ],
+          "properties": {
+            "nombre": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "descripcion": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "codigo_interno": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "proveedor_id": {
+              "type": "integer"
+            },
+            "precio_base": {
+              "type": "number"
+            },
+            "precio_mayoreo": {
+              "type": "number"
+            },
+            "precio_menudeo": {
+              "type": "number"
+            },
+            "unidad_medida_id": {
+              "type": "integer"
+            },
+            "categoria_id": {
+              "type": "integer"
+            },
+            "subcategoria_id": {
+              "type": "integer"
+            },
+            "marca_id": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "$ref": "#/definitions/ProductoCamposUniversales"
+        }
+      ],
+      "description": "ProductoStoreRequest. Precios en columnas."
+    },
+    "UpdateProductoBody": {
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "nombre": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "descripcion": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "codigo_interno": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "precio_base": {
+              "type": "number"
+            },
+            "precio_mayoreo": {
+              "type": "number"
+            },
+            "precio_menudeo": {
+              "type": "number"
+            },
+            "unidad_medida_id": {
+              "type": "integer"
+            },
+            "categoria_id": {
+              "type": "integer"
+            },
+            "subcategoria_id": {
+              "type": "integer"
+            },
+            "marca_id": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "$ref": "#/definitions/ProductoCamposUniversales"
+        }
+      ]
+    },
+    "ProductoBulkItem": {
+      "type": "object",
+      "required": [
+        "nombre"
+      ],
+      "properties": {
+        "sku": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "codigo_interno": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "descripcion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "precio_base": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "precio_mayoreo": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "precio_menudeo": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "activo": {
+          "type": "boolean"
+        },
+        "stock": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stock_inicial": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "categoria_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "categoria_nombre": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subcategoria_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "subcategoria_nombre": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "marca_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "marca_nombre": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unidad_medida_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unidad_medida": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "familia_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "subfamilia_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "familia": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subfamilia": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "precios": {
+          "type": "object",
+          "properties": {
+            "precio_base": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "precio_mayoreo": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "precio_menudeo": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        },
+        "especificaciones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "atributo",
+              "valor"
+            ],
+            "properties": {
+              "atributo": {
+                "type": "string"
+              },
+              "valor": {
+                "type": "string"
+              },
+              "unidad": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "orden": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "StoreProductoBulkBody": {
+      "type": "object",
+      "required": [
+        "productos"
+      ],
+      "properties": {
+        "productos": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/definitions/ProductoBulkItem"
+          }
+        },
+        "archivo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "importId": {
+              "type": "string",
+              "maxLength": 100
+            }
+          }
+        }
+      },
+      "description": "ProductoBulkStoreRequest — POST .../productos/bulk"
+    },
+    "StoreProductoDocumentoBody": {
+      "type": "object",
+      "properties": {
+        "tipo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "nombre": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "archivo": {
+          "description": "multipart file; required_without url; max 10MB"
+        },
+        "orden": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "StoreCategoriaBody": {
+      "type": "object",
+      "required": [
+        "nombre",
+        "descripcion"
+      ],
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "descripcion": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "categoria_padre_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "UpdateCategoriaBody": {
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "descripcion": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "categoria_padre_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "StoreMarcaBody": {
+      "type": "object",
+      "required": [
+        "nombre"
+      ],
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        }
+      }
+    },
+    "UpdateMarcaBody": {
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        }
+      }
+    },
+    "StoreUnidadMedidaBody": {
+      "type": "object",
+      "required": [
+        "clave",
+        "nombre"
+      ],
+      "properties": {
+        "clave": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "nombre": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "descripcion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        }
+      },
+      "description": "Unidades globales (ruta bajo proveedor por compatibilidad)."
+    },
+    "UpdateUnidadMedidaBody": {
+      "type": "object",
+      "properties": {
+        "clave": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "nombre": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "descripcion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        }
+      }
+    },
+    "AsignarProductosSucursalBody": {
+      "type": "object",
+      "required": [
+        "productos"
+      ],
+      "properties": {
+        "productos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "producto_id": {
+                "type": "integer"
+              },
+              "stock_local": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "precio_local": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "activo": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "DesasignarProductosSucursalBody": {
+      "type": "object",
+      "required": [
+        "productos"
+      ],
+      "properties": {
+        "productos": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "UpdateStockSucursalBody": {
+      "type": "object",
+      "required": [
+        "actualizaciones"
+      ],
+      "properties": {
+        "actualizaciones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "producto_id",
+              "stock_local"
+            ],
+            "properties": {
+              "producto_id": {
+                "type": "integer"
+              },
+              "stock_local": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "precio_local": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "activo": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CsvImportConfirmBody": {
+      "type": "object",
+      "required": [
+        "audit_id",
+        "preview_token"
+      ],
+      "properties": {
+        "audit_id": {
+          "type": "integer"
+        },
+        "preview_token": {
+          "type": "string"
+        },
+        "import_options": {
+          "type": "object",
+          "properties": {
+            "skip_duplicates": {
+              "type": "boolean"
+            },
+            "update_existing": {
+              "type": "boolean"
+            },
+            "create_missing_relations": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "StoreCatalogoFamiliaBody": {
+      "type": "object",
+      "required": [
+        "nombre"
+      ],
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "activo": {
+          "type": "boolean"
+        }
+      }
+    },
+    "UpdateCatalogoFamiliaBody": {
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "activo": {
+          "type": "boolean"
+        }
+      }
+    },
+    "StoreCatalogoSubfamiliaBody": {
+      "type": "object",
+      "required": [
+        "nombre"
+      ],
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "activo": {
+          "type": "boolean"
+        }
+      }
+    },
+    "UpdateCatalogoSubfamiliaBody": {
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 50
+        },
+        "activo": {
+          "type": "boolean"
+        }
+      }
+    },
+    "UpdateCatalogoPublicoItemBody": {
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "descripcion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "marca": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "categoria": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subcategoria": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unidad": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "empresa": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imagen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "precio_base": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "precio_mayoreo": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "precio_menudeo": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "activo": {
+          "type": "boolean"
+        },
+        "mostrar_en_listado": {
+          "type": "boolean"
+        }
+      }
+    },
+    "UpdateCatalogoPublicoEmpresaBody": {
+      "type": "object",
+      "required": [
+        "empresa_actual"
+      ],
+      "properties": {
+        "empresa_actual": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Nombre actual de la empresa"
+        },
+        "empresa": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Nuevo nombre (opcional)"
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "mostrar_en_listado": {
+          "type": "boolean"
+        }
+      },
+      "description": "AdminCatalogoPublicoUpdateEmpresaRequest"
+    },
+    "ProveedorProductoResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "sku": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "codigo_interno": {
+          "type": "string"
+        },
+        "codigo_fabricante": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "codigo_barras": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "descripcion": {
+          "type": "string"
+        },
+        "modelo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tipo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "precio_base": {
+          "type": "number"
+        },
+        "precio_mayoreo": {
+          "type": "number"
+        },
+        "precio_menudeo": {
+          "type": "number"
+        },
+        "presentacion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cantidad_contenida": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "factor_conversion": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "disponibilidad": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tiempo_entrega": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url_producto": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "imagen_principal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "marca_id": {
+          "type": "integer"
+        },
+        "categoria_id": {
+          "type": "integer"
+        },
+        "subcategoria_id": {
+          "type": "integer"
+        },
+        "familia_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "subfamilia_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "proveedor_id": {
+          "type": "integer"
+        },
+        "unidad_medida_id": {
+          "type": "integer"
+        },
+        "unidad_contenido_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unidad_base_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "categoria": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "subcategoria": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "familia": {
+          "$ref": "#/definitions/CatalogoFamiliaResource"
+        },
+        "subfamilia": {
+          "$ref": "#/definitions/CatalogoSubfamiliaResource"
+        },
+        "marca": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "unidad_medida": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "especificaciones": {
+          "type": "array"
+        },
+        "documentos": {
+          "type": "array"
+        },
+        "created_at": {},
+        "updated_at": {}
+      }
+    },
+    "CatalogoFamiliaResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activo": {
+          "type": "boolean"
+        },
+        "subfamilias": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CatalogoSubfamiliaResource"
+          }
+        },
+        "created_at": {},
+        "updated_at": {}
+      }
+    },
+    "CatalogoSubfamiliaResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "familia_id": {
+          "type": "integer"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activo": {
+          "type": "boolean"
+        }
+      }
+    },
+    "CatalogoPublicoItemResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "codigo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "descripcion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "marca": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "categoria": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subcategoria": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unidad": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "empresa": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imagen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "precio_base": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "precio_mayoreo": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "precio_menudeo": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "propiedades": {},
+        "activo": {
+          "type": "boolean"
+        },
+        "mostrar_en_listado": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ProductoDocumentoResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "producto_id": {
+          "type": "integer"
+        },
+        "tipo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nombre": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orden": {
+          "type": "integer"
+        }
+      }
+    },
+    "DestroyCatalogoPublicoEmpresaBody": {
+      "type": "object",
+      "required": [
+        "empresa"
+      ],
+      "properties": {
+        "empresa": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

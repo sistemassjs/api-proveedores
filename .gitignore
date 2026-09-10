@@ -307,7 +307,6 @@ respaldo_*.zip
 # Vistas compiladas
 /storage/framework/views/*
 !/storage/framework/views/.gitkeep
-routes/segmented/construcc.php
 storage/logs/*.*
 /public/uploads/*
 !/public/uploads/.gitkeep

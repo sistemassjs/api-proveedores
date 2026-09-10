@@ -118,7 +118,7 @@ class CsvImportService
             // Get existing data for this provider
             $existingMarcas = Marca::where('proveedor_id', $this->proveedorId)->pluck('nombre')->toArray();
             $existingCategorias = Categoria::where('proveedor_id', $this->proveedorId)->whereNull('parent_id')->pluck('nombre')->toArray();
-            $existingUnidades = UnidadMedida::where('proveedor_id', $this->proveedorId)->pluck('descripcion')->toArray();
+            $existingUnidades = UnidadMedida::query()->pluck('descripcion')->toArray();
             $existingProductos = Producto::where('proveedor_id', $this->proveedorId)->pluck('codigo_interno')->toArray();
 
             // Categorize each data type
@@ -455,7 +455,7 @@ class CsvImportService
         $existingMarcas = Marca::where('proveedor_id', $this->proveedorId)->pluck('id', 'nombre');
         $existingCategorias = Categoria::where('proveedor_id', $this->proveedorId)->whereNull('parent_id')->pluck('id', 'nombre');
         $existingSubCategorias = Categoria::where('proveedor_id', $this->proveedorId)->whereNotNull('parent_id')->pluck('id', 'nombre');
-        $existingUnidades = UnidadMedida::where('proveedor_id', $this->proveedorId)->pluck('id', 'descripcion');
+        $existingUnidades = UnidadMedida::query()->pluck('id', 'descripcion');
 
         foreach (array_chunk($rows, $chunkSize) as $chunk) {
             $currentChunk++;
@@ -580,7 +580,7 @@ class CsvImportService
 
         $unidad = UnidadMedida::create([
             'descripcion' => $nombre,
-            'proveedor_id' => $proveedor->id,
+            'nombre' => $nombre,
         ]);
 
         $existingUnidades[$nombre] = $unidad->id;

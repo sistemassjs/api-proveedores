@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
                 // Catálogos básicos
                 SucursalSeeder::class,
                 UnidadMedidaSeeder::class,
+                CatalogoOpusFamiliasSeeder::class,
                 CategoriaSeeder::class,
                 MarcaSeeder::class,
 

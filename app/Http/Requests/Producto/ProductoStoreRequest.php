@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Producto;
 
+use App\Http\Requests\Producto\Concerns\MapsProductoCatalogoUniversales;
 use App\Models\Categoria;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ProductoStoreRequest extends FormRequest
 {
+    use MapsProductoCatalogoUniversales;
+
     public function authorize(): bool
     {
         return true;
@@ -16,13 +19,12 @@ class ProductoStoreRequest extends FormRequest
     {
         $proveedorId = $this->route('proveedor')->id ?? $this->input('proveedor_id');
 
-        return [
+        return array_merge([
             'nombre' => ['required', 'string', 'max:100'],
             'descripcion' => ['required', 'string', 'max:255'],
             'codigo_interno' => ['required', 'string', 'max:50'],
             'proveedor_id' => ['sometimes', 'required', 'integer', 'exists:proveedores,id'],
 
-            // precios
             'precio_base' => ['sometimes', 'numeric'],
             'precio_mayoreo' => ['sometimes', 'numeric'],
             'precio_menudeo' => ['sometimes', 'numeric'],
@@ -75,35 +77,23 @@ class ProductoStoreRequest extends FormRequest
                     }
                 },
             ],
-        ];
+        ], $this->reglasCamposUniversales(false));
     }
 
     public function messages(): array
     {
         return [
-            // Campos obligatorios
             'nombre.required' => 'El nombre es obligatorio.',
             'descripcion.required' => 'La descripción es obligatoria.',
             'codigo_interno.required' => 'El código interno es obligatorio.',
             'proveedor_id.required' => 'El proveedor es obligatorio.',
             'unidad_medida_id.required' => 'La unidad de medida es obligatoria.',
             'categoria_id.required' => 'La categoría padre es obligatoria.',
-            'sub_categoria_id.required' => 'La subcategoría es obligatoria.',
             'marca_id.required' => 'La marca es obligatoria.',
-
-            // Existencia en base de datos
             'proveedor_id.exists' => 'El proveedor seleccionado no es válido.',
             'unidad_medida_id.exists' => 'La unidad de medida seleccionada no es válida.',
             'categoria_id.exists' => 'La categoría seleccionada no es válida.',
-            'sub_categoria_id.exists' => 'La subcategoría seleccionada no es válida.',
             'marca_id.exists' => 'La marca seleccionada no es válida.',
-
-            // Mensajes para validaciones personalizadas
-            'categoria_id.categoria_proveedor' => 'La categoría padre no pertenece al proveedor o no está en el nivel 0.',
-            'sub_categoria_id.subcategoria_padre' => 'La subcategoría no pertenece a la categoría padre especificada o la jerarquía es incorrecta.',
-            'marca_id.marca_proveedor' => 'La marca seleccionada no pertenece a este proveedor.',
-
-            // Precios (opcional, si quieres mensajes específicos)
             'precio_base.numeric' => 'El precio base debe ser un número.',
             'precio_mayoreo.numeric' => 'El precio de mayoreo debe ser un número.',
             'precio_menudeo.numeric' => 'El precio de menudeo debe ser un número.',

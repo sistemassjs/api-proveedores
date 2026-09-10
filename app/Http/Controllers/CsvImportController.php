@@ -14,6 +14,7 @@ use App\Models\UnidadMedida;
 use App\Services\CSVImport\CSVImportExportService;
 use App\Services\CSVImport\CSVImportProductValidator;
 use App\Services\CSVImport\CSVProcessorService;
+use App\Support\Catalogo\CatalogoImportPlantilla;
 use App\Traits\ApiResponse;
 use Exception;
 use Illuminate\Http\Request;
@@ -94,6 +95,8 @@ class CsvImportController extends Controller
                 'tipo' => 'productos',
                 'archivo' => $path,
                 'formato' => 'csv',
+                'plantilla_version' => CatalogoImportPlantilla::VERSION,
+                'plantilla_fecha' => CatalogoImportPlantilla::FECHA,
                 'estado' => 'preview',
                 // 'fase' => 'analisis_completado',
                 'preview_data' => [
@@ -103,6 +106,10 @@ class CsvImportController extends Controller
                     'validation_summary' => $processingResult['validation_summary'],
                     'quality_metrics' => $processingResult['quality_metrics'],
                     'preview_token' => $processingResult['preview_token'],
+                    'plantilla' => [
+                        'version' => CatalogoImportPlantilla::VERSION,
+                        'fecha' => CatalogoImportPlantilla::FECHA,
+                    ],
                 ],
                 'total_registros' => $processingResult['file_info']['total_rows'],
                 'progreso' => 100,
@@ -602,7 +609,7 @@ class CsvImportController extends Controller
 
             // --- 2. Preparar referencias en memoria ---
             $marcasMap = Marca::where('proveedor_id', $proveedorId)->pluck('id', 'nombre')->toArray();
-            $unidadesMap = UnidadMedida::where('proveedor_id', $proveedorId)->pluck('id', 'nombre')->toArray();
+            $unidadesMap = UnidadMedida::query()->pluck('id', 'nombre')->toArray();
 
             $categoriasMap = Categoria::where('proveedor_id', $proveedorId)
                 ->get()
@@ -775,7 +782,7 @@ class CsvImportController extends Controller
             $catalogosImportResults['unidades']['total']++;
             try {
                 UnidadMedida::updateOrCreate(
-                    ['nombre' => $nombreUnidad, 'proveedor_id' => $proveedorId],
+                    ['nombre' => $nombreUnidad],
                     ['estatus' => 'activo']
                 );
                 $catalogosImportResults['unidades']['imported']++;

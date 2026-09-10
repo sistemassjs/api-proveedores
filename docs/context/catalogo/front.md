@@ -7,7 +7,7 @@ Repo: `app-proveedores`. Carpetas bajo `src/app/pages/proveedor/`:
 | `producto-proveedor/` | Listado / form / detail |
 | `categorias-proveedor/` | Categorías |
 | `marcas-proveedor/` | Marcas |
-| `unidades-proveedor/` | Unidades |
+| `unidades-proveedor/` | Unidades (**catálogo global**; UI bajo proveedor por compatibilidad) |
 | `sucursales-proveedor/` | Sucursales (+ stock) |
 | `import-productos/` | Flujo import + historial |
 | `csv-import/` | Alternativa CSV (upload → confirm → results) |

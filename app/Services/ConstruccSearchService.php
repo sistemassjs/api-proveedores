@@ -16,7 +16,7 @@ class ConstruccSearchService
      */
     public function buscarProveedores(array $filtros): LengthAwarePaginator
     {
-        $query = Proveedor::with(['categorias', 'marcas', 'unidades'])
+        $query = Proveedor::with(['categorias', 'marcas'])
             ->where('estatus', 'activo');
 
         // Búsqueda por texto en múltiples campos
@@ -240,7 +240,7 @@ class ConstruccSearchService
             'catalogos' => [
                 'categorias' => $proveedor->categorias()->count(),
                 'marcas' => $proveedor->marcas()->count(),
-                'unidades' => $proveedor->unidades()->count(),
+                'unidades' => \App\Models\UnidadMedida::query()->count(),
             ],
             'precios' => [
                 'promedio' => $proveedor->productos()->where('activo', true)->avg('precio_base'),

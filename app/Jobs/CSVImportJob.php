@@ -9,6 +9,7 @@ use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Services\CSVImport\CSVImportProductValidator;
 use App\Services\CSVImport\CSVProcessorService;
+use App\Services\Catalogo\CatalogoOpusHomologacionService;
 use Exception;
 use Illuminate\Bus\Queueable as BusQueueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -45,6 +46,8 @@ class CSVImportJob implements ShouldQueue
         'categorias_existentes' => 0,
         'unidades_nuevas' => 0,
         'unidades_existentes' => 0,
+        'opus_homologados' => 0,
+        'opus_sin_match' => 0,
     ];
 
     protected array $errorDetails = [];
@@ -57,12 +60,15 @@ class CSVImportJob implements ShouldQueue
 
     protected float $startTime;
 
+    protected CatalogoOpusHomologacionService $opusMatch;
+
     /**
      * Create a new job instance.
      */
     public function __construct(ImportAudit $importAudit, array $options = [])
     {
         $this->importAudit = $importAudit;
+        $this->opusMatch = new CatalogoOpusHomologacionService;
         $this->options = array_merge([
             'chunk_size' => 500,
             'skip_duplicates' => false,
@@ -372,7 +378,6 @@ class CSVImportJob implements ShouldQueue
                 $unidad = UnidadMedida::firstOrCreate(
                     [
                         'nombre' => $unitName,
-                        'proveedor_id' => $this->importAudit->proveedor_id,
                     ],
                     [
                         'estatus' => 'activo',
@@ -493,6 +498,23 @@ class CSVImportJob implements ShouldQueue
 
         $unidadId = $this->catalogMappings['unidades'][$productData['unidad_medida']] ?? null;
 
+        $familiaTxt = trim((string) ($productData['familia'] ?? ''));
+        $subfamiliaTxt = trim((string) ($productData['subfamilia'] ?? ''));
+        if ($familiaTxt === '') {
+            $familiaTxt = trim((string) ($productData['categoria'] ?? ''));
+        }
+        if ($subfamiliaTxt === '') {
+            $subfamiliaTxt = trim((string) ($productData['subcategoria'] ?? ''));
+        }
+        $opus = $this->opusMatch->match($familiaTxt, $subfamiliaTxt);
+        if ($opus['matched']) {
+            $this->processingStats['opus_homologados']++;
+        } elseif ($familiaTxt !== '' || $subfamiliaTxt !== '') {
+            $this->processingStats['opus_sin_match']++;
+        }
+
+        $precioBase = $productData['precio'] ?? $productData['precio_base'] ?? null;
+
         // Prepare product data
         $productAttributes = [
             'codigo_interno' => $productData['codigo'],
@@ -506,9 +528,24 @@ class CSVImportJob implements ShouldQueue
             'categoria_id' => $categoriaId,
             'subcategoria_id' => $subcategoriaId,
             'unidad_medida_id' => $unidadId,
-            'precio_base' => $this->parsePrice($productData['precio_base'] ?? 0),
-            'precio_mayoreo' => $this->parsePrice($productData['precio_mayoreo'] ?? 0),
-            'precio_menudeo' => $this->parsePrice($productData['precio_menudeo'] ?? 0),
+            'familia_id' => $opus['familia_id'],
+            'subfamilia_id' => $opus['subfamilia_id'],
+            'precio_base' => $this->parseNullablePrice($precioBase),
+            'precio_mayoreo' => $this->parseNullablePrice($productData['precio_mayoreo'] ?? null),
+            'precio_menudeo' => $this->parseNullablePrice($productData['precio_menudeo'] ?? null),
+            'tipo' => $this->nullableString($productData['tipo'] ?? null),
+            'modelo' => $this->nullableString($productData['modelo'] ?? null),
+            'codigo_fabricante' => $this->nullableString($productData['codigo_fabricante'] ?? null),
+            'codigo_barras' => $this->nullableString($productData['codigo_barras'] ?? null),
+            'presentacion' => $this->nullableString($productData['presentacion'] ?? null),
+            'cantidad_contenida' => isset($productData['cantidad_contenida']) && is_numeric($productData['cantidad_contenida'])
+                ? (float) $productData['cantidad_contenida'] : null,
+            'factor_conversion' => isset($productData['factor_conversion']) && is_numeric($productData['factor_conversion'])
+                ? (float) $productData['factor_conversion'] : null,
+            'disponibilidad' => $this->nullableString($productData['disponibilidad'] ?? null),
+            'tiempo_entrega' => $this->nullableString($productData['tiempo_entrega'] ?? null),
+            'url_producto' => $this->nullableString($productData['url_producto'] ?? null),
+            'tags' => $this->parseTags($productData['tags'] ?? null),
             'activo' => true,
             'updated_at' => now(),
         ];
@@ -529,13 +566,64 @@ class CSVImportJob implements ShouldQueue
             // Only create if doesn't exist
             $existing = Producto::where($productAttributes)->first();
             if (! $existing) {
-                Producto::create(array_merge($productAttributes, $productValues, ['created_at' => now()]));
+                $producto = Producto::create(array_merge($productAttributes, $productValues, ['created_at' => now()]));
                 $this->processingStats['productos_nuevos']++;
             } else {
                 if (! $this->options['skip_duplicates']) {
                     $this->recordProductError($rowNumber, $productData, ['Producto ya existe y update_existing está desactivado']);
                 }
+
+                return;
             }
+        }
+
+        $this->syncPropiedadesFromRow($producto, $productData);
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+
+        return $value === '' ? null : $value;
+    }
+
+    protected function parseTags(mixed $value): ?array
+    {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '') {
+            return null;
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/[,;|]/', $value) ?: [])));
+    }
+
+    protected function syncPropiedadesFromRow(Producto $producto, array $row): void
+    {
+        $props = [];
+        foreach ($row as $key => $value) {
+            if (! is_string($key) || ! preg_match('/^propiedad(\d+)_clave$/i', $key, $m)) {
+                continue;
+            }
+            $n = $m[1];
+            $clave = trim((string) $value);
+            $valor = trim((string) ($row["propiedad{$n}_valor"] ?? $row["Propiedad{$n}_Valor"] ?? ''));
+            if ($clave === '') {
+                continue;
+            }
+            $props[] = [
+                'atributo' => $clave,
+                'valor' => $valor,
+                'orden' => (int) $n,
+            ];
+        }
+
+        if ($props === []) {
+            return;
+        }
+
+        $producto->especificaciones()->delete();
+        foreach ($props as $prop) {
+            $producto->especificaciones()->create($prop);
         }
     }
 
@@ -544,14 +632,41 @@ class CSVImportJob implements ShouldQueue
      */
     protected function parsePrice($price): float
     {
-        if (is_numeric($price)) {
-            return (float) $price;
+        $parsed = $this->parseNullablePrice($price);
+
+        return $parsed ?? 0.0;
+    }
+
+    /**
+     * Acepta null/vacío → null; 0 y números >= 0 → float; inválidos → null.
+     */
+    protected function parseNullablePrice(mixed $price): ?float
+    {
+        if ($price === null) {
+            return null;
         }
 
-        // Clean price string and convert
-        $cleanPrice = preg_replace('/[^0-9.]/', '', (string) $price);
+        if (is_string($price)) {
+            $price = trim($price);
+            if ($price === '' || strtolower($price) === 'null') {
+                return null;
+            }
+        }
 
-        return $cleanPrice ? (float) $cleanPrice : 0.0;
+        if (is_numeric($price)) {
+            $value = (float) $price;
+
+            return $value < 0 ? null : $value;
+        }
+
+        $cleanPrice = preg_replace('/[^0-9.]/', '', (string) $price);
+        if ($cleanPrice === '' || $cleanPrice === null) {
+            return null;
+        }
+
+        $value = (float) $cleanPrice;
+
+        return $value < 0 ? null : $value;
     }
 
     /**
@@ -599,6 +714,11 @@ class CSVImportJob implements ShouldQueue
             'unidad_imported' => $this->processingStats['unidades_nuevas'],
             'unidad_errors' => 0,
             'unidad_total' => $this->processingStats['unidades_nuevas'] + $this->processingStats['unidades_existentes'],
+        ]);
+
+        $this->importAudit->appendLog('Homologación OPUS', [
+            'homologados' => $this->processingStats['opus_homologados'],
+            'sin_match' => $this->processingStats['opus_sin_match'],
         ]);
 
         // Cleanup temporary data

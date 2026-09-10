@@ -3,8 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
+ * Catálogo global de unidades de medida (no scoped por proveedor).
+ *
  * @OA\Schema(
  *     schema="UnidadMedida",
  *     required={"nombre"},
@@ -21,25 +24,41 @@ class UnidadMedida extends BaseModel
 {
     use HasFactory;
 
-    protected $fillable = ['proveedor_id', 'nombre', 'clave', 'descripcion', 'estatus'];
+    protected $fillable = ['nombre', 'clave', 'descripcion', 'estatus'];
 
-    public function scopeFilterByNombre($query, $value)
+    protected static $filters = [
+        'nombre' => 'Nombre',
+        'clave' => 'Clave',
+        'estatus' => 'Estatus',
+        'search' => 'Search',
+    ];
+
+    public function filterByNombre($query, $value)
     {
-        return $query->where('nombre', 'like', "%$value%");
+        return $query->where('nombre', 'like', "%{$value}%");
     }
 
-    public function scopeFilterByEstatus($query, $value)
+    public function filterByClave($query, $value)
     {
-        return $query->where('estatus', "%$value%");
+        return $query->where('clave', 'like', "%{$value}%");
     }
 
-    public function productos()
+    public function filterByEstatus($query, $value)
     {
-        return $this->hasMany(Producto::class);
+        return $query->where('estatus', $value);
     }
 
-    public function proveedor()
+    public function filterBySearch($query, $value)
     {
-        return $this->belongsTo(Proveedor::class);
+        return $query->where(function ($q) use ($value) {
+            $q->where('nombre', 'like', "%{$value}%")
+                ->orWhere('clave', 'like', "%{$value}%")
+                ->orWhere('descripcion', 'like', "%{$value}%");
+        });
+    }
+
+    public function productos(): HasMany
+    {
+        return $this->hasMany(Producto::class, 'unidad_medida_id');
     }
 }

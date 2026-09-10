@@ -1,0 +1,2623 @@
+{
+	"info": {
+		"_postman_id": "catalogo-api-proveedores-001",
+		"name": "Catálogo (api-proveedores)",
+		"description": "Dominio catálogo de productos: gerente (productos/categorías/marcas/unidades/sucursal/CSV/bulk), lectura OPUS y catálogo público (shared/tienda), CRUD admin OPUS y feed público.\n\n**Base:** `{{base_url}}/api`\n\n**Auth:** Bearer `{{sanctum_token}}` (Sanctum).\n\n**Respuesta:** ApiResponse `status`, `code`, `message`, `data`|`meta`+`data`, `errors`.\n\n**Esquemas:** `catalogo-json-schemas.json` en esta carpeta.\n\nDemo Ferreteria LM: `proveedor_id=19`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{sanctum_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000"
+		},
+		{
+			"key": "sanctum_token",
+			"value": ""
+		},
+		{
+			"key": "proveedor_id",
+			"value": "19"
+		},
+		{
+			"key": "producto_id",
+			"value": "1"
+		},
+		{
+			"key": "categoria_id",
+			"value": "1"
+		},
+		{
+			"key": "marca_id",
+			"value": "1"
+		},
+		{
+			"key": "unidad_id",
+			"value": "1"
+		},
+		{
+			"key": "sucursal_id",
+			"value": "1"
+		},
+		{
+			"key": "documento_id",
+			"value": "1"
+		},
+		{
+			"key": "familia_id",
+			"value": "1"
+		},
+		{
+			"key": "subfamilia_id",
+			"value": "1"
+		},
+		{
+			"key": "audit_id",
+			"value": "1"
+		},
+		{
+			"key": "preview_token",
+			"value": ""
+		},
+		{
+			"key": "catalogo_publico_item_id",
+			"value": "1"
+		},
+		{
+			"key": "empresa_catalogo_publico",
+			"value": "EMPRESA DEMO"
+		}
+	],
+	"item": [
+		{
+			"name": "Gerente — Productos",
+			"item": [
+				{
+					"name": "GET listar productos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos?per_page=15&page=1&search=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Index paginado. Middleware proveedor.access."
+					}
+				},
+				{
+					"name": "POST crear producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos"
+							]
+						},
+						"description": "Esquema: `definitions.StoreProductoBody`. 201 + ProveedorProductoResource.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Cemento Portland 50kg\",\n  \"descripcion\": \"Saco cemento gris\",\n  \"codigo_interno\": \"CEM-50\",\n  \"precio_base\": 185.5,\n  \"precio_mayoreo\": 170,\n  \"precio_menudeo\": 195,\n  \"unidad_medida_id\": 1,\n  \"categoria_id\": 1,\n  \"subcategoria_id\": 2,\n  \"marca_id\": 1,\n  \"tipo\": \"producto\",\n  \"modelo\": \"CPC 30R\",\n  \"familia_id\": 1,\n  \"subfamilia_id\": 1,\n  \"tags\": [\n    \"obra-negra\",\n    \"cemento\"\n  ],\n  \"especificaciones\": [\n    {\n      \"atributo\": \"Resistencia\",\n      \"valor\": \"30\",\n      \"unidad\": \"MPa\",\n      \"orden\": 1\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "POST bulk productos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/bulk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"bulk"
+							]
+						},
+						"description": "Esquema: `definitions.StoreProductoBulkBody`. Ruta antes de `{producto}`. Precios: null/0/>=0.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"productos\": [\n    {\n      \"nombre\": \"Varilla 3/8\",\n      \"codigo_interno\": \"VAR-38\",\n      \"precio_base\": 0,\n      \"precio_mayoreo\": null,\n      \"categoria_nombre\": \"Aceros\",\n      \"subcategoria_nombre\": \"Varillas\",\n      \"marca_nombre\": \"Deacero\",\n      \"unidad_medida\": \"PZA\",\n      \"familia\": \"Aceros\",\n      \"subfamilia\": \"Varillas corrugadas\",\n      \"especificaciones\": [\n        {\n          \"atributo\": \"Diametro\",\n          \"valor\": \"3/8\",\n          \"unidad\": \"in\"\n        }\n      ]\n    }\n  ],\n  \"metadata\": {\n    \"importId\": \"demo-bulk-1\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET producto",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}"
+							]
+						},
+						"description": "Show. Middleware proveedor.producto."
+					}
+				},
+				{
+					"name": "PATCH actualizar producto",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}"
+							]
+						},
+						"description": "Esquema: `definitions.UpdateProductoBody`. Sync especificaciones[].",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"precio_base\": 190,\n  \"familia_id\": 1,\n  \"subfamilia_id\": 1,\n  \"especificaciones\": [\n    {\n      \"atributo\": \"Resistencia\",\n      \"valor\": \"40\",\n      \"unidad\": \"MPa\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE producto",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST logo producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "logo",
+									"type": "file",
+									"src": [],
+									"description": "Imagen del producto"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}/logo",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}",
+								"logo"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET documentos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}/documentos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}",
+								"documentos"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST documento (archivo)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "tipo",
+									"value": "ficha_tecnica",
+									"type": "text"
+								},
+								{
+									"key": "nombre",
+									"value": "Ficha PDF",
+									"type": "text"
+								},
+								{
+									"key": "orden",
+									"value": "0",
+									"type": "text"
+								},
+								{
+									"key": "archivo",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}/documentos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}",
+								"documentos"
+							]
+						},
+						"description": "Esquema: `definitions.StoreProductoDocumentoBody` (multipart o url)."
+					}
+				},
+				{
+					"name": "POST documento (url)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}/documentos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}",
+								"documentos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tipo\": \"manual\",\n  \"nombre\": \"Manual web\",\n  \"url\": \"https://example.com/manual.pdf\",\n  \"orden\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE documento",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/productos/{{producto_id}}/documentos/{{documento_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"productos",
+								"{{producto_id}}",
+								"documentos",
+								"{{documento_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Gerente — Categorías",
+			"item": [
+				{
+					"name": "GET listar",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias?per_page=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "50"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "GET all",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"all"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET all count-products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/all/count-products",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"all",
+								"count-products"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST crear (raíz o sub)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias"
+							]
+						},
+						"description": "Esquema: `definitions.StoreCategoriaBody`. Con padre → subcategoría.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Aceros\",\n  \"descripcion\": \"Productos de acero\",\n  \"categoria_padre_id\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET show",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/{{categoria_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"{{categoria_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "PATCH update",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/{{categoria_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"{{categoria_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Aceros actualizado\",\n  \"descripcion\": \"Desc\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/{{categoria_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"{{categoria_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST logo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "logo",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/{{categoria_id}}/logo",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"{{categoria_id}}",
+								"logo"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET subcategorías",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/categorias/{{categoria_id}}/subcategorias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"categorias",
+								"{{categoria_id}}",
+								"subcategorias"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Gerente — Marcas",
+			"item": [
+				{
+					"name": "GET listar",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET all",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas/all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas",
+								"all"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST crear",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas"
+							]
+						},
+						"description": "Esquema: `definitions.StoreMarcaBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Truper\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET show",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas/{{marca_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas",
+								"{{marca_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "PATCH update",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas/{{marca_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas",
+								"{{marca_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Truper MX\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas/{{marca_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas",
+								"{{marca_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST logo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "logo",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/marcas/{{marca_id}}/logo",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"marcas",
+								"{{marca_id}}",
+								"logo"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Gerente — Unidades (globales)",
+			"item": [
+				{
+					"name": "GET listar",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/unidades",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"unidades"
+							]
+						},
+						"description": "Catálogo global; ruta bajo proveedor por compatibilidad."
+					}
+				},
+				{
+					"name": "GET all",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/unidades/all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"unidades",
+								"all"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST crear",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/unidades",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"unidades"
+							]
+						},
+						"description": "Esquema: `definitions.StoreUnidadMedidaBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clave\": \"PZA\",\n  \"nombre\": \"Pieza\",\n  \"descripcion\": \"Unidad pieza\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET show",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/unidades/{{unidad_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"unidades",
+								"{{unidad_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "PATCH update",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/unidades/{{unidad_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"unidades",
+								"{{unidad_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"descripcion\": \"Pieza actualizada\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/unidades/{{unidad_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"unidades",
+								"{{unidad_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Gerente — Sucursal productos",
+			"item": [
+				{
+					"name": "GET productos de sucursal",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/sucursales/{{sucursal_id}}/productos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"sucursales",
+								"{{sucursal_id}}",
+								"productos"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST asignar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/sucursales/{{sucursal_id}}/productos/asignar",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"sucursales",
+								"{{sucursal_id}}",
+								"productos",
+								"asignar"
+							]
+						},
+						"description": "Esquema: `definitions.AsignarProductosSucursalBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"productos\": [\n    {\n      \"producto_id\": 1,\n      \"stock_local\": 10,\n      \"precio_local\": 100,\n      \"activo\": true\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE desasignar",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/sucursales/{{sucursal_id}}/productos/desasignar",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"sucursales",
+								"{{sucursal_id}}",
+								"productos",
+								"desasignar"
+							]
+						},
+						"description": "Esquema: `definitions.DesasignarProductosSucursalBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"productos\": [\n    1\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "PATCH stock (ruta incluye {producto})",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/sucursales/{{sucursal_id}}/productos/{{producto_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"sucursales",
+								"{{sucursal_id}}",
+								"productos",
+								"{{producto_id}}"
+							]
+						},
+						"description": "Esquema: `definitions.UpdateStockSucursalBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"actualizaciones\": [\n    {\n      \"producto_id\": 1,\n      \"stock_local\": 25,\n      \"precio_local\": 110,\n      \"activo\": true\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Gerente — CSV Import",
+			"item": [
+				{
+					"name": "POST upload CSV",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "delimiter",
+									"value": "comma",
+									"type": "text"
+								},
+								{
+									"key": "encoding",
+									"value": "UTF-8",
+									"type": "text"
+								},
+								{
+									"key": "has_header",
+									"value": "1",
+									"type": "text"
+								},
+								{
+									"key": "preview_rows",
+									"value": "100",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/csv-import/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"csv-import",
+								"upload"
+							]
+						},
+						"description": "Plantilla v1.0. Devuelve audit_id + preview_token."
+					}
+				},
+				{
+					"name": "POST confirm",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/csv-import/confirm",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"csv-import",
+								"confirm"
+							]
+						},
+						"description": "Esquema: `definitions.CsvImportConfirmBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"audit_id\": 1,\n  \"preview_token\": \"{{preview_token}}\",\n  \"import_options\": {\n    \"skip_duplicates\": true,\n    \"update_existing\": false,\n    \"create_missing_relations\": true\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/csv-import/status/{{audit_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"csv-import",
+								"status",
+								"{{audit_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET results",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/csv-import/results/{{audit_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"csv-import",
+								"results",
+								"{{audit_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET results export",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/proveedores/{{proveedor_id}}/csv-import/results/{{audit_id}}/export",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"proveedores",
+								"{{proveedor_id}}",
+								"csv-import",
+								"results",
+								"{{audit_id}}",
+								"export"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Shared — Catálogo OPUS (lectura)",
+			"item": [
+				{
+					"name": "GET familias",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/catalogo-familias?per_page=50&search=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"catalogo-familias"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "50"
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lectura autenticada. Resource: CatalogoFamiliaResource."
+					}
+				},
+				{
+					"name": "GET familia",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/catalogo-familias/{{familia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"catalogo-familias",
+								"{{familia_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Shared — Catálogo público (lectura)",
+			"item": [
+				{
+					"name": "GET items",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/catalogo-publico?per_page=20&empresa=&search=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"catalogo-publico"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "20"
+								},
+								{
+									"key": "empresa",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "GET empresas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/catalogo-publico/empresas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"catalogo-publico",
+								"empresas"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET facets",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/catalogo-publico/facets",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"catalogo-publico",
+								"facets"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET item",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/catalogo-publico/{{catalogo_publico_item_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"catalogo-publico",
+								"{{catalogo_publico_item_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Tienda — filtros catálogo",
+			"item": [
+				{
+					"name": "GET productos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/productos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"productos"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET categorias",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/categorias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"categorias"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET marcas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/marcas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"marcas"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET unidades-medida",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/unidades-medida",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"unidades-medida"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET catalogo-familias",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/catalogo-familias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"catalogo-familias"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET catalogo-familia",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/catalogo-familias/{{familia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"catalogo-familias",
+								"{{familia_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET producto destacado show",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tienda/productos/{{producto_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tienda",
+								"productos",
+								"{{producto_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin — Catálogo OPUS",
+			"item": [
+				{
+					"name": "GET all",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"all"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET index",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST familia",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias"
+							]
+						},
+						"description": "Esquema: `definitions.StoreCatalogoFamiliaBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Nueva familia OPUS\",\n  \"codigo\": \"NF-01\",\n  \"activo\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET show",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "PATCH familia",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"activo\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE familia",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET subfamilias",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}/subfamilias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}",
+								"subfamilias"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST subfamilia",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}/subfamilias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}",
+								"subfamilias"
+							]
+						},
+						"description": "Esquema: `definitions.StoreCatalogoSubfamiliaBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Subfamilia demo\",\n  \"codigo\": \"SF-01\",\n  \"activo\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "PATCH subfamilia",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}/subfamilias/{{subfamilia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}",
+								"subfamilias",
+								"{{subfamilia_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Subfamilia actualizada\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE subfamilia",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-familias/{{familia_id}}/subfamilias/{{subfamilia_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-familias",
+								"{{familia_id}}",
+								"subfamilias",
+								"{{subfamilia_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin — Catálogo público",
+			"item": [
+				{
+					"name": "POST import",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "Excel/CSV max 20MB"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/import",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"import"
+							]
+						},
+						"description": "Upsert por (empresa, codigo). Independiente del CSV gerente."
+					}
+				},
+				{
+					"name": "GET index",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET empresas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/empresas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"empresas"
+							]
+						}
+					}
+				},
+				{
+					"name": "PATCH empresas",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/empresas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"empresas"
+							]
+						},
+						"description": "Esquema: definitions.UpdateCatalogoPublicoEmpresaBody (empresa_actual obligatorio).",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"empresa_actual\": \"{{empresa_catalogo_publico}}\",\n  \"empresa\": \"{{empresa_catalogo_publico}}\",\n  \"mostrar_en_listado\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE empresas",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/empresas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"empresas"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"empresa\": \"{{empresa_catalogo_publico}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Esquema: definitions.DestroyCatalogoPublicoEmpresaBody."
+					}
+				},
+				{
+					"name": "GET facets",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/facets",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"facets"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET item",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/{{catalogo_publico_item_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"{{catalogo_publico_item_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "PATCH item",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/{{catalogo_publico_item_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"{{catalogo_publico_item_id}}"
+							]
+						},
+						"description": "Esquema: `definitions.UpdateCatalogoPublicoItemBody`.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"activo\": true,\n  \"precio_base\": 10\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "DELETE item",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogo-publico/{{catalogo_publico_item_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogo-publico",
+								"{{catalogo_publico_item_id}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin — Catálogos maestros (unidades/categorías/marcas)",
+			"item": [
+				{
+					"name": "GET unidades-medida",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogos/unidades-medida",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogos",
+								"unidades-medida"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST unidades-medida",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogos/unidades-medida",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogos",
+								"unidades-medida"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clave\": \"KG\",\n  \"nombre\": \"Kilogramo\",\n  \"descripcion\": \"Peso\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					}
+				},
+				{
+					"name": "GET unidad",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogos/unidades-medida/{{unidad_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogos",
+								"unidades-medida",
+								"{{unidad_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET categorias",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogos/categorias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogos",
+								"categorias"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET marcas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogos/marcas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogos",
+								"marcas"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET catalogos-resumen",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/catalogos/catalogos-resumen",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"catalogos",
+								"catalogos-resumen"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Shared — Búsqueda productos",
+			"item": [
+				{
+					"name": "GET buscar",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/productos/buscar?q=cemento&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"productos",
+								"buscar"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "cemento"
+								},
+								{
+									"key": "per_page",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "GET disponibilidad",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/productos/{{producto_id}}/disponibilidad",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"productos",
+								"{{producto_id}}",
+								"disponibilidad"
+							]
+						}
+					}
+				}
+			]
+		}
+	]
+}

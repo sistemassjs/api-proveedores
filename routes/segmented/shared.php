@@ -14,6 +14,7 @@ use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\TipoEmpresaController;
 use App\Http\Controllers\UnidadMedidaController;
 use App\Http\Controllers\Catalogo\CatalogoPublicoItemController;
+use App\Http\Controllers\Catalogo\CatalogoFamiliaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('imagenes', [ProductoImagenController::class, 'index'])->middleware(['audit']);
         Route::get('unidades-medida', [UnidadMedidaController::class, 'index'])->middleware(['audit']);
         Route::get('categorias', [CategoriaController::class, 'index'])->middleware(['audit']);
+        Route::get('catalogo-familias', [CatalogoFamiliaController::class, 'index'])->middleware(['audit']);
+        Route::get('catalogo-familias/{familia}', [CatalogoFamiliaController::class, 'show'])->middleware(['audit']);
         Route::get('marcas', [MarcaController::class, 'index'])->middleware(['audit']);
         Route::get('tipos-empresa', [TipoEmpresaController::class, 'index'])->middleware(['audit']);
 
@@ -74,6 +77,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('empresas', [CatalogoPublicoItemController::class, 'empresas'])->middleware(['audit']);
         Route::get('facets', [CatalogoPublicoItemController::class, 'facets'])->middleware(['audit']);
         Route::get('{catalogoPublicoItem}', [CatalogoPublicoItemController::class, 'show'])->middleware(['audit']);
+    });
+
+    /**
+     * CATÁLOGO OPUS (lectura familias / subfamilias globales)
+     */
+    Route::prefix('catalogo-familias')->group(function () {
+        Route::get('/', [CatalogoFamiliaController::class, 'index'])->middleware(['audit']);
+        Route::get('{familia}', [CatalogoFamiliaController::class, 'show'])->middleware(['audit']);
     });
 
 

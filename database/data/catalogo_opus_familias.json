@@ -1,0 +1,1984 @@
+[
+    {
+        "codigo": "01",
+        "nombre": "01. Aceros de refuerzo",
+        "nombre_corto": "Aceros de refuerzo",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Varilla corrugada",
+            "Varilla lisa",
+            "Alambrón",
+            "Malla electrosoldada",
+            "Armex",
+            "Alambre recocido",
+            "Separadores",
+            "Silletas",
+            "Conectores mecánicos"
+        ]
+    },
+    {
+        "codigo": "02",
+        "nombre": "02. Aceros estructurales",
+        "nombre_corto": "Aceros estructurales",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Perfil IPR",
+            "Perfil IPS",
+            "Perfil IR",
+            "Canal CPS",
+            "Canal estructural",
+            "Ángulo",
+            "PTR",
+            "HSS",
+            "Montén",
+            "Tubo estructural",
+            "Solera",
+            "Redondo",
+            "Placa",
+            "Lámina",
+            "Rejilla",
+            "Perfiles especiales"
+        ]
+    },
+    {
+        "codigo": "03",
+        "nombre": "03. Tornillería y fijaciones estructurales",
+        "nombre_corto": "Tornillería y fijaciones estructurales",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Tornillos estructurales",
+            "Tornillos A325",
+            "Tornillos A490",
+            "Pernos de anclaje",
+            "Anclas roscadas",
+            "Tuercas",
+            "Rondanas",
+            "Taquetes",
+            "Anclas químicas",
+            "Sujetadores especiales"
+        ]
+    },
+    {
+        "codigo": "04",
+        "nombre": "04. Soldadura",
+        "nombre_corto": "Soldadura",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Electrodo revestido",
+            "Microalambre",
+            "Alambre tubular",
+            "Fundente",
+            "Varilla TIG",
+            "Gas de protección",
+            "Oxígeno",
+            "Acetileno",
+            "Consumibles de soldadura"
+        ]
+    },
+    {
+        "codigo": "05",
+        "nombre": "05. Cementantes",
+        "nombre_corto": "Cementantes",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Cemento gris",
+            "Cemento blanco",
+            "Mortero cementante",
+            "Cal",
+            "Yeso",
+            "Cementantes especiales"
+        ]
+    },
+    {
+        "codigo": "06",
+        "nombre": "06. Agregados",
+        "nombre_corto": "Agregados",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Arena",
+            "Grava",
+            "Gravilla",
+            "Polvo de piedra",
+            "Base hidráulica",
+            "Subbase",
+            "Material de banco",
+            "Balasto",
+            "Tezontle",
+            "Tepetate"
+        ]
+    },
+    {
+        "codigo": "07",
+        "nombre": "07. Concretos",
+        "nombre_corto": "Concretos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Concreto premezclado",
+            "Concreto hecho en obra",
+            "Concreto bombeable",
+            "Concreto fluido",
+            "Concreto de alta resistencia",
+            "Concreto de fraguado rápido",
+            "Concreto para pavimento",
+            "Concreto especial"
+        ]
+    },
+    {
+        "codigo": "08",
+        "nombre": "08. Aditivos para concreto",
+        "nombre_corto": "Aditivos para concreto",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Plastificantes",
+            "Superplastificantes",
+            "Retardantes",
+            "Acelerantes",
+            "Impermeabilizantes",
+            "Fibras",
+            "Curadores",
+            "Desmoldantes",
+            "Aditivos especiales"
+        ]
+    },
+    {
+        "codigo": "09",
+        "nombre": "09. Morteros y mezclas",
+        "nombre_corto": "Morteros y mezclas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Mortero cemento-arena",
+            "Mortero cal-arena",
+            "Mortero para block",
+            "Mortero para repellado",
+            "Mortero autonivelante",
+            "Mortero de reparación",
+            "Grout",
+            "Mezclas especiales"
+        ]
+    },
+    {
+        "codigo": "10",
+        "nombre": "10. Prefabricados de concreto",
+        "nombre_corto": "Prefabricados de concreto",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Block",
+            "Tabicón",
+            "Adoquín",
+            "Guarnición",
+            "Brocal",
+            "Registro",
+            "Poste",
+            "Vigueta",
+            "Bovedilla",
+            "Elementos prefabricados especiales"
+        ]
+    },
+    {
+        "codigo": "11",
+        "nombre": "11. Mampostería",
+        "nombre_corto": "Mampostería",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Block de concreto",
+            "Block ligero",
+            "Tabique rojo",
+            "Tabique recocido",
+            "Tabique aparente",
+            "Piedra",
+            "Ladrillo",
+            "Celosía"
+        ]
+    },
+    {
+        "codigo": "12",
+        "nombre": "12. Cimbra",
+        "nombre_corto": "Cimbra",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Triplay",
+            "Madera de cimbra",
+            "Polín",
+            "Barrote",
+            "Puntal",
+            "Cimbra metálica",
+            "Cimbra modular",
+            "Accesorios de cimbra",
+            "Desmoldantes"
+        ]
+    },
+    {
+        "codigo": "13",
+        "nombre": "13. Madera",
+        "nombre_corto": "Madera",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Madera dimensional",
+            "Triplay",
+            "MDF",
+            "OSB",
+            "Melamina",
+            "Duela",
+            "Molduras",
+            "Madera tratada"
+        ]
+    },
+    {
+        "codigo": "14",
+        "nombre": "14. Impermeabilización",
+        "nombre_corto": "Impermeabilización",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Impermeabilizante acrílico",
+            "Prefabricado",
+            "Cementoso",
+            "Poliuretano",
+            "Membrana",
+            "Primario",
+            "Sellador",
+            "Refuerzo",
+            "Adhesivos"
+        ]
+    },
+    {
+        "codigo": "15",
+        "nombre": "15. Pinturas y recubrimientos",
+        "nombre_corto": "Pinturas y recubrimientos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Pintura vinílica",
+            "Pintura acrílica",
+            "Esmalte",
+            "Epóxica",
+            "Poliuretano",
+            "Primario",
+            "Anticorrosivo",
+            "Pintura tráfico",
+            "Pintura intumescente",
+            "Recubrimientos especiales"
+        ]
+    },
+    {
+        "codigo": "16",
+        "nombre": "16. Solventes y diluyentes",
+        "nombre_corto": "Solventes y diluyentes",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Thinner",
+            "Reductor",
+            "Solvente",
+            "Limpiador",
+            "Desengrasante"
+        ]
+    },
+    {
+        "codigo": "17",
+        "nombre": "17. Pisos cerámicos",
+        "nombre_corto": "Pisos cerámicos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Loseta cerámica",
+            "Porcelanato",
+            "Azulejo",
+            "Mosaico",
+            "Zoclo",
+            "Piso antiderrapante",
+            "Piso especial"
+        ]
+    },
+    {
+        "codigo": "18",
+        "nombre": "18. Pisos industriales",
+        "nombre_corto": "Pisos industriales",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Endurecedor",
+            "Epóxico",
+            "Poliuretano",
+            "Mortero autonivelante",
+            "Recubrimiento industrial",
+            "Sellador",
+            "Juntas"
+        ]
+    },
+    {
+        "codigo": "19",
+        "nombre": "19. Adhesivos y boquillas",
+        "nombre_corto": "Adhesivos y boquillas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Adhesivo cerámico",
+            "Adhesivo porcelanato",
+            "Adhesivo especial",
+            "Boquilla",
+            "Junta epóxica",
+            "Selladores"
+        ]
+    },
+    {
+        "codigo": "20",
+        "nombre": "20. Muros ligeros",
+        "nombre_corto": "Muros ligeros",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Panel de yeso",
+            "Panel de cemento",
+            "Poste",
+            "Canal",
+            "Tornillería",
+            "Cinta",
+            "Compuesto",
+            "Aislante interior"
+        ]
+    },
+    {
+        "codigo": "21",
+        "nombre": "21. Plafones",
+        "nombre_corto": "Plafones",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Plafón modular",
+            "Plafón de yeso",
+            "Suspensión",
+            "Canaletas",
+            "Perfiles",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "22",
+        "nombre": "22. Aislamientos",
+        "nombre_corto": "Aislamientos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Fibra de vidrio",
+            "Lana mineral",
+            "Poliestireno",
+            "Poliuretano",
+            "Espuma",
+            "Aislante reflectivo",
+            "Aislante acústico"
+        ]
+    },
+    {
+        "codigo": "23",
+        "nombre": "23. Cubiertas y techumbres",
+        "nombre_corto": "Cubiertas y techumbres",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Lámina galvanizada",
+            "Lámina pintro",
+            "Lámina engargolada",
+            "Panel sándwich",
+            "Panel aislado",
+            "Lámina traslúcida",
+            "Cumbrera",
+            "Canalón",
+            "Bajante",
+            "Remates"
+        ]
+    },
+    {
+        "codigo": "24",
+        "nombre": "24. Cancelería de aluminio",
+        "nombre_corto": "Cancelería de aluminio",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Perfiles",
+            "Marcos",
+            "Ventanas",
+            "Puertas",
+            "Herrajes",
+            "Selladores",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "25",
+        "nombre": "25. Vidrios",
+        "nombre_corto": "Vidrios",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Claro",
+            "Templado",
+            "Laminado",
+            "Reflectivo",
+            "Tintex",
+            "Doble vidrio",
+            "Espejo"
+        ]
+    },
+    {
+        "codigo": "26",
+        "nombre": "26. Herrería",
+        "nombre_corto": "Herrería",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Puertas metálicas",
+            "Ventanas",
+            "Rejas",
+            "Barandales",
+            "Escaleras",
+            "Marcos",
+            "Protecciones",
+            "Elementos especiales"
+        ]
+    },
+    {
+        "codigo": "27",
+        "nombre": "27. Carpintería",
+        "nombre_corto": "Carpintería",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Puertas",
+            "Marcos",
+            "Closets",
+            "Gabinetes",
+            "Muebles",
+            "Cubiertas",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "28",
+        "nombre": "28. Herrajes",
+        "nombre_corto": "Herrajes",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Cerraduras",
+            "Bisagras",
+            "Jaladeras",
+            "Cierrapuertas",
+            "Topes",
+            "Pasadores",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "29",
+        "nombre": "29. Selladores y juntas",
+        "nombre_corto": "Selladores y juntas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Silicón",
+            "Poliuretano",
+            "Sellador acrílico",
+            "Backer rod",
+            "Junta expansiva",
+            "Junta constructiva",
+            "Sellador epóxico"
+        ]
+    },
+    {
+        "codigo": "30",
+        "nombre": "30. Tubería hidráulica",
+        "nombre_corto": "Tubería hidráulica",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "PVC hidráulico",
+            "CPVC",
+            "PPR",
+            "PEAD",
+            "Cobre",
+            "Acero galvanizado",
+            "Acero al carbón"
+        ]
+    },
+    {
+        "codigo": "31",
+        "nombre": "31. Conexiones hidráulicas",
+        "nombre_corto": "Conexiones hidráulicas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Codos",
+            "Tees",
+            "Coples",
+            "Reducciones",
+            "Adaptadores",
+            "Uniones",
+            "Bridas"
+        ]
+    },
+    {
+        "codigo": "32",
+        "nombre": "32. Válvulas",
+        "nombre_corto": "Válvulas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Compuerta",
+            "Globo",
+            "Mariposa",
+            "Check",
+            "Bola",
+            "Reductora",
+            "Solenoide",
+            "Válvulas especiales"
+        ]
+    },
+    {
+        "codigo": "33",
+        "nombre": "33. Equipos hidráulicos",
+        "nombre_corto": "Equipos hidráulicos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Bombas",
+            "Hidroneumáticos",
+            "Tanques",
+            "Cisterna",
+            "Tinacos",
+            "Filtros",
+            "Suavizadores",
+            "Equipos especiales"
+        ]
+    },
+    {
+        "codigo": "34",
+        "nombre": "34. Tubería sanitaria",
+        "nombre_corto": "Tubería sanitaria",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "PVC sanitario",
+            "PVC serie métrica",
+            "PEAD",
+            "Fierro fundido",
+            "Tubería especial"
+        ]
+    },
+    {
+        "codigo": "35",
+        "nombre": "35. Conexiones sanitarias",
+        "nombre_corto": "Conexiones sanitarias",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Codos",
+            "Yee",
+            "Tee sanitaria",
+            "Coples",
+            "Reducciones",
+            "Registros",
+            "Tapones"
+        ]
+    },
+    {
+        "codigo": "36",
+        "nombre": "36. Aparatos sanitarios",
+        "nombre_corto": "Aparatos sanitarios",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "WC",
+            "Lavabo",
+            "Mingitorio",
+            "Fregadero",
+            "Tarja",
+            "Regadera",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "37",
+        "nombre": "37. Drenaje pluvial",
+        "nombre_corto": "Drenaje pluvial",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Tubería",
+            "Coladeras",
+            "Canalones",
+            "Bajantes",
+            "Rejillas",
+            "Registros",
+            "Cárcamos"
+        ]
+    },
+    {
+        "codigo": "38",
+        "nombre": "38. Tubería eléctrica",
+        "nombre_corto": "Tubería eléctrica",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "PVC eléctrico",
+            "EMT",
+            "IMC",
+            "RMC",
+            "Flexible",
+            "Charola",
+            "Canaleta"
+        ]
+    },
+    {
+        "codigo": "39",
+        "nombre": "39. Conductores eléctricos",
+        "nombre_corto": "Conductores eléctricos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "THW-LS",
+            "THHN\/THWN",
+            "XHHW",
+            "Cable desnudo",
+            "Cable uso rudo",
+            "Cable control",
+            "Cable media tensión",
+            "Cable especial"
+        ]
+    },
+    {
+        "codigo": "40",
+        "nombre": "40. Conexiones eléctricas",
+        "nombre_corto": "Conexiones eléctricas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Conectores",
+            "Coples",
+            "Curvas",
+            "Cajas",
+            "Registros",
+            "Abrazaderas",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "41",
+        "nombre": "41. Tableros eléctricos",
+        "nombre_corto": "Tableros eléctricos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Centro de carga",
+            "Tablero alumbrado",
+            "Tablero distribución",
+            "Tablero fuerza",
+            "Tablero control",
+            "Gabinetes"
+        ]
+    },
+    {
+        "codigo": "42",
+        "nombre": "42. Protecciones eléctricas",
+        "nombre_corto": "Protecciones eléctricas",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Interruptor termomagnético",
+            "Fusible",
+            "Seccionador",
+            "Interruptor diferencial",
+            "Supresor de sobretensión",
+            "Relevadores"
+        ]
+    },
+    {
+        "codigo": "43",
+        "nombre": "43. Transformadores",
+        "nombre_corto": "Transformadores",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Secos",
+            "Pedestal",
+            "Poste",
+            "Tipo subestación",
+            "Control"
+        ]
+    },
+    {
+        "codigo": "44",
+        "nombre": "44. Iluminación",
+        "nombre_corto": "Iluminación",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Luminaria LED",
+            "Reflector",
+            "Campana",
+            "Luminaria exterior",
+            "Emergencia",
+            "Lámparas",
+            "Drivers",
+            "Sensores"
+        ]
+    },
+    {
+        "codigo": "45",
+        "nombre": "45. Contactos y apagadores",
+        "nombre_corto": "Contactos y apagadores",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Contactos",
+            "Apagadores",
+            "Placas",
+            "Contactos industriales",
+            "Clavijas",
+            "Tomacorrientes especiales"
+        ]
+    },
+    {
+        "codigo": "46",
+        "nombre": "46. Puesta a tierra",
+        "nombre_corto": "Puesta a tierra",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Varilla copperweld",
+            "Cable desnudo",
+            "Conectores",
+            "Soldadura exotérmica",
+            "Registros",
+            "Electrodos",
+            "Barras de tierra"
+        ]
+    },
+    {
+        "codigo": "47",
+        "nombre": "47. Pararrayos",
+        "nombre_corto": "Pararrayos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Puntas",
+            "Conductores",
+            "Conectores",
+            "Electrodos",
+            "Bases",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "48",
+        "nombre": "48. Voz y datos",
+        "nombre_corto": "Voz y datos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Cable UTP",
+            "Fibra óptica",
+            "Patch panel",
+            "Rack",
+            "Jack",
+            "Faceplate",
+            "Canalización",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "49",
+        "nombre": "49. CCTV",
+        "nombre_corto": "CCTV",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Cámaras",
+            "NVR\/DVR",
+            "Cableado",
+            "Fuentes",
+            "Gabinetes",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "50",
+        "nombre": "50. Detección y alarma",
+        "nombre_corto": "Detección y alarma",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Detectores",
+            "Estaciones manuales",
+            "Sirenas",
+            "Paneles",
+            "Módulos",
+            "Cableado"
+        ]
+    },
+    {
+        "codigo": "51",
+        "nombre": "51. Sistema contra incendio",
+        "nombre_corto": "Sistema contra incendio",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Tubería",
+            "Sprinklers",
+            "Gabinetes",
+            "Mangueras",
+            "Hidrantes",
+            "Extintores",
+            "Bombas",
+            "Válvulas"
+        ]
+    },
+    {
+        "codigo": "52",
+        "nombre": "52. Gas LP y natural",
+        "nombre_corto": "Gas LP y natural",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Tubería",
+            "Conexiones",
+            "Reguladores",
+            "Válvulas",
+            "Medidores",
+            "Tanques",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "53",
+        "nombre": "53. Aire acondicionado",
+        "nombre_corto": "Aire acondicionado",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Minisplit",
+            "Paquete",
+            "Fan & coil",
+            "Condensadora",
+            "Evaporadora",
+            "Ductos",
+            "Refrigerante",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "54",
+        "nombre": "54. Ventilación",
+        "nombre_corto": "Ventilación",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Extractores",
+            "Inyectores",
+            "Ventiladores",
+            "Louvers",
+            "Ductos",
+            "Persianas",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "55",
+        "nombre": "55. Equipamiento porcino",
+        "nombre_corto": "Equipamiento porcino",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Jaulas",
+            "Comederos",
+            "Bebederos",
+            "Slats",
+            "Tolvas",
+            "Líneas de alimentación",
+            "Ventilación",
+            "Calefacción",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "56",
+        "nombre": "56. Equipamiento avícola",
+        "nombre_corto": "Equipamiento avícola",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Jaulas",
+            "Comederos",
+            "Bebederos",
+            "Silos",
+            "Líneas de alimentación",
+            "Extractores",
+            "Panel evaporativo",
+            "Recolección de huevo",
+            "Manejo de gallinaza"
+        ]
+    },
+    {
+        "codigo": "57",
+        "nombre": "57. Equipamiento agroindustrial",
+        "nombre_corto": "Equipamiento agroindustrial",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Silos",
+            "Transportadores",
+            "Tolvas",
+            "Motores",
+            "Reductores",
+            "Automatización",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "58",
+        "nombre": "58. Estaciones de servicio",
+        "nombre_corto": "Estaciones de servicio",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Tubería de combustible",
+            "Accesorios",
+            "Dispensarios",
+            "Contenedores",
+            "Válvulas",
+            "Venteos",
+            "Recuperación de vapores",
+            "Registros",
+            "Sumps"
+        ]
+    },
+    {
+        "codigo": "59",
+        "nombre": "59. Señalamiento",
+        "nombre_corto": "Señalamiento",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Señal preventivo",
+            "Informativo",
+            "Restrictivo",
+            "Protección civil",
+            "Vial",
+            "Industrial"
+        ]
+    },
+    {
+        "codigo": "60",
+        "nombre": "60. Seguridad e higiene",
+        "nombre_corto": "Seguridad e higiene",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Equipo de protección",
+            "Conos",
+            "Barreras",
+            "Cintas",
+            "Mallas",
+            "Protección temporal"
+        ]
+    },
+    {
+        "codigo": "61",
+        "nombre": "61. Jardinería",
+        "nombre_corto": "Jardinería",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Tierra vegetal",
+            "Pasto",
+            "Árboles",
+            "Arbustos",
+            "Fertilizantes",
+            "Sistemas de riego"
+        ]
+    },
+    {
+        "codigo": "62",
+        "nombre": "62. Urbanización",
+        "nombre_corto": "Urbanización",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Adoquín",
+            "Guarniciones",
+            "Banquetas",
+            "Bolardos",
+            "Mobiliario urbano",
+            "Señalamiento"
+        ]
+    },
+    {
+        "codigo": "63",
+        "nombre": "63. Pavimentos",
+        "nombre_corto": "Pavimentos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Concreto hidráulico",
+            "Asfalto",
+            "Emulsión",
+            "Base",
+            "Subbase",
+            "Sello",
+            "Aditivos"
+        ]
+    },
+    {
+        "codigo": "64",
+        "nombre": "64. Geosintéticos",
+        "nombre_corto": "Geosintéticos",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Geotextil",
+            "Geomembrana",
+            "Geomalla",
+            "Geocelda",
+            "Accesorios"
+        ]
+    },
+    {
+        "codigo": "65",
+        "nombre": "65. Consumibles",
+        "nombre_corto": "Consumibles",
+        "seccion": "MATERIALES",
+        "subfamilias": [
+            "Discos",
+            "Brocas",
+            "Lijas",
+            "Cintas",
+            "Trapos",
+            "Cepillos",
+            "Marcadores",
+            "Productos de limpieza"
+        ]
+    },
+    {
+        "codigo": "101",
+        "nombre": "101. Albañilería",
+        "nombre_corto": "Albañilería",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Oficial albañil",
+            "Medio oficial",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "102",
+        "nombre": "102. Concreto",
+        "nombre_corto": "Concreto",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Oficial concreto",
+            "Vibradorista",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "103",
+        "nombre": "103. Fierrero",
+        "nombre_corto": "Fierrero",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Oficial fierrero",
+            "Ayudante de fierrero"
+        ]
+    },
+    {
+        "codigo": "104",
+        "nombre": "104. Carpintería de obra",
+        "nombre_corto": "Carpintería de obra",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Carpintero",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "105",
+        "nombre": "105. Estructura metálica",
+        "nombre_corto": "Estructura metálica",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Montador",
+            "Armador",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "106",
+        "nombre": "106. Soldadura",
+        "nombre_corto": "Soldadura",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Soldador",
+            "Ayudante soldador",
+            "Pailero"
+        ]
+    },
+    {
+        "codigo": "107",
+        "nombre": "107. Pintura",
+        "nombre_corto": "Pintura",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Pintor",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "108",
+        "nombre": "108. Instalación hidráulica",
+        "nombre_corto": "Instalación hidráulica",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Plomero",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "109",
+        "nombre": "109. Instalación sanitaria",
+        "nombre_corto": "Instalación sanitaria",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Instalador",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "110",
+        "nombre": "110. Electricidad",
+        "nombre_corto": "Electricidad",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Electricista",
+            "Oficial electricista",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "111",
+        "nombre": "111. Aire acondicionado",
+        "nombre_corto": "Aire acondicionado",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Técnico HVAC",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "112",
+        "nombre": "112. Cancelería",
+        "nombre_corto": "Cancelería",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Aluminero",
+            "Vidriero",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "113",
+        "nombre": "113. Tablaroca",
+        "nombre_corto": "Tablaroca",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Instalador",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "114",
+        "nombre": "114. Pisos y acabados",
+        "nombre_corto": "Pisos y acabados",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Losetero",
+            "Azulejero",
+            "Marmolero",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "115",
+        "nombre": "115. Impermeabilización",
+        "nombre_corto": "Impermeabilización",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Aplicador",
+            "Ayudante"
+        ]
+    },
+    {
+        "codigo": "116",
+        "nombre": "116. Operadores de maquinaria",
+        "nombre_corto": "Operadores de maquinaria",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Operador retroexcavadora",
+            "Operador excavadora",
+            "Operador motoconformadora",
+            "Operador rodillo",
+            "Operador grúa"
+        ]
+    },
+    {
+        "codigo": "117",
+        "nombre": "117. Choferes",
+        "nombre_corto": "Choferes",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Camión volteo",
+            "Plataforma",
+            "Pipa",
+            "Vehículo de carga"
+        ]
+    },
+    {
+        "codigo": "118",
+        "nombre": "118. Supervisión y apoyo",
+        "nombre_corto": "Supervisión y apoyo",
+        "seccion": "MANO DE OBRA",
+        "subfamilias": [
+            "Cabo",
+            "Sobrestante",
+            "Topógrafo",
+            "Cadenero",
+            "Auxiliar"
+        ]
+    },
+    {
+        "codigo": "201",
+        "nombre": "201. Excavación",
+        "nombre_corto": "Excavación",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Retroexcavadora",
+            "Excavadora",
+            "Miniexcavadora",
+            "Bulldozer"
+        ]
+    },
+    {
+        "codigo": "202",
+        "nombre": "202. Compactación",
+        "nombre_corto": "Compactación",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Rodillo",
+            "Bailarina",
+            "Placa vibratoria",
+            "Compactador"
+        ]
+    },
+    {
+        "codigo": "203",
+        "nombre": "203. Terracerías",
+        "nombre_corto": "Terracerías",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Motoconformadora",
+            "Cargador frontal",
+            "Tractor"
+        ]
+    },
+    {
+        "codigo": "204",
+        "nombre": "204. Transporte",
+        "nombre_corto": "Transporte",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Camión volteo",
+            "Pipa",
+            "Plataforma",
+            "Tractocamión"
+        ]
+    },
+    {
+        "codigo": "205",
+        "nombre": "205. Izaje",
+        "nombre_corto": "Izaje",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Grúa",
+            "Titán",
+            "Montacargas",
+            "Telehandler",
+            "Manlift"
+        ]
+    },
+    {
+        "codigo": "206",
+        "nombre": "206. Concreto",
+        "nombre_corto": "Concreto",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Revolvedora",
+            "Vibrador",
+            "Regla vibratoria",
+            "Allanadora",
+            "Bomba de concreto"
+        ]
+    },
+    {
+        "codigo": "207",
+        "nombre": "207. Corte y demolición",
+        "nombre_corto": "Corte y demolición",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Martillo demoledor",
+            "Cortadora",
+            "Compresor",
+            "Rompedora"
+        ]
+    },
+    {
+        "codigo": "208",
+        "nombre": "208. Soldadura",
+        "nombre_corto": "Soldadura",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Máquina de soldar",
+            "Generador soldador",
+            "Equipo oxicorte"
+        ]
+    },
+    {
+        "codigo": "209",
+        "nombre": "209. Herramienta eléctrica",
+        "nombre_corto": "Herramienta eléctrica",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Taladro",
+            "Rotomartillo",
+            "Esmeril",
+            "Sierra",
+            "Atornillador"
+        ]
+    },
+    {
+        "codigo": "210",
+        "nombre": "210. Generación de energía",
+        "nombre_corto": "Generación de energía",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Planta eléctrica",
+            "Generador portátil"
+        ]
+    },
+    {
+        "codigo": "211",
+        "nombre": "211. Bombeo",
+        "nombre_corto": "Bombeo",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Motobomba",
+            "Bomba sumergible",
+            "Bomba achique"
+        ]
+    },
+    {
+        "codigo": "212",
+        "nombre": "212. Topografía",
+        "nombre_corto": "Topografía",
+        "seccion": "MAQUINARIA Y EQUIPO",
+        "subfamilias": [
+            "Estación total",
+            "Nivel",
+            "GPS",
+            "Dron"
+        ]
+    },
+    {
+        "codigo": "301",
+        "nombre": "301. Herramienta menor de albañilería",
+        "nombre_corto": "Herramienta menor de albañilería",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "302",
+        "nombre": "302. Herramienta menor de fierrero",
+        "nombre_corto": "Herramienta menor de fierrero",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "303",
+        "nombre": "303. Herramienta menor de carpintero",
+        "nombre_corto": "Herramienta menor de carpintero",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "304",
+        "nombre": "304. Herramienta menor de soldador",
+        "nombre_corto": "Herramienta menor de soldador",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "305",
+        "nombre": "305. Herramienta menor de electricista",
+        "nombre_corto": "Herramienta menor de electricista",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "306",
+        "nombre": "306. Herramienta menor de plomero",
+        "nombre_corto": "Herramienta menor de plomero",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "307",
+        "nombre": "307. Herramienta menor de pintor",
+        "nombre_corto": "Herramienta menor de pintor",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "308",
+        "nombre": "308. Herramienta menor de instalador",
+        "nombre_corto": "Herramienta menor de instalador",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "309",
+        "nombre": "309. Equipo de medición",
+        "nombre_corto": "Equipo de medición",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "310",
+        "nombre": "310. Equipo de seguridad",
+        "nombre_corto": "Equipo de seguridad",
+        "seccion": "HERRAMIENTA",
+        "subfamilias": []
+    },
+    {
+        "codigo": "401",
+        "nombre": "401. Cuadrillas de albañilería",
+        "nombre_corto": "Cuadrillas de albañilería",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Albañil + ayudante",
+            "2 albañiles + ayudante"
+        ]
+    },
+    {
+        "codigo": "402",
+        "nombre": "402. Cuadrillas de concreto",
+        "nombre_corto": "Cuadrillas de concreto",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "403",
+        "nombre": "403. Cuadrillas de acero",
+        "nombre_corto": "Cuadrillas de acero",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "404",
+        "nombre": "404. Cuadrillas de cimbra",
+        "nombre_corto": "Cuadrillas de cimbra",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "405",
+        "nombre": "405. Cuadrillas de estructura metálica",
+        "nombre_corto": "Cuadrillas de estructura metálica",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "406",
+        "nombre": "406. Cuadrillas de soldadura",
+        "nombre_corto": "Cuadrillas de soldadura",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "407",
+        "nombre": "407. Cuadrillas de pintura",
+        "nombre_corto": "Cuadrillas de pintura",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "408",
+        "nombre": "408. Cuadrillas eléctricas",
+        "nombre_corto": "Cuadrillas eléctricas",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "409",
+        "nombre": "409. Cuadrillas hidráulicas",
+        "nombre_corto": "Cuadrillas hidráulicas",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "410",
+        "nombre": "410. Cuadrillas sanitarias",
+        "nombre_corto": "Cuadrillas sanitarias",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "411",
+        "nombre": "411. Básicos de concreto",
+        "nombre_corto": "Básicos de concreto",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Concreto f'c 150",
+            "Concreto f'c 200",
+            "Concreto f'c 250",
+            "Concreto f'c 300"
+        ]
+    },
+    {
+        "codigo": "412",
+        "nombre": "412. Básicos de mortero",
+        "nombre_corto": "Básicos de mortero",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Mortero 1:3",
+            "Mortero 1:4",
+            "Mortero 1:5"
+        ]
+    },
+    {
+        "codigo": "413",
+        "nombre": "413. Básicos de acero",
+        "nombre_corto": "Básicos de acero",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Acero habilitado",
+            "Acero armado"
+        ]
+    },
+    {
+        "codigo": "414",
+        "nombre": "414. Básicos de cimbra",
+        "nombre_corto": "Básicos de cimbra",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Cimbra común",
+            "Cimbra aparente",
+            "Cimbra metálica"
+        ]
+    },
+    {
+        "codigo": "415",
+        "nombre": "415. Básicos eléctricos",
+        "nombre_corto": "Básicos eléctricos",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Salida eléctrica",
+            "Alimentador",
+            "Canalización"
+        ]
+    },
+    {
+        "codigo": "416",
+        "nombre": "416. Básicos hidráulicos",
+        "nombre_corto": "Básicos hidráulicos",
+        "seccion": "CUADRILLAS Y BÁSICOS",
+        "subfamilias": [
+            "Salida hidráulica",
+            "Alimentación",
+            "Conexiones"
+        ]
+    },
+    {
+        "codigo": "501",
+        "nombre": "501. Movimiento de tierras",
+        "nombre_corto": "Movimiento de tierras",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "502",
+        "nombre": "502. Cimentaciones especiales",
+        "nombre_corto": "Cimentaciones especiales",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "503",
+        "nombre": "503. Estructura metálica",
+        "nombre_corto": "Estructura metálica",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "504",
+        "nombre": "504. Cubiertas",
+        "nombre_corto": "Cubiertas",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "505",
+        "nombre": "505. Impermeabilización",
+        "nombre_corto": "Impermeabilización",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "506",
+        "nombre": "506. Instalación eléctrica",
+        "nombre_corto": "Instalación eléctrica",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "507",
+        "nombre": "507. Instalación hidráulica",
+        "nombre_corto": "Instalación hidráulica",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "508",
+        "nombre": "508. Instalación sanitaria",
+        "nombre_corto": "Instalación sanitaria",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "509",
+        "nombre": "509. Aire acondicionado",
+        "nombre_corto": "Aire acondicionado",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "510",
+        "nombre": "510. Sistema contra incendio",
+        "nombre_corto": "Sistema contra incendio",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "511",
+        "nombre": "511. Voz y datos",
+        "nombre_corto": "Voz y datos",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "512",
+        "nombre": "512. CCTV",
+        "nombre_corto": "CCTV",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "513",
+        "nombre": "513. Automatización",
+        "nombre_corto": "Automatización",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "514",
+        "nombre": "514. Cancelería",
+        "nombre_corto": "Cancelería",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "515",
+        "nombre": "515. Carpintería",
+        "nombre_corto": "Carpintería",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "516",
+        "nombre": "516. Pintura",
+        "nombre_corto": "Pintura",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "517",
+        "nombre": "517. Pisos",
+        "nombre_corto": "Pisos",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "518",
+        "nombre": "518. Equipamiento porcino",
+        "nombre_corto": "Equipamiento porcino",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "519",
+        "nombre": "519. Equipamiento avícola",
+        "nombre_corto": "Equipamiento avícola",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "520",
+        "nombre": "520. Equipamiento de estaciones de servicio",
+        "nombre_corto": "Equipamiento de estaciones de servicio",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "521",
+        "nombre": "521. Estudios y pruebas",
+        "nombre_corto": "Estudios y pruebas",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "522",
+        "nombre": "522. Laboratorio",
+        "nombre_corto": "Laboratorio",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "523",
+        "nombre": "523. Topografía",
+        "nombre_corto": "Topografía",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "524",
+        "nombre": "524. Señalamiento",
+        "nombre_corto": "Señalamiento",
+        "seccion": "SUBCONTRATOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "601",
+        "nombre": "601. Fletes locales",
+        "nombre_corto": "Fletes locales",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "602",
+        "nombre": "602. Fletes foráneos",
+        "nombre_corto": "Fletes foráneos",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "603",
+        "nombre": "603. Acarreo de materiales",
+        "nombre_corto": "Acarreo de materiales",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "604",
+        "nombre": "604. Acarreo de escombro",
+        "nombre_corto": "Acarreo de escombro",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "605",
+        "nombre": "605. Acarreo de producto de excavación",
+        "nombre_corto": "Acarreo de producto de excavación",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "606",
+        "nombre": "606. Transporte de maquinaria",
+        "nombre_corto": "Transporte de maquinaria",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "607",
+        "nombre": "607. Maniobras",
+        "nombre_corto": "Maniobras",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "608",
+        "nombre": "608. Carga y descarga",
+        "nombre_corto": "Carga y descarga",
+        "seccion": "FLETES Y ACARREOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "701",
+        "nombre": "701. Topografía",
+        "nombre_corto": "Topografía",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "702",
+        "nombre": "702. Mecánica de suelos",
+        "nombre_corto": "Mecánica de suelos",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "703",
+        "nombre": "703. Laboratorio de concreto",
+        "nombre_corto": "Laboratorio de concreto",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "704",
+        "nombre": "704. Laboratorio de compactación",
+        "nombre_corto": "Laboratorio de compactación",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "705",
+        "nombre": "705. Estudios ambientales",
+        "nombre_corto": "Estudios ambientales",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "706",
+        "nombre": "706. Impacto social",
+        "nombre_corto": "Impacto social",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "707",
+        "nombre": "707. Análisis de riesgo",
+        "nombre_corto": "Análisis de riesgo",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "708",
+        "nombre": "708. Proyecto estructural",
+        "nombre_corto": "Proyecto estructural",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "709",
+        "nombre": "709. Proyecto eléctrico",
+        "nombre_corto": "Proyecto eléctrico",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "710",
+        "nombre": "710. Proyecto hidráulico",
+        "nombre_corto": "Proyecto hidráulico",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "711",
+        "nombre": "711. Proyecto sanitario",
+        "nombre_corto": "Proyecto sanitario",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "712",
+        "nombre": "712. Protección contra incendio",
+        "nombre_corto": "Protección contra incendio",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "713",
+        "nombre": "713. Dictámenes",
+        "nombre_corto": "Dictámenes",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "714",
+        "nombre": "714. Verificaciones",
+        "nombre_corto": "Verificaciones",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "715",
+        "nombre": "715. Unidades de inspección",
+        "nombre_corto": "Unidades de inspección",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "716",
+        "nombre": "716. Gestoría y trámites",
+        "nombre_corto": "Gestoría y trámites",
+        "seccion": "SERVICIOS Y ESTUDIOS",
+        "subfamilias": []
+    },
+    {
+        "codigo": "801",
+        "nombre": "801. Oficina de obra",
+        "nombre_corto": "Oficina de obra",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "802",
+        "nombre": "802. Personal técnico",
+        "nombre_corto": "Personal técnico",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "803",
+        "nombre": "803. Seguridad",
+        "nombre_corto": "Seguridad",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "804",
+        "nombre": "804. Señalización temporal",
+        "nombre_corto": "Señalización temporal",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "805",
+        "nombre": "805. Servicios provisionales",
+        "nombre_corto": "Servicios provisionales",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "806",
+        "nombre": "806. Sanitarios provisionales",
+        "nombre_corto": "Sanitarios provisionales",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "807",
+        "nombre": "807. Bodega",
+        "nombre_corto": "Bodega",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "808",
+        "nombre": "808. Vigilancia",
+        "nombre_corto": "Vigilancia",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "809",
+        "nombre": "809. Limpieza",
+        "nombre_corto": "Limpieza",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "810",
+        "nombre": "810. Equipo de comunicación",
+        "nombre_corto": "Equipo de comunicación",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "811",
+        "nombre": "811. Vehículos",
+        "nombre_corto": "Vehículos",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "812",
+        "nombre": "812. Consumibles administrativos",
+        "nombre_corto": "Consumibles administrativos",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    },
+    {
+        "codigo": "813",
+        "nombre": "813. Pruebas y control de calidad",
+        "nombre_corto": "Pruebas y control de calidad",
+        "seccion": "COSTOS INDIRECTOS CONTROLABLES",
+        "subfamilias": []
+    }
+]

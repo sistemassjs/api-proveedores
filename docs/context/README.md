@@ -10,7 +10,7 @@ Este ecosistema (`api-proveedores` + `app-proveedores`) tiene **tres dominios de
 
 | Dominio | Carpeta | Que es | Que no es |
 |---------|---------|--------|-----------|
-| **Catalogo** | [catalogo/](./catalogo/) | Productos, categorias, marcas, unidades, stock sucursal, import CSV | No es SP ni presupuestos |
+| **Catalogo** | [catalogo/](./catalogo/) | Productos, categorias (por empresa), familias OPUS globales, marcas, unidades globales, stock sucursal, import CSV | No es SP ni presupuestos |
 | **Solicitudes de pago** | [solicitudes-pago/](./solicitudes-pago/) | SP/SPP, facturas, comprobantes, OC a SP, empresas constructoras | No es catalogo ni presupuestos |
 | **Presupuestos** | [presupuestos/](./presupuestos/) | Presupuestos multi-giro, PDF, cartera, monedas MXN/USD/EUR; cobro roadmap (Plus / pasarelas) | No es SP ni catalogo de productos |
 

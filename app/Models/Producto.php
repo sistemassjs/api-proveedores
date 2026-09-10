@@ -16,21 +16,37 @@ class Producto extends BaseModel
         'sku',
         'imagen_principal',
         'codigo_interno',
+        'codigo_fabricante',
+        'codigo_barras',
         'proveedor_id',
         'nombre',
         'descripcion',
         'marca_id',
         'categoria_id',
         'subcategoria_id',
+        'familia_id',
+        'subfamilia_id',
+        'unidad_medida_id',
+        'unidad_contenido_id',
+        'unidad_base_id',
+        'presentacion',
+        'cantidad_contenida',
+        'factor_conversion',
         'precio_base',
         'precio_mayoreo',
         'precio_menudeo',
         'modelo',
+        'tipo',
+        'disponibilidad',
+        'tiempo_entrega',
+        'url_producto',
+        'tags',
         'activo',
         'stock',
         'destacado',
         'principal',
         'estatus',
+        'mostrar_precios',
     ];
 
     protected static $filters = [
@@ -40,8 +56,11 @@ class Producto extends BaseModel
         'codigo' => 'Codigo',
         'categoria_id' => 'CategoriaId',
         'subcategoria_id' => 'SubCategoriaId',
+        'familia_id' => 'FamiliaId',
+        'subfamilia_id' => 'SubfamiliaId',
         'proveedor_id' => 'ProveedorId',
         'marca_id' => 'MarcaId',
+        'tipo' => 'Tipo',
         'activo' => 'Activo',
         'estatus' => 'Estatus',
     ];
@@ -51,9 +70,12 @@ class Producto extends BaseModel
         'precio_base' => 'float',
         'precio_mayoreo' => 'float',
         'precio_menudeo' => 'float',
+        'cantidad_contenida' => 'float',
+        'factor_conversion' => 'float',
         'principal' => 'boolean',
         'destacado' => 'boolean',
         'activo' => 'boolean',
+        'mostrar_precios' => 'boolean',
     ];
 
     public static function eagerLodable(): array
@@ -62,9 +84,14 @@ class Producto extends BaseModel
             'marca',
             'categoria',
             'subcategoria',
+            'familia',
+            'subfamilia',
             'unidad_medida',
+            'unidadContenido',
+            'unidadBase',
             'especificaciones',
             'imagenes',
+            'documentos',
         ];
     }
 
@@ -79,6 +106,16 @@ class Producto extends BaseModel
     public function filterBySubCategoriaId($query, $value)
     {
         return $query->whereIn('subcategoria_id', explode(',', $value));
+    }
+
+    public function filterByFamiliaId($query, $value)
+    {
+        return $query->whereIn('familia_id', explode(',', (string) $value));
+    }
+
+    public function filterBySubfamiliaId($query, $value)
+    {
+        return $query->whereIn('subfamilia_id', explode(',', (string) $value));
     }
 
     public function filterByMarcaId($query, $value)
@@ -111,6 +148,11 @@ class Producto extends BaseModel
         return $query->where('codigo_interno', 'like', "%$value%");
     }
 
+    public function filterByTipo($query, $value)
+    {
+        return $query->where('tipo', $value);
+    }
+
     public function filterByActivo($query, $value)
     {
         return $query->where('activo', (bool) $value);
@@ -134,6 +176,16 @@ class Producto extends BaseModel
         return $this->belongsTo(UnidadMedida::class);
     }
 
+    public function unidadContenido(): BelongsTo
+    {
+        return $this->belongsTo(UnidadMedida::class, 'unidad_contenido_id');
+    }
+
+    public function unidadBase(): BelongsTo
+    {
+        return $this->belongsTo(UnidadMedida::class, 'unidad_base_id');
+    }
+
     public function marca(): BelongsTo
     {
         return $this->belongsTo(Marca::class);
@@ -149,6 +201,16 @@ class Producto extends BaseModel
         return $this->belongsTo(Categoria::class, 'subcategoria_id');
     }
 
+    public function familia(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoFamilia::class, 'familia_id');
+    }
+
+    public function subfamilia(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoSubfamilia::class, 'subfamilia_id');
+    }
+
     public function especificaciones(): HasMany
     {
         return $this->hasMany(ProductoEspecificacion::class);
@@ -157,6 +219,11 @@ class Producto extends BaseModel
     public function imagenes(): HasMany
     {
         return $this->hasMany(ProductoImagen::class);
+    }
+
+    public function documentos(): HasMany
+    {
+        return $this->hasMany(ProductoDocumento::class);
     }
 
     public function sucursales(): BelongsToMany
