@@ -22,8 +22,14 @@ class ConstruccPagoIndexResource extends JsonResource
 
     return [
       'id' => $this->id,
+      'origen' => $this->origen ?? 'spp',
       'monto_total' => (float) $this->monto_total,
       'spp_count' => $this->solicitudes_pago_count,
+      'facturas_count' => $this->when(isset($this->facturas_count), $this->facturas_count),
+      'documentos_faltantes' => $this->when(
+        $this->relationLoaded('facturas'),
+        fn () => $this->documentosFaltantes()
+      ),
 
       // datos de empresa construcc
       'folio_pago_spp_consecutivo' => $this->folio_pago_spp_consecutivo,

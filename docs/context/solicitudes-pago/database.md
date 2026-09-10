@@ -5,13 +5,30 @@
 | Model | Tabla | Rol |
 |-------|-------|-----|
 | `SolicitudPago` | `solicitudes_pago` | Núcleo SP (montos, facturas, comprobante, roles, OC) |
-| `PagoSPP` | `pagos_spp` | Pago a una o varias SP |
-| `PagoSolicitudPago` | `pago_solicitud_pago` | Pivot monto aplicado |
+| `PagoSPP` | `pagos_spp` | Pago a una o varias SP **o** pago directo (`origen`) |
+| `PagoSolicitudPago` | `pago_solicitud_pago` | Pivot monto aplicado (solo `origen=spp`) |
+| `PagoFactura` | `pago_facturas` | N facturas ligadas a un pago (flujo directo; PDF/XML opcionales) |
+| `PagoComplemento` | `pago_complementos` | Complementos CFDI tipo P por factura (PPD) |
 | `CuentaBancaria` | `cuentas_bancarias` | Cuentas del proveedor |
 | `SolicitudPagoCuentaBancaria` | pivot | SP ↔ cuentas |
 | `EmpresaConstrucc` | `empresa_construcc` | Empresa constructora (+ consecutivos) |
 | `OcConstrucc` | `oc_construcc` | Tracking ligero OC externa |
 | `OrdenCompra` | local | Soporte conversión OC→SP |
+
+## `pagos_spp.origen`
+
+| Valor | Significado |
+|-------|-------------|
+| `spp` (default) | Pago aplicado a SPP vía pivot; requiere autorización previa de la SPP |
+| `directo` | Sin SPP ni aprobación; documentos en `pago_facturas` / `pago_complementos` |
+
+Folio: `folio_pago_spp_consecutivo` (misma serie por empresa si `config('pagos.pagos_directos_usan_misma_serie_folio')`).
+
+## Documentos faltantes
+
+Por factura del pago: `factura_pdf`, `factura_xml`; si `metodo_pago=PPD` y `config('pagos.marcar_complemento_faltante_si_ppd')`: `complemento_pago_pdf` / `complemento_pago_xml`.
+
+Storage disco `private`: `comprobantes/`, `facturas/pdf|xml/`, `complementos_pago/pdf|xml/`.
 
 ## Enums de estado
 

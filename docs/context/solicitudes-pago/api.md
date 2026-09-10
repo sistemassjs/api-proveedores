@@ -19,6 +19,20 @@ Endpoints SP frecuentes: `GET/POST /`, `POST /sin-factura`, `GET /historico`, `/
 
 Middleware ApiKey. Controllers: `ConstruccSolicitudPagoController`, `ConstruccPagosSPPController`, `ConstruccProveedorSolicitudPagoController`, etc.
 
+### Pagos SPP / directos (`/construcc/pagos-spp`)
+
+| Método | Ruta | Notas |
+|--------|------|-------|
+| `POST` | `/proveedor/{proveedor}/pagos` | Pago con SPP (autorización previa) |
+| `POST` | `/proveedor/{proveedor}/pagos-directos` | Pago sin SPP; comprobante required; facturas/complementos opcionales |
+| `POST` | `/pagos/{pago}/facturas` | Agregar factura al pago |
+| `POST` | `/pagos/{pago}/facturas/{factura}/complementos` | Agregar complemento |
+| `GET` | `/facturas/{factura}/descargar-pdf\|xml` | Descarga |
+| `GET` | `/complementos/{complemento}/descargar-pdf\|xml` | Descarga |
+| `GET` | `/reportes/contabilidad` | Incluye `origen`, `facturas`, `documentos_faltantes` |
+
+Config: `config/pagos.php` (`marcar_complemento_faltante_si_ppd`, `pagos_directos_usan_misma_serie_folio`).
+
 > El mismo archivo también tiene rutas de **productos** (`construcc/proveedores/…/productos`). Esas pertenecen al dominio **catálogo**, no a SP.
 
 ## Webhooks (`routes/segmented/notifications.php`)
@@ -29,6 +43,8 @@ Middleware ApiKey. Controllers: `ConstruccSolicitudPagoController`, `ConstruccPa
 ## Notificaciones Laravel
 
 `app/Notifications/SolicitudPago/`: Pagada, Abonada, Rechazada, FacturaSubida, FacturaPendiente, SinFactura, ComprobanteActualizado, etc.
+
+Pagos directos: **sin notificaciones** en v1 (solo registro interno).
 
 ## Servicios
 
