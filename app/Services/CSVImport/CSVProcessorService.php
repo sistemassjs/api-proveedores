@@ -1079,11 +1079,11 @@ class CSVProcessorService
     }
 
     /**
-     * Get existing unidades de medida for the proveedor
+     * Get existing unidades de medida (catálogo global)
      */
     private function getExistingUnidades(int $proveedorId): Collection
     {
-        return UnidadMedida::where('proveedor_id', $proveedorId)
+        return UnidadMedida::query()
             ->where('estatus', 'activo')
             ->select('id', 'nombre', 'clave', 'descripcion')
             ->get();

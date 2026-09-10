@@ -134,7 +134,6 @@ class Proveedor extends BaseModel
     public static function eagerLodable(): array
     {
         return [
-            'unidades',
             'categorias',
             'marcas',
             'sucursales',
@@ -317,11 +316,6 @@ class Proveedor extends BaseModel
     public function marcas(): HasMany
     {
         return $this->hasMany(Marca::class);
-    }
-
-    public function unidades(): HasMany
-    {
-        return $this->hasMany(UnidadMedida::class);
     }
 
     public function sucursales(): HasMany

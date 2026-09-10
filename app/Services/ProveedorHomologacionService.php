@@ -206,9 +206,7 @@ class ProveedorHomologacionService
             ->where('proveedor_id', $proveedorOrigenId)
             ->update(['proveedor_id' => $proveedorDestinoId]);
 
-        $actualizaciones['unidades_medida'] = DB::table('unidad_medidas')
-            ->where('proveedor_id', $proveedorOrigenId)
-            ->update(['proveedor_id' => $proveedorDestinoId]);
+        $actualizaciones['unidades_medida'] = 0; // catálogo global: no se reasignan por proveedor
 
         return $actualizaciones;
     }
@@ -318,10 +316,11 @@ class ProveedorHomologacionService
                 'sucursales',
                 'categorias',
                 'marcas',
-                'unidades',
             ])
             ->orderBy('created_at', 'asc')
             ->get();
+
+        $unidadesGlobales = DB::table('unidad_medidas')->count();
 
         if ($proveedores->count() < 2) {
             throw new \Exception('Se requieren al menos 2 proveedores para homologar');
@@ -347,7 +346,7 @@ class ProveedorHomologacionService
                     'sucursales' => $proveedorDestino->sucursales_count,
                     'categorias' => $proveedorDestino->categorias_count,
                     'marcas' => $proveedorDestino->marcas_count,
-                    'unidades_medida' => $proveedorDestino->unidades_count,
+                    'unidades_medida' => $unidadesGlobales,
                 ],
             ],
             'proveedores_a_eliminar' => $proveedoresAEliminar->pluck('id')->toArray(),
@@ -364,7 +363,7 @@ class ProveedorHomologacionService
                     'sucursales' => $p->sucursales_count,
                     'categorias' => $p->categorias_count,
                     'marcas' => $p->marcas_count,
-                    'unidades_medida' => $p->unidades_count,
+                    'unidades_medida' => 0,
                 ],
                 'puede_eliminar' => $this->puedeEliminarProveedor($p->id),
             ]),
@@ -401,7 +400,7 @@ class ProveedorHomologacionService
                 'sucursales' => $proveedoresAEliminar->sum('sucursales_count'),
                 'categorias' => $proveedoresAEliminar->sum('categorias_count'),
                 'marcas' => $proveedoresAEliminar->sum('marcas_count'),
-                'unidades_medida' => $proveedoresAEliminar->sum('unidades_count'),
+                'unidades_medida' => 0,
             ],
         ];
     }

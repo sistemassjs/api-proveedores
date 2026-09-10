@@ -7,15 +7,19 @@ use App\Http\Requests\UnidadMedidaStoreRequest;
 use App\Http\Requests\UnidadMedidaUpdateRequest;
 use App\Models\Proveedor;
 use App\Models\UnidadMedida;
-use Illuminate\Database\Eloquent\RelationNotFoundException;
 use Illuminate\Http\Request;
 
+/**
+ * Unidades de medida globales expuestas bajo la ruta del proveedor
+ * (compatibilidad de rutas). El catálogo ya no es por proveedor.
+ */
 class ProveedorUnidadMedidaController extends Controller
 {
     public function all(Request $request, Proveedor $proveedor)
     {
-        $originalPaginator = UnidadMedida::where('proveedor_id', $proveedor->id)
+        $originalPaginator = UnidadMedida::query()
             ->where('estatus', EstadoGeneral::ACTIVO->value)
+            ->orderBy('nombre')
             ->paginate(10000);
 
         return $this->paginated($originalPaginator);
@@ -25,7 +29,7 @@ class ProveedorUnidadMedidaController extends Controller
     {
         $filters = $request->only(UnidadMedida::getFilters());
         $originalPaginator = UnidadMedida::filter($filters)
-            ->where('proveedor_id', $proveedor->id)
+            ->orderBy('nombre')
             ->paginate();
 
         return $this->paginated($originalPaginator);
@@ -37,8 +41,7 @@ class ProveedorUnidadMedidaController extends Controller
             'clave' => $request->clave,
             'nombre' => $request->nombre,
             'descripcion' => $request->descripcion,
-            'activo' => $request->activo ?? true,
-            'proveedor_id' => $proveedor->id,
+            'estatus' => EstadoGeneral::ACTIVO->value,
         ]);
 
         return $this->success($unidad, 201);
@@ -48,10 +51,6 @@ class ProveedorUnidadMedidaController extends Controller
     {
         $unidad = UnidadMedida::findOrFail($unidadId);
 
-        if ($unidad->proveedor_id !== $proveedor->id) {
-            throw new RelationNotFoundException('La unidad de medida no pertenece a este proveedor.', 403);
-        }
-
         return $this->success($unidad);
     }
 
@@ -59,11 +58,7 @@ class ProveedorUnidadMedidaController extends Controller
     {
         $unidad = UnidadMedida::findOrFail($unidadId);
 
-        if ($unidad->proveedor_id !== $proveedor->id) {
-            throw new RelationNotFoundException('La unidad de medida no pertenece a este proveedor.', 403);
-        }
-
-        $unidad->update($request->only(['clave', 'nombre', 'descripcion', 'activo']));
+        $unidad->update($request->only(['clave', 'nombre', 'descripcion', 'estatus']));
 
         return $this->success($unidad);
     }
@@ -71,11 +66,6 @@ class ProveedorUnidadMedidaController extends Controller
     public function destroy(Request $request, Proveedor $proveedor, $unidadId)
     {
         $unidad = UnidadMedida::findOrFail($unidadId);
-
-        if ($unidad->proveedor_id !== $proveedor->id) {
-            throw new RelationNotFoundException('La unidad de medida no pertenece a este proveedor.', 403);
-        }
-
         $unidad->delete();
 
         return $this->success(null, 204);

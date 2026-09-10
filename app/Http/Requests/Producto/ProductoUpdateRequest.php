@@ -2,12 +2,15 @@
 
 namespace App\Http\Requests\Producto;
 
+use App\Http\Requests\Producto\Concerns\MapsProductoCatalogoUniversales;
 use App\Models\Categoria;
 use App\Models\Marca;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ProductoUpdateRequest extends FormRequest
 {
+    use MapsProductoCatalogoUniversales;
+
     public function authorize(): bool
     {
         return true;
@@ -17,21 +20,20 @@ class ProductoUpdateRequest extends FormRequest
     {
         $proveedorId = $this->route('proveedor')->id ?? $this->input('proveedor_id');
 
-        return [
+        return array_merge([
             'nombre' => ['sometimes', 'required', 'string', 'max:100'],
             'descripcion' => ['sometimes', 'required', 'string', 'max:255'],
             'codigo_interno' => ['sometimes', 'required', 'string', 'max:50'],
             'proveedor_id' => ['sometimes', 'required', 'integer', 'exists:proveedores,id'],
 
-            // precios
             'precio_base' => ['sometimes', 'numeric'],
             'precio_mayoreo' => ['sometimes', 'numeric'],
             'precio_menudeo' => ['sometimes', 'numeric'],
 
             'unidad_medida_id' => ['sometimes', 'required', 'integer', 'exists:unidad_medidas,id'],
 
-            // categoría principal
             'categoria_id' => [
+                'sometimes',
                 'required',
                 'integer',
                 'exists:categorias,id',
@@ -42,7 +44,6 @@ class ProductoUpdateRequest extends FormRequest
                 },
             ],
 
-            // subcategoría (debe ser hija)
             'subcategoria_id' => [
                 'nullable',
                 'integer',
@@ -57,8 +58,8 @@ class ProductoUpdateRequest extends FormRequest
                 },
             ],
 
-            // marca
             'marca_id' => [
+                'sometimes',
                 'required',
                 'integer',
                 'exists:marcas,id',
@@ -68,7 +69,7 @@ class ProductoUpdateRequest extends FormRequest
                     }
                 },
             ],
-        ];
+        ], $this->reglasCamposUniversales(true));
     }
 
     public function messages(): array
@@ -77,20 +78,13 @@ class ProductoUpdateRequest extends FormRequest
             'nombre.required' => 'El nombre es obligatorio.',
             'descripcion.required' => 'La descripción es obligatoria.',
             'codigo_interno.required' => 'El código interno es obligatorio.',
-
             'proveedor_id.required' => 'El proveedor es obligatorio.',
             'proveedor_id.exists' => 'El proveedor seleccionado no es válido.',
-
             'unidad_medida_id.required' => 'La unidad de medida es obligatoria.',
             'unidad_medida_id.exists' => 'La unidad de medida seleccionada no es válida.',
-
             'categoria_id.required' => 'La categoría es obligatoria.',
             'categoria_id.exists' => 'La categoría seleccionada no es válida.',
-
-            'subcategoria_id.integer' => 'La subcategoría debe ser un identificador válido.',
             'subcategoria_id.exists' => 'La subcategoría seleccionada no es válida.',
-            'subcategoria_id.required' => 'La subcategoría es obligatoria cuando aplique.',
-
             'marca_id.required' => 'La marca es obligatoria.',
             'marca_id.exists' => 'La marca seleccionada no es válida.',
         ];

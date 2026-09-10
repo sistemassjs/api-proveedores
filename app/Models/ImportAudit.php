@@ -11,6 +11,8 @@ class ImportAudit extends BaseModel
         'tipo',
         'archivo',
         'formato',
+        'plantilla_version',
+        'plantilla_fecha',
         'estado',
         'fase',
         'logs',
@@ -49,6 +51,7 @@ class ImportAudit extends BaseModel
         'error_types' => 'array',
         'inicio_proceso' => 'datetime',
         'fin_proceso' => 'datetime',
+        'plantilla_fecha' => 'date',
         'processing_time' => 'decimal:2',
         'memory_usage' => 'decimal:2',
     ];

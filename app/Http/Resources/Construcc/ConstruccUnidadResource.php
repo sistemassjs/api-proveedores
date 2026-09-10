@@ -22,7 +22,7 @@ class ConstruccUnidadResource extends JsonResource
             'estatus' => $this->estatus,
 
             // Información del proveedor (solo ID para optimizar)
-            'proveedor_id' => $this->proveedor_id,
+            'proveedor_id' => null,
 
             // Estadísticas de productos
             'productos_count' => $this->when($this->relationLoaded('productos'), function () {

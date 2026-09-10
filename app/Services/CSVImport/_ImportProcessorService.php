@@ -228,7 +228,7 @@ class ImportProcessorService
                     ->whereNull('parent_id')
                     ->pluck('id', 'nombre')
                     ->toArray(),
-                'unidades' => UnidadMedida::where('proveedor_id', $proveedor->id)->pluck('id', 'nombre')->toArray(),
+                'unidades' => UnidadMedida::query()->pluck('id', 'nombre')->toArray(),
             ];
         });
     }
@@ -264,21 +264,29 @@ class ImportProcessorService
         });
 
         if ($missing->isNotEmpty()) {
-            $insertData = $missing->map(function ($item) use ($proveedor) {
-                return [
+            $isUnidad = $modelClass === UnidadMedida::class;
+
+            $insertData = $missing->map(function ($item) use ($proveedor, $isUnidad) {
+                $row = [
                     'nombre' => $item,
-                    'proveedor_id' => $proveedor->id,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
+                if (! $isUnidad) {
+                    $row['proveedor_id'] = $proveedor->id;
+                }
+
+                return $row;
             })->toArray();
 
             $modelClass::insert($insertData);
 
             // Actualizar cache
-            $newItems = $modelClass::where('proveedor_id', $proveedor->id)
-                ->whereIn('nombre', $missing->toArray())
-                ->pluck('id', 'nombre');
+            $newQuery = $modelClass::query()->whereIn('nombre', $missing->toArray());
+            if (! $isUnidad) {
+                $newQuery->where('proveedor_id', $proveedor->id);
+            }
+            $newItems = $newQuery->pluck('id', 'nombre');
 
             $this->catalogCache[$cacheKey] = array_merge($existing, $newItems->toArray());
         }

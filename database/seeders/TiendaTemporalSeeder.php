@@ -177,11 +177,10 @@ class TiendaTemporalSeeder extends Seeder
 
         $unidad = UnidadMedida::firstOrCreate(
             [
-                'proveedor_id' => $proveedor->id,
-                'clave' => 'PZA',
+                'nombre' => 'Pieza',
             ],
             [
-                'nombre' => 'Pieza',
+                'clave' => 'H87',
                 'descripcion' => 'Unidad pieza (demo tienda)',
                 'estatus' => EstadoGeneral::ACTIVO->value,
             ]

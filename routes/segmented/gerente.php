@@ -12,6 +12,7 @@ use App\Http\Controllers\ProveedorUsuarioController;
 use App\Http\Controllers\SucursalProductoController;
 use App\Http\Controllers\ProveedorSucursalController;
 use App\Http\Controllers\ProveedorProductoController;
+use App\Http\Controllers\ProveedorProductoDocumentoController;
 use App\Http\Controllers\ProveedorCategoriaController;
 use App\Http\Controllers\ProveedorDashboardController;
 use App\Http\Controllers\ProveedorUnidadMedidaController;
@@ -126,11 +127,16 @@ Route::prefix('proveedores')
         Route::prefix('{proveedor}/productos')->middleware(['proveedor.access'])->group(function () {
             Route::get('/', [ProveedorProductoController::class, 'index']);
             Route::post('/', [ProveedorProductoController::class, 'store']);
+            Route::post('/bulk', [ProveedorProductoController::class, 'bulkStore']);
             Route::middleware(['proveedor.producto'])->group(function () {
                 Route::get('{producto}', [ProveedorProductoController::class, 'show']);
                 Route::patch('{producto}', [ProveedorProductoController::class, 'update']);
                 Route::delete('{producto}', [ProveedorProductoController::class, 'destroy']);
                 Route::post('{producto}/logo', [ProveedorProductoController::class, 'updateLogo']);
+
+                Route::get('{producto}/documentos', [ProveedorProductoDocumentoController::class, 'index']);
+                Route::post('{producto}/documentos', [ProveedorProductoDocumentoController::class, 'store']);
+                Route::delete('{producto}/documentos/{documento}', [ProveedorProductoDocumentoController::class, 'destroy']);
             });
         });
 

@@ -350,9 +350,9 @@ class ConstruccController extends Controller
      */
     public function unidadesProveedor(Request $request, Proveedor $proveedor): JsonResponse
     {
-        $unidades = $proveedor->unidades()
-            ->withCount(['productos' => function ($query) {
-                $query->where('activo', true);
+        $unidades = UnidadMedida::query()
+            ->withCount(['productos' => function ($query) use ($proveedor) {
+                $query->where('proveedor_id', $proveedor->id)->where('activo', true);
             }])
             ->orderBy('nombre')
             ->get();

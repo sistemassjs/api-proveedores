@@ -18,6 +18,7 @@ use App\Http\Controllers\AdminProveedorController;
 use App\Http\Controllers\ProveedorUsuarioController;
 use App\Http\Controllers\Admin\ProveedorHomologacionController;
 use App\Http\Controllers\Admin\AdminCatalogoPublicoController;
+use App\Http\Controllers\Admin\AdminCatalogoFamiliaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -141,6 +142,25 @@ Route::middleware(['auth:sanctum', 'role:' . UserRoleEnumerate::ADMINISTRADOR->v
         Route::patch('{catalogoPublicoItem}', [AdminCatalogoPublicoController::class, 'update']);
         Route::put('{catalogoPublicoItem}', [AdminCatalogoPublicoController::class, 'update']);
         Route::delete('{catalogoPublicoItem}', [AdminCatalogoPublicoController::class, 'destroy']);
+    });
+
+    /**
+     * CATÁLOGO GLOBAL OPUS (familias / subfamilias)
+     */
+    Route::prefix('catalogo-familias')->group(function () {
+        Route::get('all', [AdminCatalogoFamiliaController::class, 'all']);
+        Route::get('/', [AdminCatalogoFamiliaController::class, 'index']);
+        Route::post('/', [AdminCatalogoFamiliaController::class, 'store']);
+        Route::get('{familia}', [AdminCatalogoFamiliaController::class, 'show']);
+        Route::patch('{familia}', [AdminCatalogoFamiliaController::class, 'update']);
+        Route::put('{familia}', [AdminCatalogoFamiliaController::class, 'update']);
+        Route::delete('{familia}', [AdminCatalogoFamiliaController::class, 'destroy']);
+
+        Route::get('{familia}/subfamilias', [AdminCatalogoFamiliaController::class, 'indexSubfamilias']);
+        Route::post('{familia}/subfamilias', [AdminCatalogoFamiliaController::class, 'storeSubfamilia']);
+        Route::patch('{familia}/subfamilias/{subfamilia}', [AdminCatalogoFamiliaController::class, 'updateSubfamilia']);
+        Route::put('{familia}/subfamilias/{subfamilia}', [AdminCatalogoFamiliaController::class, 'updateSubfamilia']);
+        Route::delete('{familia}/subfamilias/{subfamilia}', [AdminCatalogoFamiliaController::class, 'destroySubfamilia']);
     });
 
     /**

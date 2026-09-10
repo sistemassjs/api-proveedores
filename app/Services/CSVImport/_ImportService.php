@@ -227,7 +227,7 @@ class ImportService
             ->whereNull('parent_id')
             ->pluck('id', 'nombre');
 
-        $unidadesExistentes = UnidadMedida::where('proveedor_id', $proveedor->id)
+        $unidadesExistentes = UnidadMedida::query()
             ->whereIn('nombre', $nombresUnidades)
             ->pluck('id', 'nombre');
 
@@ -264,7 +264,6 @@ class ImportService
             if (! isset($unidadesExistentes[$nombre])) {
                 $unidad = UnidadMedida::create([
                     'nombre' => $nombre,
-                    'proveedor_id' => $proveedor->id,
                 ]);
                 $unidadesExistentes[$nombre] = $unidad->id;
                 $unidadesCreadas[] = $unidad;

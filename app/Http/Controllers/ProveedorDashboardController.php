@@ -7,6 +7,7 @@ use App\Enums\EstadoGeneral;
 use App\Http\Resources\Proveedor\ProveedorDashboardCotizacionResource;
 use App\Models\Cotizacion;
 use App\Models\Proveedor;
+use App\Models\UnidadMedida;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 
@@ -27,7 +28,7 @@ class ProveedorDashboardController extends Controller
             'categorias' => $proveedor->categorias()->where('estatus', EstadoGeneral::ACTIVO->value)->count(),
             'marcas' => $proveedor->marcas()->where('estatus', EstadoGeneral::ACTIVO->value)->count(),
             'sucursales' => $proveedor->sucursalesActivas()->count(),
-            'unidadesMedida' => $proveedor->unidades()->where('estatus', EstadoGeneral::ACTIVO->value)->count(),
+            'unidadesMedida' => UnidadMedida::query()->where('estatus', EstadoGeneral::ACTIVO->value)->count(),
 
         ];
 
