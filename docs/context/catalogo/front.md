@@ -9,8 +9,8 @@ Repo: `app-proveedores`. Carpetas bajo `src/app/pages/proveedor/`:
 | `marcas-proveedor/` | Marcas |
 | `unidades-proveedor/` | Unidades (**catálogo global**; UI bajo proveedor por compatibilidad) |
 | `sucursales-proveedor/` | Sucursales (+ stock) |
-| `import-productos/` | Flujo import + historial |
-| `csv-import/` | Alternativa CSV (upload → confirm → results) |
+| `import-productos/` | Flujo editable + historial → `POST productos/bulk` (localStorage; ≤~1000). **No** tocar al endurecer masivo |
+| `csv-import/` | Importación masiva servidor: upload → confirm → poll status/results (`camino: csv-import-servidor`) |
 
 Modelos compartidos: `shared/models/producto.model.ts`.
 

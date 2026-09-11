@@ -43,6 +43,12 @@ class CsvUploadResponse
             'catalogos' => $this->catalogos,
             'estado' => $this->estado,
             'mensaje' => $this->mensaje,
+            'plantilla' => [
+                'version' => \App\Support\Catalogo\CatalogoImportPlantilla::VERSION,
+                'fecha' => \App\Support\Catalogo\CatalogoImportPlantilla::FECHA,
+            ],
+            'camino' => 'csv-import-servidor',
+            'nota' => 'Importación masiva en servidor (temp tables + job). Independiente de productos/bulk (localStorage).',
         ];
     }
 

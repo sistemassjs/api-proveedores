@@ -8,6 +8,8 @@ Hay un **segundo recurso** en este dominio, independiente del anterior: el **cat
 
 Administrar productos, categorías/subcategorías **por empresa**, marcas; asignar productos a sucursales con stock; importar por CSV. Homologar opcionalmente contra **familias/subfamilias OPUS globales** y usar **unidades de medida globales**.
 
+**Importación:** dos caminos aislados — (1) `productos/bulk` + localStorage (editable, ≤~1000); (2) `csv-import` + job en cola (masivo ~50k, tablas temporales). No mezclar ni romper el camino 1 al endurecer el 2.
+
 **Catálogo público:** fuente global actualizable para presupuestos (picker combinado, snapshot) y Construcc (lectura).
 
 ## Límites (qué entra)

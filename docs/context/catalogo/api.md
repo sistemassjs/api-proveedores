@@ -7,13 +7,30 @@ Repo: `api-proveedores`. Núcleo en `routes/segmented/gerente.php` bajo `proveed
 | Prefijo | Controller |
 |---------|------------|
 | `{proveedor}/productos` | `ProveedorProductoController` (+ logo) |
-| `{proveedor}/productos/bulk` | `POST` importación masiva (front import-productos) |
+| `{proveedor}/productos/bulk` | `POST` importación editable ≤1000 (front `import-productos` + localStorage). **No** usar para ~50k |
 | `{proveedor}/productos/{producto}/documentos` | `ProveedorProductoDocumentoController` |
 | `{proveedor}/categorias` | `ProveedorCategoriaController` (+ subcategorías, logo, counts) |
 | `{proveedor}/marcas` | `ProveedorMarcaController` (+ logo) |
 | `{proveedor}/unidades` | `ProveedorUnidadMedidaController` — **catálogo global** (rutas bajo proveedor por compatibilidad; ya no filtra por `proveedor_id`) |
 | `{proveedor}/sucursales/{sucursal}/productos` | `SucursalProductoController` (asignar / desasignar / stock) |
-| `{proveedor}/csv-import` | `CsvImportController` (+ job `CSVImportJob`) |
+| `{proveedor}/csv-import` | `CsvImportController` — importación **masiva servidor** (~50k; temp tables + `CSVImportJob`) |
+
+### Dos caminos de importación (no mezclar)
+
+| Camino | Front | API | Límite práctico |
+|--------|-------|-----|-----------------|
+| Editable / pequeño | `import-productos` + localStorage | `POST …/productos/bulk` | ≤ ~1000 filas |
+| Masivo servidor | `csv-import` | `upload` → `confirm` → `status`/`results` | ~50 MB / ~50k filas |
+
+Flujo masivo:
+
+1. `POST …/csv-import/upload` — max 50 MB; respuesta incluye `camino: csv-import-servidor`, `audit_id`, `preview_token`, plantilla.
+2. `POST …/csv-import/confirm` — solo si `estado=preview` (409 si ya confirmado); despacha `CSVImportJob` en cola `imports` con `afterResponse()`.
+3. Poll `GET …/csv-import/status/{audit}` / `results/{audit}`.
+
+**Ops (local):** `QUEUE_CONNECTION=database`, `QUEUE_RETRY_AFTER=1900`, worker `queue:work --queue=imports,… --timeout=1800` (`composer dev`). Con `sync`, el job corre en el request HTTP y puede timeout. El `confirm` despacha a la cola de inmediato (sin `afterResponse`) para que `artisan serve` no retrase el JSON y el front no se quede en “Confirmando…”. En imports grandes el progreso del job se escribe con menos frecuencia; el log live se quitó de `composer dev` (usar `storage/logs/laravel.log`) para no congelar la consola.
+
+Controllers tipan `Proveedor $proveedor` (route model binding).
 
 Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.marca`, `proveedor.unidad` (solo resuelve la unidad; no valida ownership), `proveedor.sucursal` (según ruta).
 

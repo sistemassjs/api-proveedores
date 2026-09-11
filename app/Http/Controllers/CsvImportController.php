@@ -38,27 +38,31 @@ class CsvImportController extends Controller
     }
 
     /**
-     * POST /api/proveedores/{id}/csv-import
-     * Subida del archivo y análisis
+     * POST /api/proveedores/{proveedor}/csv-import/upload
+     * Subida del archivo y análisis (route model binding).
      */
-    public function upload(Request $request, $id)
+    public function upload(Request $request, Proveedor $proveedor)
     {
         try {
-            // Validar el proveedor
-            $proveedor = Proveedor::findOrFail($id);
+            @ini_set('memory_limit', CatalogoImportPlantilla::MEMORY_LIMIT_UPLOAD);
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(600);
+            }
 
-            // Validar el archivo
+            // Validar el archivo (camino masivo ~50k; no usar localStorage/bulk)
+            $maxKb = CatalogoImportPlantilla::MAX_UPLOAD_KB;
+            $maxPreview = CatalogoImportPlantilla::PREVIEW_ROWS_MAX;
             $request->validate([
-                'file' => 'required|file|mimes:csv,txt|max:10240',
+                'file' => "required|file|mimes:csv,txt|max:{$maxKb}",
                 'delimiter' => 'nullable|string',
                 'encoding' => 'nullable|string|in:UTF-8,ISO-8859-1,Windows-1252',
                 'has_header' => 'nullable|boolean',
-                'preview_rows' => 'nullable|integer|min:-1|max:500',
+                'preview_rows' => "nullable|integer|min:-1|max:{$maxPreview}",
             ], [
                 'file.required' => 'El archivo es obligatorio.',
                 'file.file' => 'Debe ser un archivo válido.',
                 'file.mimes' => 'El archivo debe ser de tipo CSV o TXT.',
-                'file.max' => 'El archivo no debe exceder los 10MB.',
+                'file.max' => 'El archivo no debe exceder los '.($maxKb / 1024).' MB (importación masiva en servidor).',
             ]);
 
             $file = $request->file('file');
@@ -70,7 +74,7 @@ class CsvImportController extends Controller
                 'delimiter' => $this->getDelimiter($request->get('delimiter', 'comma')),
                 'encoding' => $request->get('encoding', 'UTF-8'),
                 'has_header' => $request->get('has_header', true),
-                'preview_rows' => $request->get('preview_rows', 100),
+                'preview_rows' => $request->get('preview_rows', CatalogoImportPlantilla::PREVIEW_ROWS_DEFAULT),
                 'strict_validation' => true,
                 'auto_create_relations' => false,
             ];
@@ -90,7 +94,7 @@ class CsvImportController extends Controller
             $jobId = Str::uuid()->toString();
             $audit = ImportAudit::create([
                 'job_id' => $jobId,
-                'ooptions_read_csv' => $options,
+                'options_read_csv' => $options,
                 'proveedor_id' => $proveedor->id,
                 'tipo' => 'productos',
                 'archivo' => $path,
@@ -98,7 +102,6 @@ class CsvImportController extends Controller
                 'plantilla_version' => CatalogoImportPlantilla::VERSION,
                 'plantilla_fecha' => CatalogoImportPlantilla::FECHA,
                 'estado' => 'preview',
-                // 'fase' => 'analisis_completado',
                 'preview_data' => [
                     'file_info' => $processingResult['file_info'],
                     'headers' => $processingResult['headers'],
@@ -120,13 +123,14 @@ class CsvImportController extends Controller
                 'size' => $file->getSize(),
                 'total_rows' => $processingResult['file_info']['total_rows'],
             ]);
+            $audit->save();
 
             $response = CsvUploadResponse::fromProcessorResult($audit->id, $jobId, $processingResult);
 
             return $this->success($response->toArray(), 'Archivo cargado y analizado correctamente');
         } catch (Exception $e) {
             Log::error('Error en upload CSV', [
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -136,16 +140,14 @@ class CsvImportController extends Controller
     }
 
     /**
-     * POST /api/proveedores/{id}/csv-import/confirm
+     * POST /api/proveedores/{proveedor}/csv-import/confirm
      * Confirmar la importación
      */
-    public function confirm(Request $request, $id)
+    public function confirm(Request $request, Proveedor $proveedor)
     {
         try {
-            // Validar el proveedor
-            $proveedor = Proveedor::findOrFail($id);
-
-            // Validar datos de entrada
+            $chunkMin = CatalogoImportPlantilla::JOB_CHUNK_MIN;
+            $chunkMax = CatalogoImportPlantilla::JOB_CHUNK_MAX;
             $request->validate([
                 'audit_id' => 'required|integer|exists:import_audits,id',
                 'preview_token' => 'required|string',
@@ -153,40 +155,44 @@ class CsvImportController extends Controller
                 'import_options.skip_duplicates' => 'nullable|boolean',
                 'import_options.update_existing' => 'nullable|boolean',
                 'import_options.create_missing_relations' => 'nullable|boolean',
+                'import_options.chunk_size' => "nullable|integer|min:{$chunkMin}|max:{$chunkMax}",
             ]);
 
-            // Extraer valores en variables
             $auditId = $request->input('audit_id');
-            $previewToken = $request->input('preview_token');
             $skipDuplicates = $request->input('import_options.skip_duplicates', false);
             $updateExisting = $request->input('import_options.update_existing', false);
             $createMissingRelations = $request->input('import_options.create_missing_relations', false);
 
-            // Buscar el audit
             $audit = ImportAudit::where('id', $auditId)
                 ->where('proveedor_id', $proveedor->id)
-                // ->where('estado', 'preview')
                 ->first();
 
             if (! $audit) {
                 return $this->error('No se encontró la importación o ya fue procesada', 404);
             }
 
-            // Verificar que tenemos el token de preview
+            if ($audit->estado !== 'preview') {
+                return $this->error(
+                    'La importación ya fue confirmada o no está en estado de vista previa (estado actual: '.$audit->estado.').',
+                    409
+                );
+            }
+
             $previewData = $audit->preview_data;
-            if (! $previewData || $previewData['preview_token'] !== $request->preview_token) {
+            if (! $previewData || ($previewData['preview_token'] ?? null) !== $request->preview_token) {
                 return $this->error('Token de preview inválido', 400);
             }
 
-            // Configurar opciones de importación
             $importOptions = [
                 'skip_duplicates' => $skipDuplicates,
                 'update_existing' => $updateExisting,
                 'create_missing_relations' => $createMissingRelations,
-                'chunk_size' => $request->input('import_options.chunk_size', 500),
+                'chunk_size' => (int) $request->input(
+                    'import_options.chunk_size',
+                    CatalogoImportPlantilla::JOB_CHUNK_DEFAULT
+                ),
             ];
 
-            // Actualizar estado a confirmado antes de despachar el job
             $audit->update([
                 'estado' => 'confirmado',
                 'progreso' => 0,
@@ -196,13 +202,12 @@ class CsvImportController extends Controller
                 'options' => $importOptions,
                 'preview_token' => $request->preview_token,
             ]);
+            $audit->save();
 
-            // Despachar job de importación asíncrono
-            CSVImportJob::dispatch($audit, $importOptions)
-                ->onQueue('imports')
-                ->delay(now()->addSeconds(2)); // Small delay to allow response to return
+            // Despacho inmediato a cola `imports` (no afterResponse): con `artisan serve`
+            // afterResponse retrasa el flush HTTP y el front se queda en "Confirmando…".
+            CSVImportJob::dispatch($audit, $importOptions)->onQueue('imports');
 
-            // Crear respuesta inmediata
             $response = [
                 'success' => true,
                 'audit_id' => $audit->id,
@@ -216,7 +221,6 @@ class CsvImportController extends Controller
 
             return $this->success($response, 'Importación iniciada exitosamente. Puede consultar el progreso usando el endpoint proporcionado.');
         } catch (Exception $e) {
-            // En caso de error, actualizar el audit
             if (isset($audit)) {
                 $audit->update([
                     'estado' => 'error',
@@ -229,7 +233,7 @@ class CsvImportController extends Controller
             }
 
             Log::error('Error en confirm CSV import', [
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -242,13 +246,9 @@ class CsvImportController extends Controller
      * GET /api/proveedores/{id}/csv-import/status/{auditId}
      * Obtener estado y progreso de una importación
      */
-    public function getImportStatus(Request $request, $id, $auditId)
+    public function getImportStatus(Request $request, Proveedor $proveedor, $auditId)
     {
         try {
-            // Validar el proveedor
-            $proveedor = Proveedor::findOrFail($id);
-
-            // Buscar el registro de auditoría
             $audit = ImportAudit::where('id', $auditId)
                 ->where('proveedor_id', $proveedor->id)
                 ->first();
@@ -257,9 +257,9 @@ class CsvImportController extends Controller
                 return $this->error('No se encontró la importación solicitada', 404);
             }
 
-            // Formatear el estado para el frontend
             $status = [
                 'audit_id' => $audit->id,
+                'job_id' => $audit->job_id,
                 'estado' => $audit->estado,
                 'progreso' => $audit->progreso ?? 0,
                 'inicio_proceso' => $audit->inicio_proceso,
@@ -268,17 +268,17 @@ class CsvImportController extends Controller
                 'procesados' => $audit->numero_registros_procesados,
                 'estimated_remaining' => $this->estimateRemainingTime($audit),
                 'current_phase' => $audit->estado,
-                // 'current_phase' => $this->getCurrentProcessingPhase($audit),
-                // 'logs' => array_slice($audit->logs ?? [], -3), // Last 3 log entries
-                // 'can_cancel' => in_array($audit->estado, ['confirmado', 'procesando']),
-                // 'has_errors' => ($audit->errores ?? 0) > 0,
-                // 'error_summary' => $this->getErrorSummary($audit),
+                'plantilla' => [
+                    'version' => $audit->plantilla_version ?? CatalogoImportPlantilla::VERSION,
+                    'fecha' => $audit->plantilla_fecha ?? CatalogoImportPlantilla::FECHA,
+                ],
+                'camino' => 'csv-import-servidor',
             ];
 
             return $this->success($status, 'Estado de importación obtenido correctamente');
         } catch (Exception $e) {
             Log::error('Error obteniendo estado de importación', [
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'audit_id' => $auditId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -289,16 +289,12 @@ class CsvImportController extends Controller
     }
 
     /**
-     * GET /api/proveedores/{id}/csv-import/results/{auditId}
+     * GET /api/proveedores/{proveedor}/csv-import/results/{auditId}
      * Obtener resultados de una importación específica
      */
-    public function getImportResults(Request $request, $id, $auditId)
+    public function getImportResults(Request $request, Proveedor $proveedor, $auditId)
     {
         try {
-            // Validar el proveedor
-            $proveedor = Proveedor::findOrFail($id);
-
-            // Buscar el registro de auditoría
             $audit = ImportAudit::where('id', $auditId)
                 ->where('proveedor_id', $proveedor->id)
                 ->first();
@@ -307,9 +303,11 @@ class CsvImportController extends Controller
                 return $this->error('No se encontró la importación solicitada', 404);
             }
 
-            // Formatear los resultados para el frontend
+            $previewData = $audit->preview_data ?? [];
+
             $results = [
                 'audit_id' => $audit->id,
+                'job_id' => $audit->job_id,
                 'estado' => $audit->estado,
                 'success' => $audit->estado === 'completado',
                 'archivo' => $audit->archivo,
@@ -337,7 +335,6 @@ class CsvImportController extends Controller
                         'errors' => $audit->errores ?? 0,
                         'total' => $audit->total_registros ?? 0,
                     ],
-                    // Placeholder para otras categorías - se pueden implementar más tarde
                     'marcas' => [
                         'imported' => $audit->marca_imported,
                         'errors' => $audit->marca_errors,
@@ -354,16 +351,19 @@ class CsvImportController extends Controller
                         'total' => $audit->unidad_total,
                     ],
                 ],
+                'opus' => $previewData['opus'] ?? null,
+                'plantilla' => [
+                    'version' => $audit->plantilla_version ?? CatalogoImportPlantilla::VERSION,
+                    'fecha' => $audit->plantilla_fecha ?? CatalogoImportPlantilla::FECHA,
+                ],
+                'camino' => 'csv-import-servidor',
                 'errores_detalle' => $audit->errores_detalle ?? [],
-                // 'advertencias_detalle' => [], // Se puede agregar en futuras versiones
-                // 'items_importados' => $this->getImportedItems($audit),
-                // 'logs' => $audit->logs ?? []
             ];
 
             return $this->success($results, 'Resultados de importación obtenidos correctamente');
         } catch (Exception $e) {
             Log::error('Error obteniendo resultados de importación', [
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'audit_id' => $auditId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -374,27 +374,22 @@ class CsvImportController extends Controller
     }
 
     /**
-     * GET /api/proveedores/{id}/csv-import/results/{auditId}/export
+     * GET /api/proveedores/{proveedor}/csv-import/results/{auditId}/export
      * Exportar resultados de importación en diferentes formatos
      */
-    public function export(Request $request, $id, $auditId)
+    public function export(Request $request, Proveedor $proveedor, $auditId)
     {
         try {
             set_time_limit(5000);
-            // Validar el proveedor
-            $proveedor = Proveedor::findOrFail($id);
 
-            // Validar parámetros de entrada
             $request->validate([
                 'format' => 'nullable|string|in:xlsx,csv,pdf',
                 'type' => 'nullable|string|in:report,data,summary',
             ]);
 
-            // Obtener parámetros con valores por defecto
             $format = $request->get('format', 'xlsx');
             $type = $request->get('type', 'report');
 
-            // Buscar el registro de auditoría
             $audit = ImportAudit::where('id', $auditId)
                 ->where('proveedor_id', $proveedor->id)
                 ->first();
@@ -403,25 +398,22 @@ class CsvImportController extends Controller
                 return $this->error('No se encontró la importación solicitada', 404);
             }
 
-            // Verificar que la importación esté completada
             if (! in_array($audit->estado, ['completado', 'error'])) {
                 return $this->error('La importación debe estar completada para poder exportar los resultados', 400);
             }
 
-            // Log de la exportación
             Log::info('Exportando resultados de importación', [
                 'audit_id' => $auditId,
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'format' => $format,
                 'type' => $type,
                 'user' => auth()->user()->id ?? 'anonymous',
             ]);
 
-            // Usar el servicio de exportación
             return $this->exportService->exportImportResults($audit, $format, $type);
         } catch (Exception $e) {
             Log::error('Error exportando resultados de importación', [
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'audit_id' => $auditId,
                 'format' => $request->get('format', 'xlsx'),
                 'type' => $request->get('type', 'report'),
@@ -434,16 +426,12 @@ class CsvImportController extends Controller
     }
 
     /**
-     * POST /api/proveedores/{id}/csv-import/validate-producto
+     * POST /api/proveedores/{proveedor}/csv-import/validate-producto
      * Validar un producto específico
      */
-    public function validateProducto(Request $request, $id)
+    public function validateProducto(Request $request, Proveedor $proveedor)
     {
         try {
-            // Validar el proveedor
-            $proveedor = Proveedor::findOrFail($id);
-
-            // Validar datos de entrada
             $request->validate([
                 'producto' => 'required|array',
                 'producto.codigo' => 'required|string|max:255',
@@ -463,13 +451,10 @@ class CsvImportController extends Controller
             $productoData = $request->get('producto');
             $strictValidation = $request->get('strict_validation', false);
 
-            // Crear validator para este proveedor
             $validator = new CSVImportProductValidator($proveedor->id);
 
-            // Validar el producto usando el servicio de validación
             $validationResult = $validator->validateRow($productoData, 1);
 
-            // Verificar si ya existe el producto
             $existingProduct = Producto::where('codigo_interno', $productoData['codigo'])
                 ->where('proveedor_id', $proveedor->id)
                 ->first();
@@ -499,7 +484,7 @@ class CsvImportController extends Controller
             }
         } catch (Exception $e) {
             Log::error('Error en validateProducto', [
-                'proveedor_id' => $id,
+                'proveedor_id' => $proveedor->id,
                 'error' => $e->getMessage(),
                 'producto_data' => $request->get('producto', []),
                 'trace' => $e->getTraceAsString(),

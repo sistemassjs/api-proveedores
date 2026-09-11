@@ -11,7 +11,7 @@
 | `UnidadMedida` | Unidades **globales** (sin `proveedor_id`); unique `nombre` |
 | `Sucursal` | Sucursales; pivot con producto |
 | `ProductoImagen` / `ProductoEspecificacion` / `ProductoDocumento` | Satélites (EAV specs, galería, fichas/docs) |
-| `ImportAudit` / `ImportValidationCache` | Import CSV (+ `plantilla_version` / `plantilla_fecha`) |
+| `ImportAudit` / `ImportValidationCache` | Import CSV (+ `plantilla_version` / `plantilla_fecha`); masivo usa tablas temporales + job cola `imports` |
 | `CatalogoPublicoItem` | Feed plano global (`catalogo_publico_items`); unique `(empresa, codigo)` |
 
 ## Clasificación dual
