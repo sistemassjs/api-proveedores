@@ -330,26 +330,28 @@ class CsvImportController extends Controller
                 ],
                 'breakdown' => [
                     'productos' => [
-                        'imported' => $audit->nuevos ?? 0,
-                        'updated' => $audit->actualizados ?? 0,
-                        'errors' => $audit->errores ?? 0,
-                        'total' => $audit->total_registros ?? 0,
+                        'imported' => (int) ($audit->nuevos ?? 0),
+                        'created' => (int) ($audit->nuevos ?? 0),
+                        'updated' => (int) ($audit->actualizados ?? 0),
+                        'errors' => (int) ($audit->errores ?? 0),
+                        'total' => (int) ($audit->total_registros ?? 0),
+                        'processed' => (int) (($audit->nuevos ?? 0) + ($audit->actualizados ?? 0)),
                     ],
-                    'marcas' => [
-                        'imported' => $audit->marca_imported,
-                        'errors' => $audit->marca_errors,
-                        'total' => $audit->marca_total,
-                    ],
-                    'categorias' => [
-                        'imported' => $audit->categoria_imported,
-                        'errors' => $audit->categoria_errors,
-                        'total' => $audit->categoria_total,
-                    ],
-                    'unidades' => [
-                        'imported' => $audit->unidad_imported,
-                        'errors' => $audit->unidad_errors,
-                        'total' => $audit->unidad_total,
-                    ],
+                    'marcas' => $this->buildCatalogBreakdown(
+                        (int) ($audit->marca_imported ?? 0),
+                        (int) ($audit->marca_errors ?? 0),
+                        (int) ($audit->marca_total ?? 0),
+                    ),
+                    'categorias' => $this->buildCatalogBreakdown(
+                        (int) ($audit->categoria_imported ?? 0),
+                        (int) ($audit->categoria_errors ?? 0),
+                        (int) ($audit->categoria_total ?? 0),
+                    ),
+                    'unidades' => $this->buildCatalogBreakdown(
+                        (int) ($audit->unidad_imported ?? 0),
+                        (int) ($audit->unidad_errors ?? 0),
+                        (int) ($audit->unidad_total ?? 0),
+                    ),
                 ],
                 'opus' => $previewData['opus'] ?? null,
                 'plantilla' => [
@@ -383,11 +385,11 @@ class CsvImportController extends Controller
             set_time_limit(5000);
 
             $request->validate([
-                'format' => 'nullable|string|in:xlsx,csv,pdf',
-                'type' => 'nullable|string|in:report,data,summary',
+                'format' => 'nullable|string|in:pdf',
+                'type' => 'nullable|string|in:report,data,summary,errors',
             ]);
 
-            $format = $request->get('format', 'xlsx');
+            $format = $request->get('format', 'pdf');
             $type = $request->get('type', 'report');
 
             $audit = ImportAudit::where('id', $auditId)
@@ -415,7 +417,7 @@ class CsvImportController extends Controller
             Log::error('Error exportando resultados de importación', [
                 'proveedor_id' => $proveedor->id,
                 'audit_id' => $auditId,
-                'format' => $request->get('format', 'xlsx'),
+                'format' => $request->get('format', 'pdf'),
                 'type' => $request->get('type', 'report'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -931,6 +933,28 @@ class CsvImportController extends Controller
      * Convertir string delimiter a carácter
      * Maneja tanto valores string como caracteres directos
      */
+    /**
+     * Breakdown de catálogo: en DB `*_imported` = solo altas nuevas;
+     * el front necesita también existentes / procesados para no mostrar 0% en re-imports.
+     *
+     * @return array{created:int,existing:int,imported:int,processed:int,errors:int,total:int}
+     */
+    private function buildCatalogBreakdown(int $created, int $errors, int $total): array
+    {
+        $existing = max(0, $total - $created - $errors);
+        $processed = $created + $existing;
+
+        return [
+            'created' => $created,
+            'existing' => $existing,
+            // Compat: "imported" = procesados con éxito (nuevas + existentes)
+            'imported' => $processed,
+            'processed' => $processed,
+            'errors' => $errors,
+            'total' => $total,
+        ];
+    }
+
     private function getDelimiter(string $delimiter): string
     {
         // Normalizar el valor de entrada
