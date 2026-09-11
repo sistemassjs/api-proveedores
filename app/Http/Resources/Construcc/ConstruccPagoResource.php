@@ -24,6 +24,8 @@ class ConstruccPagoResource extends JsonResource
     return [
       'id' => $this->id,
 
+      'origen' => $this->origen ?? 'spp',
+
       // Datos de empresa construcc
       'folio_pago_spp_consecutivo' => $this->folio_pago_spp_consecutivo,
       'empresa_construcc_id' => $this->empresa_construcc_id,
@@ -116,6 +118,13 @@ class ConstruccPagoResource extends JsonResource
           ];
         });
       }),
+
+      // Facturas del pago (flujo directo / documentos en pago)
+      'facturas' => ConstruccPagoFacturaResource::collection($this->whenLoaded('facturas')),
+      'documentos_faltantes' => $this->when(
+        $this->relationLoaded('facturas'),
+        fn () => $this->documentosFaltantes()
+      ),
 
       // Fechas
       'fecha_pago' => optional($this->fecha_pago)?->toDateTimeString(),

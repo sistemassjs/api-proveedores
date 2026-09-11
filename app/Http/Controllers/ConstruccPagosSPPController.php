@@ -13,13 +13,20 @@ use Illuminate\Support\Str;
 use App\Enums\EstadoSP;
 
 use App\Http\Requests\Construcc\ConstruccPagosSPPRegistrarPagoRequest;
+use App\Http\Requests\Construcc\ConstruccPagosSPPRegistrarPagoDirectoRequest;
+use App\Http\Requests\Construcc\StorePagoComplementoRequest;
+use App\Http\Requests\Construcc\StorePagoFacturaRequest;
 use App\Http\Resources\Construcc\ConstruccPagoIndexResource;
 use App\Http\Resources\Construcc\ConstruccPagoProveedorResource;
 use App\Http\Resources\Construcc\ConstruccPagoResource;
 use App\Http\Resources\Construcc\ConstruccPagoResumenResource;
 use App\Http\Resources\Construcc\ConstruccPagoSPPResource;
+use App\Http\Resources\Construcc\ConstruccPagoFacturaResource;
+use App\Http\Resources\Construcc\ConstruccPagoComplementoResource;
 use App\Models\CuentaBancaria;
 use App\Models\EmpresaConstrucc;
+use App\Models\PagoComplemento;
+use App\Models\PagoFactura;
 use App\Models\PagoSPP;
 use App\Models\Proveedor;
 use App\Models\SolicitudPago;
@@ -70,8 +77,9 @@ class ConstruccPagosSPPController extends Controller
                     'empresaConstrucc',
                     // Opcional: si quieres ver las solicitudes relacionadas en el index
                     'solicitudesPago',
+                    'facturas.complementos',
                 ])
-                ->withCount('solicitudesPago') // 👈 agrega el conteo
+                ->withCount(['solicitudesPago', 'facturas']) // 👈 agrega el conteo
                 ->filter($filters)
                 ->orderBy($sortBy, $order);
 
@@ -108,6 +116,7 @@ class ConstruccPagosSPPController extends Controller
             'empresaConstrucc',
             'proveedor',
             'solicitudesPago', // esta relación ya tiene pivot + orden definido
+            'facturas.complementos',
         ]);
 
         return $this->success([
@@ -643,6 +652,7 @@ class ConstruccPagosSPPController extends Controller
             }
 
             $pago = PagoSPP::create([
+                'origen' => PagoSPP::ORIGEN_SPP,
                 'comprobante_pago' => $comprobantePath,
                 'cuenta_bancaria_empresa_construcc_id' => $validated['cuenta_bancaria_empresa_construcc_id'] ?? null,
                 'cuenta_destino_id' => $validated['cuenta_destino_id'] ?? null,
@@ -866,6 +876,301 @@ class ConstruccPagosSPPController extends Controller
         }
         return response()->download(
             Storage::disk('private')->path($pago->comprobante_pago)
+        );
+    }
+
+    /**
+     * Registra un pago directo (sin SPP ni autorización).
+     * Comprobante obligatorio; facturas y complementos opcionales/incompletos.
+     *
+     * POST /api/construcc/pagos-spp/proveedor/{proveedor}/pagos-directos
+     */
+    public function registrarPagoDirecto(
+        ConstruccPagosSPPRegistrarPagoDirectoRequest $request,
+        Proveedor $proveedor
+    ): JsonResponse {
+        try {
+            $validated = $request->validated();
+
+            if ((int) $validated['proveedor_id'] !== (int) $proveedor->id) {
+                return $this->error(
+                    'El proveedor del body no coincide con el proveedor de la ruta.',
+                    ['proveedor_id' => (int) $validated['proveedor_id'], 'proveedor_ruta' => (int) $proveedor->id],
+                    422
+                );
+            }
+
+            $empresaConstruccId = (int) $validated['empresa_id'];
+
+            $proveedorPerteneceEmpresa = $proveedor->empresasConstrucc()
+                ->where('empresa_construcc.id', $empresaConstruccId)
+                ->exists()
+                || ((int) ($proveedor->empresa_construcc_alta ?? 0) === $empresaConstruccId);
+
+            if (! $proveedorPerteneceEmpresa) {
+                return $this->error(
+                    'El proveedor no pertenece a la empresa indicada.',
+                    ['proveedor_id' => (int) $proveedor->id, 'empresa_id' => $empresaConstruccId],
+                    422
+                );
+            }
+
+            DB::beginTransaction();
+
+            $comprobantePath = $request->file('comprobante_pago')->store('comprobantes', 'private');
+            $infoComprobante = $validated['info_comprobante'] ?? [];
+
+            $folioConsecutivo = null;
+            if (config('pagos.pagos_directos_usan_misma_serie_folio', true)) {
+                $empresaConstrucc = EmpresaConstrucc::find($empresaConstruccId);
+                if ($empresaConstrucc) {
+                    $folioConsecutivo = $empresaConstrucc->obtenerFolioSiguientePagoSPP();
+                }
+            }
+
+            $ultimos4 = null;
+            if (! empty($validated['cuenta_destino_id'])) {
+                $cuentaBancaria = CuentaBancaria::findOrFail($validated['cuenta_destino_id']);
+                $numeroPago = $cuentaBancaria->obtenerNumeroPago();
+                $campo = preg_replace('/\D+/', '', (string) $numeroPago);
+                $ultimos4 = substr($campo, -4);
+            }
+
+            $fechaPago = now()->format('Y-m-d H:i:s');
+            if (! empty($infoComprobante['fecha'])) {
+                $hora = trim((string) ($infoComprobante['hora'] ?? '00:00:00'));
+                $fechaPago = Carbon::parse(trim($infoComprobante['fecha']) . ' ' . $hora)
+                    ->format('Y-m-d H:i:s');
+            }
+
+            $pago = PagoSPP::create([
+                'origen' => PagoSPP::ORIGEN_DIRECTO,
+                'comprobante_pago' => $comprobantePath,
+                'cuenta_bancaria_empresa_construcc_id' => $validated['cuenta_bancaria_empresa_construcc_id'] ?? null,
+                'cuenta_destino_id' => $validated['cuenta_destino_id'] ?? null,
+                'cuenta_destino_terminacion' => $ultimos4,
+                'empresa_construcc_id' => $empresaConstruccId,
+                'folio_pago_spp_consecutivo' => $folioConsecutivo,
+                'proveedor_id' => $validated['proveedor_id'],
+                'usuario_registro_id' => $validated['usuario_id'],
+                'usuario_registro_nombre' => $validated['usuario_nombre'],
+                'monto_total' => $validated['monto_total'],
+                'fecha_pago' => $fechaPago,
+                'referencia_pago' => $infoComprobante['referencia'] ?? '',
+                'banco_destino' => $infoComprobante['bancoDestino'] ?? '',
+                'titular_cuenta_destino' => $infoComprobante['nombreBeneficiario'] ?? '',
+                'clave_rastreo' => $infoComprobante['claveRastreo'] ?? '',
+                'observaciones' => $validated['observaciones'] ?? null,
+                'fecha_registro' => now(),
+            ]);
+
+            foreach ($validated['facturas'] ?? [] as $index => $facturaData) {
+                $rutaPdf = null;
+                $rutaXml = null;
+
+                if ($request->hasFile("facturas.{$index}.factura_pdf")) {
+                    $rutaPdf = $request->file("facturas.{$index}.factura_pdf")
+                        ->store('facturas/pdf', 'private');
+                }
+                if ($request->hasFile("facturas.{$index}.factura_xml")) {
+                    $rutaXml = $request->file("facturas.{$index}.factura_xml")
+                        ->store('facturas/xml', 'private');
+                }
+
+                $factura = PagoFactura::create([
+                    'pago_spp_id' => $pago->id,
+                    'folio_factura' => $facturaData['folio_factura'] ?? null,
+                    'ruta_archivo_factura_pdf' => $rutaPdf,
+                    'ruta_archivo_factura_xml' => $rutaXml,
+                    'metodo_pago' => $facturaData['metodo_pago'] ?? null,
+                    'monto' => $facturaData['monto'] ?? null,
+                ]);
+
+                foreach ($facturaData['complementos'] ?? [] as $cIndex => $complementoData) {
+                    $cPdf = null;
+                    $cXml = null;
+
+                    if ($request->hasFile("facturas.{$index}.complementos.{$cIndex}.complemento_pdf")) {
+                        $cPdf = $request->file("facturas.{$index}.complementos.{$cIndex}.complemento_pdf")
+                            ->store('complementos_pago/pdf', 'private');
+                    }
+                    if ($request->hasFile("facturas.{$index}.complementos.{$cIndex}.complemento_xml")) {
+                        $cXml = $request->file("facturas.{$index}.complementos.{$cIndex}.complemento_xml")
+                            ->store('complementos_pago/xml', 'private');
+                    }
+
+                    if (! $cPdf && ! $cXml && empty($complementoData['folio_complemento'])) {
+                        continue;
+                    }
+
+                    PagoComplemento::create([
+                        'pago_factura_id' => $factura->id,
+                        'pago_spp_id' => $pago->id,
+                        'folio_complemento' => $complementoData['folio_complemento'] ?? null,
+                        'ruta_archivo_pdf' => $cPdf,
+                        'ruta_archivo_xml' => $cXml,
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            $pago->load([
+                'empresaConstrucc',
+                'proveedor',
+                'facturas.complementos',
+            ]);
+
+            return $this->success(
+                new ConstruccPagoResource($pago),
+                'Pago directo registrado exitosamente.',
+                201
+            );
+        } catch (\Throwable $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
+            return $this->handleRegistrarPagoError(
+                $e,
+                'Error inesperado al registrar el pago directo.',
+                ['proveedor_id' => $proveedor->id]
+            );
+        }
+    }
+
+    /**
+     * Agrega una factura a un pago (típicamente origen=directo).
+     *
+     * POST /api/construcc/pagos-spp/pagos/{pago}/facturas
+     */
+    public function storeFactura(StorePagoFacturaRequest $request, PagoSPP $pago): JsonResponse
+    {
+        try {
+            $validated = $request->validated();
+
+            $rutaPdf = $request->hasFile('factura_pdf')
+                ? $request->file('factura_pdf')->store('facturas/pdf', 'private')
+                : null;
+            $rutaXml = $request->hasFile('factura_xml')
+                ? $request->file('factura_xml')->store('facturas/xml', 'private')
+                : null;
+
+            $factura = PagoFactura::create([
+                'pago_spp_id' => $pago->id,
+                'folio_factura' => $validated['folio_factura'] ?? null,
+                'ruta_archivo_factura_pdf' => $rutaPdf,
+                'ruta_archivo_factura_xml' => $rutaXml,
+                'metodo_pago' => $validated['metodo_pago'] ?? null,
+                'monto' => $validated['monto'] ?? null,
+            ]);
+
+            $factura->load('complementos');
+
+            return $this->success(
+                new ConstruccPagoFacturaResource($factura),
+                'Factura agregada al pago.',
+                201
+            );
+        } catch (\Throwable $e) {
+            Log::error('Error al agregar factura a pago', [
+                'pago_id' => $pago->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('No se pudo agregar la factura al pago.', null, 500);
+        }
+    }
+
+    /**
+     * Agrega un complemento de pago a una factura del pago.
+     *
+     * POST /api/construcc/pagos-spp/pagos/{pago}/facturas/{factura}/complementos
+     */
+    public function storeComplemento(
+        StorePagoComplementoRequest $request,
+        PagoSPP $pago,
+        PagoFactura $factura
+    ): JsonResponse {
+        try {
+            if ((int) $factura->pago_spp_id !== (int) $pago->id) {
+                return $this->error('La factura no pertenece a este pago.', null, 404);
+            }
+
+            $validated = $request->validated();
+
+            $rutaPdf = $request->hasFile('complemento_pdf')
+                ? $request->file('complemento_pdf')->store('complementos_pago/pdf', 'private')
+                : null;
+            $rutaXml = $request->hasFile('complemento_xml')
+                ? $request->file('complemento_xml')->store('complementos_pago/xml', 'private')
+                : null;
+
+            $complemento = PagoComplemento::create([
+                'pago_factura_id' => $factura->id,
+                'pago_spp_id' => $pago->id,
+                'folio_complemento' => $validated['folio_complemento'] ?? null,
+                'ruta_archivo_pdf' => $rutaPdf,
+                'ruta_archivo_xml' => $rutaXml,
+            ]);
+
+            return $this->success(
+                new ConstruccPagoComplementoResource($complemento),
+                'Complemento de pago agregado.',
+                201
+            );
+        } catch (\Throwable $e) {
+            Log::error('Error al agregar complemento a factura de pago', [
+                'pago_id' => $pago->id,
+                'factura_id' => $factura->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->error('No se pudo agregar el complemento de pago.', null, 500);
+        }
+    }
+
+    public function descargarFacturaPdf(PagoFactura $factura)
+    {
+        if (! $factura->archivoPdfExiste()) {
+            return $this->error('Factura PDF no disponible.', null, 404);
+        }
+
+        return response()->download(
+            Storage::disk('private')->path($factura->ruta_archivo_factura_pdf)
+        );
+    }
+
+    public function descargarFacturaXml(PagoFactura $factura)
+    {
+        if (! $factura->archivoXmlExiste()) {
+            return $this->error('Factura XML no disponible.', null, 404);
+        }
+
+        return response()->download(
+            Storage::disk('private')->path($factura->ruta_archivo_factura_xml)
+        );
+    }
+
+    public function descargarComplementoPdf(PagoComplemento $complemento)
+    {
+        if (! $complemento->archivoPdfExiste()) {
+            return $this->error('Complemento PDF no disponible.', null, 404);
+        }
+
+        return response()->download(
+            Storage::disk('private')->path($complemento->ruta_archivo_pdf)
+        );
+    }
+
+    public function descargarComplementoXml(PagoComplemento $complemento)
+    {
+        if (! $complemento->archivoXmlExiste()) {
+            return $this->error('Complemento XML no disponible.', null, 404);
+        }
+
+        return response()->download(
+            Storage::disk('private')->path($complemento->ruta_archivo_xml)
         );
     }
 

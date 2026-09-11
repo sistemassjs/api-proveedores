@@ -121,3 +121,116 @@ Accept: {{acceptType}}
   "referencia": "PAGO-CAJA-01",
   "notas": "Abono adicional para reducir saldo pendiente."
 }
+
+###############################################################################
+# PAGOS DIRECTOS (sin SPP / sin aprobación)
+###############################################################################
+
+### 11. Registrar pago directo (multipart: comprobante + facturas opcionales)
+# Content-Type: multipart/form-data
+POST {{baseUrl}}/construcc/pagos-spp/proveedor/{{proveedorId}}/pagos-directos
+X-API-KEY: {{apiKey}}
+Accept: {{acceptType}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="comprobante_pago"; filename="comprobante.pdf"
+Content-Type: application/pdf
+
+< ./tests/files/comprobante.pdf
+--boundary
+Content-Disposition: form-data; name="empresa_id"
+
+1
+--boundary
+Content-Disposition: form-data; name="proveedor_id"
+
+{{proveedorId}}
+--boundary
+Content-Disposition: form-data; name="usuario_id"
+
+10
+--boundary
+Content-Disposition: form-data; name="usuario_nombre"
+
+Usuario Construcc
+--boundary
+Content-Disposition: form-data; name="monto_total"
+
+15000.50
+--boundary
+Content-Disposition: form-data; name="info_comprobante[fecha]"
+
+2026-09-10
+--boundary
+Content-Disposition: form-data; name="info_comprobante[hora]"
+
+12:00:00
+--boundary
+Content-Disposition: form-data; name="info_comprobante[referencia]"
+
+TRX-DIRECTO-001
+--boundary
+Content-Disposition: form-data; name="facturas[0][folio_factura]"
+
+F-1001
+--boundary
+Content-Disposition: form-data; name="facturas[0][metodo_pago]"
+
+PPD
+--boundary
+Content-Disposition: form-data; name="facturas[0][factura_pdf]"; filename="factura.pdf"
+Content-Type: application/pdf
+
+< ./tests/files/comprobante.pdf
+--boundary--
+
+### 12. Agregar factura a un pago existente
+# @pagoDirectoId = 1
+POST {{baseUrl}}/construcc/pagos-spp/pagos/{{pagoId}}/facturas
+X-API-KEY: {{apiKey}}
+Accept: {{acceptType}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="folio_factura"
+
+F-1002
+--boundary
+Content-Disposition: form-data; name="metodo_pago"
+
+PUE
+--boundary
+Content-Disposition: form-data; name="factura_pdf"; filename="factura.pdf"
+Content-Type: application/pdf
+
+< ./tests/files/comprobante.pdf
+--boundary--
+
+### 13. Agregar complemento a una factura del pago
+# @facturaId = 1
+POST {{baseUrl}}/construcc/pagos-spp/pagos/{{pagoId}}/facturas/1/complementos
+X-API-KEY: {{apiKey}}
+Accept: {{acceptType}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="folio_complemento"
+
+CP-1
+--boundary
+Content-Disposition: form-data; name="complemento_pdf"; filename="complemento.pdf"
+Content-Type: application/pdf
+
+< ./tests/files/comprobante.pdf
+--boundary--
+
+### 14. Reporte contabilidad (incluye pagos directos y documentos_faltantes)
+GET {{baseUrl}}/construcc/reportes/contabilidad?fecha_pago_desde=2026-09-01&fecha_pago_hasta=2026-09-30
+X-API-KEY: {{apiKey}}
+Accept: {{acceptType}}
+
+### 15. Reporte solo pagos directos
+GET {{baseUrl}}/construcc/reportes/contabilidad?origen=directo&fecha_pago_desde=2026-09-01&fecha_pago_hasta=2026-09-30
+X-API-KEY: {{apiKey}}
+Accept: {{acceptType}}

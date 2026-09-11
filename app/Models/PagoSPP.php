@@ -6,14 +6,20 @@ use App\Traits\Filterable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Modelo para gestionar los pagos realizados a proveedores.
  * Un pago puede aplicar a múltiples solicitudes de pago (relación muchos a muchos).
+ * También soporta origen=directo (sin SPP ni autorización).
  */
 class PagoSPP extends BaseModel
 {
     use HasFactory;
+
+    public const ORIGEN_SPP = 'spp';
+
+    public const ORIGEN_DIRECTO = 'directo';
 
     protected $connection = 'mysql5';
     protected $table = 'pagos_spp';
@@ -21,6 +27,9 @@ class PagoSPP extends BaseModel
     protected $fillable = [
         // folio consecuntivio por empresa
         'folio_pago_spp_consecutivo',
+
+        // spp | directo
+        'origen',
 
         // Comprobante y fechas
         'comprobante_pago',
@@ -82,6 +91,7 @@ class PagoSPP extends BaseModel
         'usuario_registro_id' => 'UsuarioRegistroId',
         'monto_min' => 'MontoMin',
         'monto_max' => 'MontoMax',
+        'origen' => 'Origen',
     ];
 
 
@@ -90,6 +100,7 @@ class PagoSPP extends BaseModel
         return [
             'solicitudesPago',
             'empresaConstrucc',
+            'facturas.complementos',
         ];
     }
 
@@ -133,6 +144,53 @@ class PagoSPP extends BaseModel
     public function proveedor(): BelongsTo
     {
         return $this->belongsTo(Proveedor::class);
+    }
+
+    /**
+     * Facturas asociadas al pago (flujo directo u opcional en spp).
+     */
+    public function facturas(): HasMany
+    {
+        return $this->hasMany(PagoFactura::class, 'pago_spp_id');
+    }
+
+    /**
+     * Complementos de pago asociados.
+     */
+    public function complementos(): HasMany
+    {
+        return $this->hasMany(PagoComplemento::class, 'pago_spp_id');
+    }
+
+    public function esDirecto(): bool
+    {
+        return ($this->origen ?? self::ORIGEN_SPP) === self::ORIGEN_DIRECTO;
+    }
+
+    /**
+     * Documentos faltantes agregados del pago (comprobante + facturas).
+     *
+     * @return list<string>
+     */
+    public function documentosFaltantes(): array
+    {
+        $faltantes = [];
+
+        if (empty($this->comprobante_pago)) {
+            $faltantes[] = 'comprobante_pago';
+        }
+
+        $facturas = $this->relationLoaded('facturas')
+            ? $this->facturas
+            : $this->facturas()->with('complementos')->get();
+
+        foreach ($facturas as $factura) {
+            foreach ($factura->documentosFaltantes() as $doc) {
+                $faltantes[] = $doc;
+            }
+        }
+
+        return array_values(array_unique($faltantes));
     }
 
     /** ----------------
@@ -255,6 +313,11 @@ class PagoSPP extends BaseModel
     public function filterByMontoMax($query, $value)
     {
         return $query->where('monto_total', '<=', $value);
+    }
+
+    public function filterByOrigen($query, $value)
+    {
+        return $query->where('origen', $value);
     }
 
     /** ----------------

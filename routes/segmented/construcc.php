@@ -202,8 +202,19 @@ Route::prefix('construcc')
             Route::get('/proveedor/{proveedor}/cuentas_bancarias', [ConstruccPagosSPPController::class, 'cuentasPorProveedor'])->name('proveedor.spp.cuentas');
 
             // ===== GESTIÓN DE PAGOS A PROVEEDOR =====
-            // POST /proveedor/{proveedor}/pagos -> Registrar un pago a un proveedor
+            // POST /proveedor/{proveedor}/pagos -> Registrar un pago a un proveedor (con SPP)
             Route::post('/proveedor/{proveedor}/pagos', [ConstruccPagosSPPController::class, 'registrarPagoProveedor'])->name('proveedor.pagos.registrar');
+
+            // POST /proveedor/{proveedor}/pagos-directos -> Pago sin SPP ni autorización
+            Route::post('/proveedor/{proveedor}/pagos-directos', [ConstruccPagosSPPController::class, 'registrarPagoDirecto'])->name('proveedor.pagos-directos.registrar');
+
+            // Facturas y complementos ligados al pago
+            Route::post('/pagos/{pago}/facturas', [ConstruccPagosSPPController::class, 'storeFactura'])->name('pagos.facturas.store');
+            Route::post('/pagos/{pago}/facturas/{factura}/complementos', [ConstruccPagosSPPController::class, 'storeComplemento'])->name('pagos.facturas.complementos.store');
+            Route::get('/facturas/{factura}/descargar-pdf', [ConstruccPagosSPPController::class, 'descargarFacturaPdf'])->name('facturas.descargar-pdf');
+            Route::get('/facturas/{factura}/descargar-xml', [ConstruccPagosSPPController::class, 'descargarFacturaXml'])->name('facturas.descargar-xml');
+            Route::get('/complementos/{complemento}/descargar-pdf', [ConstruccPagosSPPController::class, 'descargarComplementoPdf'])->name('complementos.descargar-pdf');
+            Route::get('/complementos/{complemento}/descargar-xml', [ConstruccPagosSPPController::class, 'descargarComplementoXml'])->name('complementos.descargar-xml');
 
             // GET /proveedor/{proveedor}/pagos/{pago}/spp -> Listar SPP asociadas a un pago
             Route::get('/proveedor/{proveedor}/pagos/{pago}/spp', [ConstruccPagosSPPController::class, 'sppDePago'])->name('proveedor.pagos.spp');

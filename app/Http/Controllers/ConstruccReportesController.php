@@ -38,6 +38,7 @@ class ConstruccReportesController extends Controller
       'cuenta_id' => 'nullable|integer',
       'fecha_pago_desde' => 'nullable|date',
       'fecha_pago_hasta' => 'nullable|date',
+      'origen' => 'nullable|string|in:spp,directo',
     ]);
 
     // Establecer fechas por defecto (hoy)
@@ -56,10 +57,15 @@ class ConstruccReportesController extends Controller
           'solicitudes_pago.ruta_archivo_factura_xml',
           'solicitudes_pago.proveedor_id'
         );
-      }
+      },
+      'facturas.complementos',
     ])
       ->whereDate('fecha_pago', '>=', $fechaDesde)
       ->whereDate('fecha_pago', '<=', $fechaHasta);
+
+    if (! empty($validated['origen'])) {
+      $query->where('origen', $validated['origen']);
+    }
 
     // Filtrar por banco si se especifica
     if ($bancoId) {
@@ -67,7 +73,7 @@ class ConstruccReportesController extends Controller
     }
 
     // Ordenar por fecha de pago
-    /** @var Collection<PagoSPP> $pagos */
+    /** @var \Illuminate\Support\Collection<int, PagoSPP> $pagos */
     $pagos = $query->orderBy('fecha_pago', 'asc')->get();
 
     // Transformar datos para el reporte
@@ -76,48 +82,85 @@ class ConstruccReportesController extends Controller
 
     /** @var PagoSPP $pago */
     foreach ($pagos as $pago) {
-      /** @var SolicitudPago $SPPsDelPago */
       $SPPsDelPago = $pago->solicitudesPago;
       $totalSppEnPago = $SPPsDelPago->count();
 
-      // Si el pago tiene múltiples SPP, generamos URL de descarga múltiple
-      $urlDescargaMultiplePdf = null;
-      $urlDescargaMultipleXml = null;
       $urlDescargaMultipleAmbos = null;
       $foliosFacturaString = null;
       $foliosFactura = [];
+      $facturasDetalle = [];
 
       if ($totalSppEnPago > 1) {
-        // Generar URLs usando la ruta pública con parámetros de ruta
         $sppIds = $SPPsDelPago->pluck('id')->toArray();
         $sppIdsString = implode(',', $sppIds);
-        // $urlDescargaMultiplePdf = url('/api/construcc/reportes/descargar-facturas-multiple/' . $sppIdsString . '/pdf');
-        // $urlDescargaMultipleXml = url('/api/construcc/reportes/descargar-facturas-multiple/' . $sppIdsString . '/xml');
         $urlDescargaMultipleAmbos = url('/api/construcc/reportes/descargar-facturas-multiple/' . $sppIdsString . '/ambos');
-        // Obtener los folios de las facturas
-        // $foliosFactura = $SPPsDelPago->pluck('folio_factura')->toArray();
-        // $foliosFacturaString = implode(',', $foliosFactura);
       }
-
-      $foliosFactura = [];
 
       foreach ($SPPsDelPago as $spp) {
-        // Obtener monto aplicado desde la tabla pivot
         $foliosFactura[] = $spp->folio_factura;
+        $facturasDetalle[] = [
+          'fuente' => 'spp',
+          'spp_id' => $spp->id,
+          'folio_factura' => $spp->folio_factura,
+          'tiene_pdf' => ! empty($spp->ruta_archivo_factura_pdf),
+          'tiene_xml' => ! empty($spp->ruta_archivo_factura_xml),
+          'metodo_pago' => null,
+          'documentos_faltantes' => array_values(array_filter([
+            empty($spp->ruta_archivo_factura_pdf) ? 'factura_pdf' : null,
+            empty($spp->ruta_archivo_factura_xml) ? 'factura_xml' : null,
+          ])),
+          'complementos' => [],
+        ];
       }
+
+      foreach ($pago->facturas as $factura) {
+        $foliosFactura[] = $factura->folio_factura;
+        $facturasDetalle[] = [
+          'fuente' => 'pago',
+          'pago_factura_id' => $factura->id,
+          'folio_factura' => $factura->folio_factura,
+          'tiene_pdf' => ! empty($factura->ruta_archivo_factura_pdf),
+          'tiene_xml' => ! empty($factura->ruta_archivo_factura_xml),
+          'metodo_pago' => $factura->metodo_pago,
+          'url_pdf' => $factura->ruta_archivo_factura_pdf
+            ? route('construcc.pagos-spp.facturas.descargar-pdf', ['factura' => $factura->id])
+            : null,
+          'url_xml' => $factura->ruta_archivo_factura_xml
+            ? route('construcc.pagos-spp.facturas.descargar-xml', ['factura' => $factura->id])
+            : null,
+          'documentos_faltantes' => $factura->documentosFaltantes(),
+          'complementos' => $factura->complementos->map(fn ($c) => [
+            'id' => $c->id,
+            'folio_complemento' => $c->folio_complemento,
+            'tiene_pdf' => ! empty($c->ruta_archivo_pdf),
+            'tiene_xml' => ! empty($c->ruta_archivo_xml),
+            'url_pdf' => $c->ruta_archivo_pdf
+              ? route('construcc.pagos-spp.complementos.descargar-pdf', ['complemento' => $c->id])
+              : null,
+            'url_xml' => $c->ruta_archivo_xml
+              ? route('construcc.pagos-spp.complementos.descargar-xml', ['complemento' => $c->id])
+              : null,
+          ])->values()->all(),
+        ];
+      }
+
+      $foliosFactura = array_values(array_filter($foliosFactura, fn ($f) => $f !== null && $f !== ''));
+      $foliosFacturaString = ! empty($foliosFactura) ? implode(',', $foliosFactura) : null;
 
       $importeTotal += $pago->monto_total;
 
       $data[] = [
         'pago_id' => $pago->id . '',
+        'origen' => $pago->origen ?? PagoSPP::ORIGEN_SPP,
         'folio_pago' => $pago->folio_pago_spp_consecutivo,
         'fecha_pago' => $pago->fecha_pago ? $pago->fecha_pago->format('Y-m-d H:i:s') : null,
         'proveedor_rfc' => $pago->proveedor->rfc ?? null,
         'proveedor_razon_social' => $pago->proveedor->razon_social ?? $pago->proveedor->nombre_comercial ?? null,
         'folios_factura' => $foliosFactura,
+        'facturas' => $facturasDetalle,
+        'documentos_faltantes' => $pago->documentosFaltantes(),
 
         'importe' => number_format($pago->monto_total, 2, '.', ''),
-        // Información adicional útil
         'referencia_pago' => $pago->referencia_pago,
         'clave_rastreo' => $pago->clave_rastreo,
         'banco_destino' => $pago->banco_destino,
