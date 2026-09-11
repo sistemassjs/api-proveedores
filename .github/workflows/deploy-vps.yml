@@ -56,6 +56,8 @@ jobs:
             fi
             test -L public/storage
             php artisan up
+            # Workers en memoria no ven config:cache; deploy user necesita sudoers NOPASSWD (ver docs/desarrollo/despliegue-vps.md)
+            sudo supervisorctl restart api-proveedores-worker:*
 
       - name: Comprobar status / versión
         run: curl -fsS --retry 5 --retry-delay 2 https://api.rorisafe.com/gestion/api/status

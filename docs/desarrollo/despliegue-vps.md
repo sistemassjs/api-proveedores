@@ -105,9 +105,23 @@ sudo -u deploy -H ssh -i /home/deploy/.ssh/github_actions_deploy \
    - Si el symlink ya está, no lo recrea
    - Falla el deploy si al final no es un enlace simbólico
 8. `php artisan up`
-9. `GET https://api.rorisafe.com/gestion/api/status` desde el runner
+9. `sudo supervisorctl restart api-proveedores-worker:*` (recarga cola tras `config:cache`)
+10. `GET https://api.rorisafe.com/gestion/api/status` desde el runner
 
 No ejecuta seeders, `migrate:fresh`, `key:generate` ni modifica `.env`.
+
+### Cola / Supervisor (requerido para import CSV masivo)
+
+En el VPS debe existir el programa Supervisor `api-proveedores-worker` (`queue:work` con colas `imports,notifications,default`, `--timeout=1800`). En `.env`: `QUEUE_CONNECTION=database`, `QUEUE_RETRY_AFTER=1900`.
+
+El usuario `deploy` necesita sudo sin password solo para reiniciar ese worker, p. ej.:
+
+```bash
+# /etc/sudoers.d/api-proveedores-worker  (validar con visudo -cf)
+deploy ALL=(root) NOPASSWD: /usr/bin/supervisorctl restart api-proveedores-worker\:*, /usr/bin/supervisorctl status api-proveedores-worker\:*
+```
+
+Sin ese sudoers, el paso 9 del workflow falla el deploy.
 
 **Importante:** los archivos públicos viven en `storage/app/public/`. `public/storage` solo es el enlace; no debe versionarse ni crearse como directorio.
 
@@ -134,9 +148,11 @@ Tras un deploy:
 | `insufficient permission … .git/objects` | `git` hecho como root → `chown -R deploy:www-data` del proyecto |
 | Job OK pero versión vieja | No se subió `VERSION` o caché de CDN/proxy; hard refresh / curl directo |
 | Logos /storage 404 tras deploy | `public/storage` era carpeta, no symlink; el workflow ya lo corrige; en VPS: `rm -rf public/storage && php artisan storage:link` |
+| `sudo: a password is required` / falló restart worker | Falta sudoers de `deploy` para `supervisorctl` (ver sección Cola / Supervisor) o el programa Supervisor no existe aún |
 
 ## Límites
 
 - No toca el front en GoDaddy.
-- CORS, Reverb, `APP_KEY` y MySQL viven en el `.env` del VPS.
+- CORS, Reverb, `APP_KEY`, MySQL y `QUEUE_*` viven en el `.env` del VPS.
 - Recargar PHP-FPM no forma parte de este flujo.
+- El restart de Supervisor sí forma parte del workflow; el conf de Supervisor y el `.env` de cola se preparan una vez en el servidor.
