@@ -123,6 +123,7 @@ class CatalogoEmpresasController extends Controller
 
     /**
      * Facets OPUS (familia / subfamilia) dentro de una empresa. Sin marca.
+     * Incluye `arbol` anidado para UI de chips (familia → subfamilias presentes).
      */
     public function facets(Request $request, Proveedor $proveedor): JsonResponse
     {
@@ -132,37 +133,70 @@ class CatalogoEmpresasController extends Controller
 
         $base = $this->productosPublicosQuery($proveedor);
 
-        $familiaIds = (clone $base)
+        $pares = (clone $base)
             ->whereNotNull('familia_id')
+            ->select('familia_id', 'subfamilia_id')
             ->distinct()
-            ->pluck('familia_id')
-            ->filter()
-            ->values();
+            ->get();
 
-        $familias = CatalogoFamilia::query()
+        $familiaIds = $pares->pluck('familia_id')->filter()->unique()->values();
+        $subfamiliaIds = $pares->pluck('subfamilia_id')->filter()->unique()->values();
+
+        if ($familiaIds->isEmpty()) {
+            return $this->success(
+                [
+                    'arbol' => [],
+                    'familias' => [],
+                    'subfamilias' => [],
+                    'categorias' => [],
+                    'marcas' => [],
+                ],
+                'Filtros OPUS del catálogo.'
+            );
+        }
+
+        $familiasModels = CatalogoFamilia::query()
             ->whereIn('id', $familiaIds)
+            ->with(['subfamilias' => function ($q) use ($subfamiliaIds) {
+                if ($subfamiliaIds->isEmpty()) {
+                    $q->whereRaw('1 = 0');
+                } else {
+                    $q->whereIn('id', $subfamiliaIds);
+                }
+                $q->orderBy('nombre');
+            }])
             ->orderBy('nombre')
-            ->pluck('nombre')
-            ->map(fn ($n) => trim((string) $n))
-            ->filter()
-            ->unique(fn ($n) => mb_strtolower($n, 'UTF-8'))
+            ->get();
+
+        $arbol = $familiasModels->map(function (CatalogoFamilia $familia) {
+            return [
+                'id' => (int) $familia->id,
+                'nombre' => trim((string) $familia->nombre),
+                'subfamilias' => $familia->subfamilias
+                    ->map(fn ($s) => [
+                        'id' => (int) $s->id,
+                        'nombre' => trim((string) $s->nombre),
+                    ])
+                    ->filter(fn ($s) => $s['nombre'] !== '')
+                    ->values()
+                    ->all(),
+            ];
+        })
+            ->filter(fn ($f) => $f['nombre'] !== '')
             ->values()
             ->all();
 
-        $subfamilias = (clone $base)
-            ->whereNotNull('subfamilia_id')
-            ->with('subfamilia:id,nombre')
-            ->get()
-            ->pluck('subfamilia.nombre')
-            ->map(fn ($n) => trim((string) $n))
-            ->filter()
-            ->unique(fn ($n) => mb_strtolower($n, 'UTF-8'))
+        $familias = collect($arbol)->pluck('nombre')->values()->all();
+        $subfamilias = collect($arbol)
+            ->flatMap(fn ($f) => collect($f['subfamilias'])->pluck('nombre'))
+            ->unique(fn ($n) => mb_strtolower((string) $n, 'UTF-8'))
             ->sort()
             ->values()
             ->all();
 
         return $this->success(
             [
+                'arbol' => $arbol,
                 // Compat UI picker: "categorias" = familias OPUS; marcas vacío (no es filtro).
                 'familias' => $familias,
                 'subfamilias' => $subfamilias,

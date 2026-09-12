@@ -29,7 +29,7 @@ Mecanismo: **solo lectura + snapshot** (mismo comportamiento UX que tenía el fe
 1. **Home / dashboard:** puede mostrar contadores o enlaces a más de un dominio. Solo navegación/UI.
 2. **Métricas SP:** el dashboard de SP puede contar presupuestos como número suelto. No hay FK ni flujo.
 3. **Palabra “catálogo” en presupuestos:** suele significar **cartera de clientes/receptores** o **catálogo de conceptos** Plus — no confundir con productos.
-4. **Construcc (`construcc.php`):** mezcla HTTP de SP y de productos. Separar por controller: productos → dominio catálogo; SP/pagos → dominio SP.
+5. **Admin catálogo empresas:** gestiona productos reales (`/admin/catalogo-empresas` + import CSV). Reemplaza el feed `catalogo-publico` en el menú admin.
 
 ## Dependencia externa (solo SP)
 

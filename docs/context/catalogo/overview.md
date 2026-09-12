@@ -33,10 +33,11 @@ Administrar productos, categorías/subcategorías **por empresa**, marcas; asign
 
 ## Estado / gap front
 
-- **API:** CRUD gerente + rutas `/catalogo/empresas` para picker PPTOs.
-- **Front productos:** módulos existen; `proveedor-routing` puede no montar lazy routes de catálogo — ver [front.md](./front.md).
-- **Picker PPTOs:** usa `/catalogo/empresas` (ya no el feed admin).
-- **Pendiente:** UI explícita de la bandera `mostrar_en_catalogo_publico` en form de producto; apagado completo admin `catalogo-publico`; UI admin familias OPUS.
+- **API:** CRUD gerente + `/catalogo/empresas` (picker) + `/admin/catalogo-empresas` (gestión admin).
+- **Front productos (gerente):** módulos existen; `proveedor-routing` puede no montar lazy routes — ver [front.md](./front.md).
+- **Admin catálogo empresas:** UI `/pages/panel-admin/catalogo-empresas` (import CSV + multiselect publicar). Reemplaza el menú del feed `catalogo-publico`.
+- **Picker PPTOs:** usa `/catalogo/empresas`.
+- **Pendiente:** bandera en form producto gerente; apagado físico del módulo legacy `catalogo-publico`; UI admin familias OPUS.
 
 ## Docs del dominio
 

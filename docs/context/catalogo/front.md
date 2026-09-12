@@ -34,11 +34,22 @@ Modal `concepto-catalogo-manual-modal`:
 
 - Cards empresas → `GET /catalogo/empresas` (proveedores `is_proveedor_catalogo` + productos publicados).
 - Productos de empresa → `GET /catalogo/empresas/{proveedor}/productos`.
-- Facets OPUS → `…/productos/facets` (familia; sin marca).
+- Facets OPUS → `…/productos/facets` (árbol familia→subfamilias; sin marca).
+- Picker PPTOs: barra de chips de familia; al elegir una, segunda barra anidada de subfamilias.
 - Detalle → `…/productos/{producto}`.
 - Snapshot: `nombre`→descripcion, unidad, `precio_base`, imagen; sin FK.
-- Servicios: `PresupuestoCatalogoConceptosService` (`fetchEmpresasCatalogoPublico`, `fetchProductosCatalogoEmpresa`, …).
+
+## Gestión admin (reemplazo de catalogo-publico)
+
+Pantalla: `panel-administrativo/pages/catalogo-empresas/` — ruta UI `/pages/panel-admin/catalogo-empresas`.
+
+- Cards de empresas catálogo → productos con **multiselección** (publicar / despublicar).
+  - «Seleccionar visibles» marca la página cargada; si hay más resultados, banner **Seleccionar los N** aplica el filtro completo.
+- Import CSV NEXPROV vía `admin/catalogos/proveedores/{id}/csv-import`.
+- Nueva empresa: `proveedores/form?catalogo=1` (flag `is_proveedor_catalogo`).
+
+Menú admin: **Catálogo de empresas** (ya no «Catálogo público»).
 
 ## Feed admin `catalogo-publico` (deprecado)
 
-Pantalla admin `panel-administrativo/pages/catalogo-publico/` sigue en el repo pero **fuera del picker**. Plan de apagado completo (API + UI). No usar para nuevas features.
+Pantalla legacy `catalogo-publico/` puede seguir en el repo/ruta pero **fuera del menú**. No usar para nuevas features.

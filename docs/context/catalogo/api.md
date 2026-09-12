@@ -50,6 +50,23 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 - Formato genérico vs lineamiento NEXPROV (columnas actuales, gaps y encabezado v1.1): [plantilla-importacion.md](./plantilla-importacion.md).
 - Tabla temporal de import guarda `payload` JSON con la fila completa (p. ej. `PropiedadN_*`, `familia`, `tags`) para que el job persista especificaciones EAV.
 
+## Catálogo empresas admin (gestión)
+
+UI: `/pages/panel-admin/catalogo-empresas` (reemplaza menú «Catálogo público»).
+
+| Acción | API |
+|--------|-----|
+| Listar empresas catálogo | `GET /admin/catalogo-empresas` |
+| Productos de empresa | `GET /admin/catalogo-empresas/{proveedor}/productos` |
+| Publicar/despublicar masivo | `POST /admin/catalogo-empresas/{proveedor}/productos/bulk-flags` |
+| Marcar empresa como catálogo | `POST /admin/catalogo-empresas/{proveedor}/marcar-catalogo` |
+| Import CSV | `POST /admin/catalogos/proveedores/{proveedor}/csv-import/upload\|confirm` (+ status/results) |
+
+Alta empresa con `is_proveedor_catalogo`: form admin `proveedores/form?catalogo=1`.
+
+Multiselección en listado de productos: publicar / despublicar `mostrar_en_catalogo_publico`.
+Body: `producto_ids[]` **o** `aplicar_filtro=true` (+ `search`, `filtro_mostrar_en_catalogo_publico`) para actuar sobre todo el filtro (no solo visibles).
+
 ## Catálogo empresas (picker PPTOs)
 
 Rutas en `routes/segmented/shared.php` (`auth:sanctum`). Controller: `Catalogo\CatalogoEmpresasController`.
@@ -58,7 +75,7 @@ Rutas en `routes/segmented/shared.php` (`auth:sanctum`). Controller: `Catalogo\C
 |--------|------|-----|
 | `GET` | `/catalogo/empresas` | Cards: proveedores `is_proveedor_catalogo` con ≥1 producto publicado. Query `search` (empresa o producto; resultado agrupado por empresa). Respuesta: `proveedor_id`, `empresa` (razón social), `logo`, `total_productos` |
 | `GET` | `/catalogo/empresas/{proveedor}/productos` | Productos `activo` + `mostrar_en_catalogo_publico`. Query: `search`, `familia` / `familia_id`, `subfamilia` / `subfamilia_id`, `per_page`. Shape tipo sugerencia PPTOs (`origen: catalogo`) |
-| `GET` | `/catalogo/empresas/{proveedor}/productos/facets` | Facets OPUS: `familias`, `subfamilias` (+ alias `categorias`; `marcas` vacío) |
+| `GET` | `/catalogo/empresas/{proveedor}/productos/facets` | Facets OPUS: `arbol` (familia→subfamilias), `familias`, `subfamilias` (+ alias `categorias`; `marcas` vacío) |
 | `GET` | `/catalogo/empresas/{proveedor}/productos/{producto}` | Detalle para ficha del picker |
 
 ### Snapshot a línea de presupuesto (acordado v1)
@@ -85,7 +102,7 @@ Sin `producto_id` en `presupuesto_conceptos`.
 
 | Archivo | Uso |
 |---------|-----|
-| `admin.php` | CRUD admin global / OPUS; **catalogo-publico feed = deprecado** |
+| `admin.php` | CRUD admin / OPUS; **`/admin/catalogo-empresas`** gestión productos; catalogo-publico feed = deprecado |
 | `shared.php` | `/catalogo/empresas`, tienda, lectura OPUS; `catalogo-publico/*` legacy temporal |
 | `public.php` | Indexes read-only |
 | `construcc.php` | Búsqueda productos para Construcc (**no** es lógica SP) |

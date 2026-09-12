@@ -19,6 +19,8 @@ class AdminProveedorStoreRequest extends FormRequest
             'rfc' => 'required|string|max:13|unique:proveedores,rfc',
             'email' => 'required|email|max:255|unique:proveedores,email',
             'telefono' => 'nullable|string|max:20',
+            'is_proveedor_catalogo' => 'sometimes|boolean',
+            'is_proveedor_sp' => 'sometimes|boolean',
         ];
     }
 }

@@ -18,7 +18,9 @@ use App\Http\Controllers\AdminProveedorController;
 use App\Http\Controllers\ProveedorUsuarioController;
 use App\Http\Controllers\Admin\ProveedorHomologacionController;
 use App\Http\Controllers\Admin\AdminCatalogoPublicoController;
+use App\Http\Controllers\Admin\AdminCatalogoEmpresasController;
 use App\Http\Controllers\Admin\AdminCatalogoFamiliaController;
+use App\Http\Controllers\CsvImportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -56,6 +58,15 @@ Route::middleware(['auth:sanctum', 'role:' . UserRoleEnumerate::ADMINISTRADOR->v
         Route::delete('proveedores/{proveedor}', [AdminProveedorController::class, 'destroy']);
         Route::get('proveedores/{proveedor}/productos', [AdminProveedorController::class, 'productos']);
         Route::get('proveedores/all/count-categorias', [AdminProveedorController::class, 'proveedoresConCategoriasConSubcatCountProductos']);
+
+        // Import CSV productos (mismo CsvImportController que gerente; sin proveedor.access)
+        Route::prefix('proveedores/{proveedor}/csv-import')->group(function () {
+            Route::post('/upload', [CsvImportController::class, 'upload']);
+            Route::post('/confirm', [CsvImportController::class, 'confirm']);
+            Route::get('/status/{auditId}', [CsvImportController::class, 'getImportStatus']);
+            Route::get('/results/{auditId}', [CsvImportController::class, 'getImportResults']);
+            Route::get('/results/{auditId}/export', [CsvImportController::class, 'export']);
+        });
 
         Route::prefix('proveedores/{proveedor}/users')->group(function () {
             Route::get('/', [ProveedorUsuarioController::class, 'index']);
@@ -129,7 +140,17 @@ Route::middleware(['auth:sanctum', 'role:' . UserRoleEnumerate::ADMINISTRADOR->v
     });
 
     /**
-     * CATÁLOGO PÚBLICO (feed importado por admin; no es el catálogo NextPro)
+     * CATÁLOGO EMPRESAS (productos reales; reemplazo de catalogo-publico)
+     */
+    Route::prefix('catalogo-empresas')->group(function () {
+        Route::get('/', [AdminCatalogoEmpresasController::class, 'empresas']);
+        Route::get('{proveedor}/productos', [AdminCatalogoEmpresasController::class, 'productos']);
+        Route::post('{proveedor}/productos/bulk-flags', [AdminCatalogoEmpresasController::class, 'bulkFlags']);
+        Route::post('{proveedor}/marcar-catalogo', [AdminCatalogoEmpresasController::class, 'marcarComoCatalogo']);
+    });
+
+    /**
+     * CATÁLOGO PÚBLICO legacy (feed plano) — deprecado; no usar en UI nueva.
      */
     Route::prefix('catalogo-publico')->group(function () {
         Route::post('import', [AdminCatalogoPublicoController::class, 'import']);
