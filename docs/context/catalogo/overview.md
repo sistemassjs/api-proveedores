@@ -45,5 +45,7 @@ Administrar productos, categorías/subcategorías **por empresa**, marcas; asign
 - [api.md](./api.md)
 - [database.md](./database.md)
 - [front.md](./front.md)
+- [plantilla-importacion.md](./plantilla-importacion.md) — formato CSV genérico vs lineamiento NEXPROV + gaps
+- Ejemplo CSV: [plantilla-importacion-ejemplo-v1.1.csv](./plantilla-importacion-ejemplo-v1.1.csv)
 
 Ver también: [../cross-domain.md](../cross-domain.md)

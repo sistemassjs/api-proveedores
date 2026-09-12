@@ -270,6 +270,14 @@ class CSVImportJob implements ShouldQueue
             if (! empty($row['unidad_medida']) && ! in_array($row['unidad_medida'], $catalogs['unidades'])) {
                 $catalogs['unidades'][] = trim($row['unidad_medida']);
             }
+            foreach (['unidad_contenido', 'unidad_base'] as $unidadCol) {
+                if (! empty($row[$unidadCol])) {
+                    $u = trim((string) $row[$unidadCol]);
+                    if ($u !== '' && ! in_array($u, $catalogs['unidades'], true)) {
+                        $catalogs['unidades'][] = $u;
+                    }
+                }
+            }
 
             // Extract categories with hierarchy
             if (! empty($row['categoria'])) {
@@ -522,6 +530,14 @@ class CSVImportJob implements ShouldQueue
         }
 
         $unidadId = $this->catalogMappings['unidades'][$productData['unidad_medida']] ?? null;
+        $unidadContenidoId = null;
+        if (! empty($productData['unidad_contenido'])) {
+            $unidadContenidoId = $this->catalogMappings['unidades'][$productData['unidad_contenido']] ?? null;
+        }
+        $unidadBaseId = null;
+        if (! empty($productData['unidad_base'])) {
+            $unidadBaseId = $this->catalogMappings['unidades'][$productData['unidad_base']] ?? null;
+        }
 
         $familiaTxt = trim((string) ($productData['familia'] ?? ''));
         $subfamiliaTxt = trim((string) ($productData['subfamilia'] ?? ''));
@@ -553,6 +569,8 @@ class CSVImportJob implements ShouldQueue
             'categoria_id' => $categoriaId,
             'subcategoria_id' => $subcategoriaId,
             'unidad_medida_id' => $unidadId,
+            'unidad_contenido_id' => $unidadContenidoId,
+            'unidad_base_id' => $unidadBaseId,
             'familia_id' => $opus['familia_id'],
             'subfamilia_id' => $opus['subfamilia_id'],
             'precio_base' => $this->parseNullablePrice($precioBase),
@@ -631,11 +649,23 @@ class CSVImportJob implements ShouldQueue
             }
             $n = $m[1];
             $clave = trim((string) $value);
-            $valor = trim((string) ($row["propiedad{$n}_valor"] ?? $row["Propiedad{$n}_Valor"] ?? ''));
+            $valorKey = 'propiedad'.$n.'_valor';
+            $valor = '';
+            if (array_key_exists($valorKey, $row)) {
+                $valor = trim((string) $row[$valorKey]);
+            } else {
+                foreach ($row as $k => $v) {
+                    if (is_string($k) && strcasecmp($k, $valorKey) === 0) {
+                        $valor = trim((string) $v);
+                        break;
+                    }
+                }
+            }
             if ($clave === '') {
                 continue;
             }
-            $props[] = [
+            // Unique (producto_id, atributo): última clave gana si se repite
+            $props[$clave] = [
                 'atributo' => $clave,
                 'valor' => $valor,
                 'orden' => (int) $n,
@@ -647,7 +677,7 @@ class CSVImportJob implements ShouldQueue
         }
 
         $producto->especificaciones()->delete();
-        foreach ($props as $prop) {
+        foreach (array_values($props) as $prop) {
             $producto->especificaciones()->create($prop);
         }
     }

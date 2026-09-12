@@ -1,4 +1,4 @@
-﻿# Catálogo de productos — Base de datos
+# Catálogo de productos — Base de datos
 
 ## Models
 

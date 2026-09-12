@@ -142,6 +142,14 @@ class CSVProcessorService
                 if (! empty($row['unidad_medida']) && ! in_array($row['unidad_medida'], $catalogos['unidades'])) {
                     $catalogos['unidades'][] = trim($row['unidad_medida']);
                 }
+                foreach (['unidad_contenido', 'unidad_base'] as $unidadCol) {
+                    if (! empty($row[$unidadCol])) {
+                        $u = trim((string) $row[$unidadCol]);
+                        if ($u !== '' && ! in_array($u, $catalogos['unidades'], true)) {
+                            $catalogos['unidades'][] = $u;
+                        }
+                    }
+                }
                 if (! empty($row['categoria'])) {
                     $cat = trim($row['categoria']);
                     if (! isset($catalogos['categorias'][$cat])) {
@@ -1382,6 +1390,7 @@ class CSVProcessorService
             }
 
             // Crear tabla temporal con estructura optimizada
+            // `payload` JSON = fila CSV completa (PropiedadN_*, familia, tags, etc.)
             DB::statement("CREATE TABLE {$tableName} (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
                 codigo VARCHAR(255) NULL,
@@ -1395,6 +1404,7 @@ class CSVProcessorService
                 precio_mayoreo DECIMAL(12,4) NULL,
                 precio_menudeo DECIMAL(12,4) NULL,
                 modelo VARCHAR(255) NULL,
+                payload JSON NULL,
                 row_index INT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_row_index (row_index),
@@ -1424,20 +1434,43 @@ class CSVProcessorService
      */
     private function prepareRowForTempTable(array $row, int $rowIndex): array
     {
+        $normalized = $this->normalizeCsvRowKeys($row);
+
+        $precio = $normalized['precio'] ?? null;
+        $precioMayoreo = $normalized['precio_mayoreo'] ?? null;
+        $precioMenudeo = $normalized['precio_menudeo'] ?? null;
+
         return [
-            'codigo' => ! empty($row['codigo']) ? substr(trim($row['codigo']), 0, 255) : null,
-            'producto' => ! empty($row['producto']) ? substr(trim($row['producto']), 0, 500) : null,
-            'descripcion' => ! empty($row['descripcion']) ? trim($row['descripcion']) : null,
-            'marca' => ! empty($row['marca']) ? substr(trim($row['marca']), 0, 255) : null,
-            'categoria' => ! empty($row['categoria']) ? substr(trim($row['categoria']), 0, 255) : null,
-            'subcategoria' => ! empty($row['subcategoria']) ? substr(trim($row['subcategoria']), 0, 255) : null,
-            'unidad_medida' => ! empty($row['unidad_medida']) ? substr(trim($row['unidad_medida']), 0, 100) : null,
-            'precio' => ! empty($row['precio']) && is_numeric($row['precio']) ? (float) $row['precio'] : null,
-            'precio_mayoreo' => ! empty($row['precio_mayoreo']) && is_numeric($row['precio_mayoreo']) ? (float) $row['precio_mayoreo'] : null,
-            'precio_menudeo' => ! empty($row['precio_menudeo']) && is_numeric($row['precio_menudeo']) ? (float) $row['precio_menudeo'] : null,
-            'modelo' => ! empty($row['modelo']) ? substr(trim($row['modelo']), 0, 255) : null,
+            'codigo' => ! empty($normalized['codigo']) ? substr(trim((string) $normalized['codigo']), 0, 255) : null,
+            'producto' => ! empty($normalized['producto']) ? substr(trim((string) $normalized['producto']), 0, 500) : null,
+            'descripcion' => ! empty($normalized['descripcion']) ? trim((string) $normalized['descripcion']) : null,
+            'marca' => ! empty($normalized['marca']) ? substr(trim((string) $normalized['marca']), 0, 255) : null,
+            'categoria' => ! empty($normalized['categoria']) ? substr(trim((string) $normalized['categoria']), 0, 255) : null,
+            'subcategoria' => ! empty($normalized['subcategoria']) ? substr(trim((string) $normalized['subcategoria']), 0, 255) : null,
+            'unidad_medida' => ! empty($normalized['unidad_medida']) ? substr(trim((string) $normalized['unidad_medida']), 0, 100) : null,
+            'precio' => $precio !== null && $precio !== '' && is_numeric($precio) ? (float) $precio : null,
+            'precio_mayoreo' => $precioMayoreo !== null && $precioMayoreo !== '' && is_numeric($precioMayoreo) ? (float) $precioMayoreo : null,
+            'precio_menudeo' => $precioMenudeo !== null && $precioMenudeo !== '' && is_numeric($precioMenudeo) ? (float) $precioMenudeo : null,
+            'modelo' => ! empty($normalized['modelo']) ? substr(trim((string) $normalized['modelo']), 0, 255) : null,
+            'payload' => json_encode($normalized, JSON_UNESCAPED_UNICODE),
             'row_index' => $rowIndex,
         ];
+    }
+
+    /**
+     * Normaliza claves de fila CSV a minúsculas (Propiedad1_Clave → propiedad1_clave).
+     */
+    private function normalizeCsvRowKeys(array $row): array
+    {
+        $out = [];
+        foreach ($row as $key => $value) {
+            if (! is_string($key)) {
+                continue;
+            }
+            $out[strtolower(trim($key))] = is_string($value) ? trim($value) : $value;
+        }
+
+        return $out;
     }
 
     /**
@@ -1596,7 +1629,7 @@ class CSVProcessorService
                 ->offset($offset)
                 ->get()
                 ->map(function ($row) {
-                    return [
+                    $base = [
                         'codigo' => $row->codigo,
                         'producto' => $row->producto,
                         'descripcion' => $row->descripcion,
@@ -1609,6 +1642,19 @@ class CSVProcessorService
                         'precio_menudeo' => $row->precio_menudeo,
                         'modelo' => $row->modelo,
                     ];
+
+                    $payload = [];
+                    if (! empty($row->payload)) {
+                        $decoded = is_string($row->payload)
+                            ? json_decode($row->payload, true)
+                            : (array) $row->payload;
+                        if (is_array($decoded)) {
+                            $payload = $decoded;
+                        }
+                    }
+
+                    // payload gana (fila CSV completa); base rellena si falta algo
+                    return array_merge($base, $payload);
                 })
                 ->toArray();
         } catch (\Exception $e) {

@@ -1,4 +1,4 @@
-﻿# Catálogo de productos — Frontend
+# Catálogo de productos — Frontend
 
 Repo: `app-proveedores`. Carpetas bajo `src/app/pages/proveedor/`:
 
