@@ -38,7 +38,34 @@ jobs:
             set -euo pipefail
             cd "$APP_DIR"
             trap 'php artisan up || true' EXIT
+
+            # Si root tocó el repo, .git/objects queda sin escritura para deploy.
+            # Intenta auto-reparar vía sudoers (docs/desarrollo/despliegue-vps.md);
+            # si no hay sudoers, falla con el comando exacto a ejecutar en el VPS.
+            ensure_git_writable() {
+              if [ -w .git/objects ]; then
+                return 0
+              fi
+              echo "WARN: .git/objects no escribible por $(whoami); intentando chown vía sudo..."
+              if sudo -n chown -R "$(whoami):www-data" .git; then
+                echo "Ownership de .git corregido."
+              else
+                echo "::error::insufficient permission en .git/objects. En el VPS como root ejecuta:"
+                echo "  chown -R deploy:www-data $APP_DIR"
+                echo "  find $APP_DIR/storage $APP_DIR/bootstrap/cache -type d -exec chmod 2775 {} \\;"
+                echo "  find $APP_DIR/storage $APP_DIR/bootstrap/cache -type f -exec chmod 664 {} \\;"
+                echo "  chmod 640 $APP_DIR/.env"
+                echo "O añade sudoers de chown .git (ver docs/desarrollo/despliegue-vps.md)."
+                exit 128
+              fi
+              if [ ! -w .git/objects ]; then
+                echo "::error::Tras chown, .git/objects sigue sin escritura."
+                exit 128
+              fi
+            }
+
             php artisan down --retry=60 || true
+            ensure_git_writable
             git fetch origin main
             git reset --hard origin/main
             composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
@@ -56,8 +83,13 @@ jobs:
             fi
             test -L public/storage
             php artisan up
-            # Workers en memoria no ven config:cache; deploy user necesita sudoers NOPASSWD (ver docs/desarrollo/despliegue-vps.md)
-            sudo supervisorctl restart api-proveedores-worker:*
+            # Workers en memoria no ven config:cache; deploy user necesita sudoers NOPASSWD
+            # (ver docs/desarrollo/despliegue-vps.md). timeout evita cuelgues de 15m.
+            if ! timeout 60 sudo -n supervisorctl restart api-proveedores-worker:*; then
+              echo "::error::No se pudo reiniciar api-proveedores-worker (timeout o sudoers)."
+              timeout 15 sudo -n supervisorctl status api-proveedores-worker:* || true
+              exit 1
+            fi
 
       - name: Comprobar status / versión
         run: curl -fsS --retry 5 --retry-delay 2 https://api.rorisafe.com/gestion/api/status
