@@ -39,6 +39,7 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 - Store/update aceptan campos universales opcionales (`tipo`, `familia_id`, `subfamilia_id`, presentación/conversión, `tags`, etc.).
 - Array `especificaciones[]` (`atributo`|`clave`, `valor`, `unidad`, `orden`) se sincroniza en create/update.
 - Precios siguen en columnas: `precio_base`, `precio_mayoreo`, `precio_menudeo`.
+- **`mostrar_en_catalogo_publico`** (bool, default `false`): si el producto se lista en el picker de presupuestos vía `/catalogo/empresas`.
 
 ### Import CSV (plantilla v1.0)
 
@@ -48,6 +49,29 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 - Columna `precio` → `precio_base`.
 - Formato genérico vs lineamiento NEXPROV (columnas actuales, gaps y encabezado v1.1): [plantilla-importacion.md](./plantilla-importacion.md).
 - Tabla temporal de import guarda `payload` JSON con la fila completa (p. ej. `PropiedadN_*`, `familia`, `tags`) para que el job persista especificaciones EAV.
+
+## Catálogo empresas (picker PPTOs)
+
+Rutas en `routes/segmented/shared.php` (`auth:sanctum`). Controller: `Catalogo\CatalogoEmpresasController`.
+
+| Método | Path | Rol |
+|--------|------|-----|
+| `GET` | `/catalogo/empresas` | Cards: proveedores `is_proveedor_catalogo` con ≥1 producto publicado. Query `search` (empresa o producto; resultado agrupado por empresa). Respuesta: `proveedor_id`, `empresa` (razón social), `logo`, `total_productos` |
+| `GET` | `/catalogo/empresas/{proveedor}/productos` | Productos `activo` + `mostrar_en_catalogo_publico`. Query: `search`, `familia` / `familia_id`, `subfamilia` / `subfamilia_id`, `per_page`. Shape tipo sugerencia PPTOs (`origen: catalogo`) |
+| `GET` | `/catalogo/empresas/{proveedor}/productos/facets` | Facets OPUS: `familias`, `subfamilias` (+ alias `categorias`; `marcas` vacío) |
+| `GET` | `/catalogo/empresas/{proveedor}/productos/{producto}` | Detalle para ficha del picker |
+
+### Snapshot a línea de presupuesto (acordado v1)
+
+| Campo línea PPTO | Origen producto |
+|------------------|-----------------|
+| `descripcion` | `nombre` |
+| `unidad` | nombre/clave de `unidad_medida` (default UI `pza` si falta) |
+| `precio_unitario` | `precio_base` |
+| imagen | `imagen_principal` |
+| `cantidad` | usuario en el modal |
+
+Sin `producto_id` en `presupuesto_conceptos`.
 
 ## Catálogos globales OPUS
 
@@ -61,8 +85,8 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 
 | Archivo | Uso |
 |---------|-----|
-| `admin.php` | CRUD admin global / catálogos / OPUS / catálogo público |
-| `shared.php` | Búsqueda / tienda / lectura OPUS |
+| `admin.php` | CRUD admin global / OPUS; **catalogo-publico feed = deprecado** |
+| `shared.php` | `/catalogo/empresas`, tienda, lectura OPUS; `catalogo-publico/*` legacy temporal |
 | `public.php` | Indexes read-only |
 | `construcc.php` | Búsqueda productos para Construcc (**no** es lógica SP) |
 
@@ -70,22 +94,20 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 
 - `app/Services/CSVImport/` — processor, validators, export
 - `app/Services/Catalogo/CatalogoOpusHomologacionService` — match import → FKs OPUS
-- `CatalogoPublicoImportService` — feed público (no mezclar con CSV gerente)
+- `CatalogoPublicoImportService` — feed admin legacy (no mezclar con CSV gerente; **plan de apagado**)
 
-## Catálogo público (feed admin)
+## Feed admin `catalogo_publico` (deprecado)
 
-| Prefijo | Controller |
-|---------|------------|
-| `admin/catalogo-publico` | `AdminCatalogoPublicoController` |
-| `catalogo-publico` (shared, auth) | `CatalogoPublicoItemController` |
-
-Import: upsert por `(empresa, codigo)`.
+| Prefijo | Estado |
+|---------|--------|
+| `admin/catalogo-publico` | Legacy; plan de apagado completo |
+| `catalogo-publico` (shared) | Legacy; picker PPTOs usa `/catalogo/empresas` |
 
 ## Postman
 
 | Archivo | Contenido |
 |---------|-----------|
-| `postman/Catalogo.postman_collection.json` | Colección v2.1: gerente, shared/tienda, admin OPUS y catálogo público |
+| `postman/Catalogo.postman_collection.json` | Colección v2.1: gerente, shared/tienda, admin OPUS y catálogo público (actualizar con `/catalogo/empresas`) |
 | `postman/catalogo-json-schemas.json` | JSON Schema (bodies + resources + ApiResponse) |
 
 Variables útiles: `base_url`, `sanctum_token`, `proveedor_id` (demo Ferreteria LM: `19`).

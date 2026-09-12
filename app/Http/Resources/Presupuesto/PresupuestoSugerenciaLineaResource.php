@@ -24,6 +24,7 @@ class PresupuestoSugerenciaLineaResource extends JsonResource
                     : null,
             'empresa' => $this['empresa'] ?? null,
             'logo' => $this['logo'] ?? null,
+            'proveedor_id' => $this['proveedor_id'] ?? null,
             'categoria_ui' => $this['categoria_ui'] ?? null,
             'marca' => $this['marca'] ?? null,
             'familia' => $this['familia'] ?? null,

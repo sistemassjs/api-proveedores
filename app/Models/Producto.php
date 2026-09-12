@@ -47,6 +47,7 @@ class Producto extends BaseModel
         'principal',
         'estatus',
         'mostrar_precios',
+        'mostrar_en_catalogo_publico',
     ];
 
     protected static $filters = [
@@ -63,6 +64,8 @@ class Producto extends BaseModel
         'tipo' => 'Tipo',
         'activo' => 'Activo',
         'estatus' => 'Estatus',
+        'mostrar_en_catalogo_publico' => 'MostrarEnCatalogoPublico',
+        'search' => 'Search',
     ];
 
     protected $casts = [
@@ -76,6 +79,7 @@ class Producto extends BaseModel
         'destacado' => 'boolean',
         'activo' => 'boolean',
         'mostrar_precios' => 'boolean',
+        'mostrar_en_catalogo_publico' => 'boolean',
     ];
 
     public static function eagerLodable(): array
@@ -161,6 +165,28 @@ class Producto extends BaseModel
     public function filterByEstatus($query, $value)
     {
         return $query->where('estatus', $value);
+    }
+
+    public function filterByMostrarEnCatalogoPublico($query, $value)
+    {
+        return $query->where('mostrar_en_catalogo_publico', filter_var($value, FILTER_VALIDATE_BOOLEAN));
+    }
+
+    public function filterBySearch($query, $value)
+    {
+        $term = trim((string) $value);
+        if ($term === '') {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($term) {
+            $q->where('nombre', 'like', "%{$term}%")
+                ->orWhere('descripcion', 'like', "%{$term}%")
+                ->orWhere('sku', 'like', "%{$term}%")
+                ->orWhere('codigo_interno', 'like', "%{$term}%")
+                ->orWhere('codigo_fabricante', 'like', "%{$term}%")
+                ->orWhere('codigo_barras', 'like', "%{$term}%");
+        });
     }
 
     /** ----------------

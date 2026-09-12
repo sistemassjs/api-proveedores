@@ -2,7 +2,7 @@
 
 Dominio **aislado**: herramienta para generar presupuestos a distintos giros comerciales (mecánicos, herreros, constructores, vendedores, etc.) con una UX simple, al alcance de cualquier usuario.
 
-Parte de un **esquema gratuito** (plan base) y funciones **Plus** (ver [front.md](./front.md) — badge / directiva). A futuro puede evolucionar a apps independientes; hoy cohabita en el monorepo sin mezclarse con catálogo de productos ni solicitudes de pago.
+Parte de un **esquema gratuito** (plan base) y funciones **Plus** (ver [front.md](./front.md) — badge / directiva). A futuro puede evolucionar a apps independientes; hoy cohabita en el monorepo. Con catálogo de productos solo hay puente **lectura + snapshot** (sin FK); no mezclar con solicitudes de pago.
 
 ## Propósito
 
@@ -18,6 +18,7 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 | Acceso a empresas/proveedores registrados | **Hecho** | `proveedores-registrados` |
 | Receptor manual (texto) | **Hecho** | Sin entidad previa |
 | Conceptos libres (línea / párrafo) | **Hecho** | Snapshot; sin `producto_id` |
+| Picker desde catálogo productos | **Hecho** | Empresas `is_proveedor_catalogo` + productos `mostrar_en_catalogo_publico`; snapshot |
 | Catálogo de conceptos reutilizable | **Hecho** | API + modal captura (Plus) + sección menú **Catálogo de conceptos** (list/form/detail) |
 | Tarjetas Presentación (emisor / Atte.) | **Hecho** | API config + sección menú **Tarjetas** (list/form/detail); Perfil enlaza al listado |
 | Menú producto (Generar / Mis presupuestos / …) | **Hecho** | Ver [front.md](./front.md) |
@@ -56,7 +57,7 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 | No mezclar con | Motivo |
 |----------------|--------|
 | Solicitudes de pago (SP/SPP) | No hay conversión presupuesto → SP |
-| Catálogo de **productos** | Conceptos sin FK a producto |
+| Catálogo de **productos** | Sin FK; el picker **lee** productos publicados y hace snapshot. Ver [../cross-domain.md](../cross-domain.md) |
 | Cotizaciones / pedidos | Otros flujos |
 
 ## Advertencia de lenguaje

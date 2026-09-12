@@ -121,6 +121,7 @@ class ProveedorProductoResource extends JsonResource
             'updated_at' => $this->updated_at,
             'estatus' => $this->estatus,
             'activo' => (bool) $this->activo,
+            'mostrar_en_catalogo_publico' => (bool) ($this->mostrar_en_catalogo_publico ?? false),
         ];
     }
 }

@@ -50,10 +50,9 @@ Campo típico `term_cond_moneda`: valores admitidos **MXN** | **USD** | **EUR** 
 
 ## Conceptos
 
-Tipos: `concepto` | `parrafo`. Campos libres: descripción, cantidad, unidad, precios, imagen. **Sin `producto_id`.**
+Tipos: `concepto` | `parrafo`. Campos libres: descripción, cantidad, unidad, precios, imagen. **Sin `producto_id`.** El picker puede rellenar la línea desde productos publicados (snapshot: nombre→descripcion, unidad, precio_base, imagen).
 
-Catálogo de conceptos reutilizable: tabla `presupuesto_catalogo_conceptos` (`descripcion`, `categoria` producto|servicio, `unidad`, `precio_unitario` decimal(15,4) para Opus, `imagen_path` opcional, `activo` boolean default true — baja/reactivar sin hard delete). Al usarlo en un presupuesto se hace **snapshot** a la línea (sin FK). UI de precios: `environment.presupuestoPrecioDecimals` (storage 4 / display 2 por defecto). Sugerencias PPTO solo conceptos `activo=true`.
-
+Catálogo de conceptos reutilizable: tabla `presupuesto_catalogo_conceptos` (`descripcion`, `categoria` producto|servicio, `unidad`, `precio_unitario` decimal(15,4) para Opus, `imagen_path` opcional, `activo` boolean default true — baja/reactivar sin hard delete). Al usarlo en un presupuesto se hace **snapshot** a la línea (sin FK). UI de precios: `environment.presupuestoPrecioDecimals` (storage 4 / display 2 por defecto). Sugerencias PPTO: conceptos `activo=true` + productos `mostrar_en_catalogo_publico` de empresas catálogo.
 `cartera_clientes`: mismo patrón `activo` (baja/reactivar). Tarjetas (`config_emisor_receptor_presupuestos`): `estado` inactivo = baja; listado de gestión con `incluir_inactivos=1`.
 
 Traslados / viáticos: **no** hay columnas `obs_traslados` / `obs_viaticos` (drop fase 3). Fuente de verdad: `term_cond_visibilidad.incluye_traslados` / `incluye_viaticos`. La API puede exponer `obs_traslados` / `obs_viaticos` en Resources como **alias derivados** de esa visibilidad (compat front).

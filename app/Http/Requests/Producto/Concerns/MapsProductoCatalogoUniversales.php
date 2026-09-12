@@ -51,6 +51,7 @@ trait MapsProductoCatalogoUniversales
             'especificaciones.*.valor' => ['required_with:especificaciones', 'string'],
             'especificaciones.*.unidad' => ['nullable', 'string', 'max:50'],
             'especificaciones.*.orden' => ['nullable', 'integer', 'min:0'],
+            'mostrar_en_catalogo_publico' => array_merge($prefix, ['nullable', 'boolean']),
         ];
     }
 }

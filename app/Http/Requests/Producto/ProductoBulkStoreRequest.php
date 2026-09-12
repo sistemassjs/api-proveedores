@@ -81,6 +81,7 @@ class ProductoBulkStoreRequest extends FormRequest
             'productos.*.precio_mayoreo' => $precioRules,
             'productos.*.precio_menudeo' => $precioRules,
             'productos.*.activo' => ['nullable', 'boolean'],
+            'productos.*.mostrar_en_catalogo_publico' => ['nullable', 'boolean'],
             'productos.*.stock' => ['nullable', 'integer', 'min:0'],
             'productos.*.stock_inicial' => ['nullable', 'integer', 'min:0'],
 

@@ -26,9 +26,19 @@ Los módulos y el menú (`PROVEEDOR_CATALOG` / tipo catálogo) siguen existiendo
 
 Al trabajar el front de catálogo: verificar si hay que **volver a registrar** lazy routes, no asumir que ya navegan.
 
-## Catálogo público
+**Pendiente UI:** exponer `mostrar_en_catalogo_publico` en el form de producto para publicar al picker de PPTOs.
 
-Admin: `src/app/pages/panel-administrativo/pages/catalogo-publico/` — import Excel/CSV + listado seccionado por empresas (cards cuadradas/largas, hueco de imagen, edición de empresa y producto, filtros laterales marca/empresa/categoría, barra sticky de búsqueda+filtro, página de resultado de importación). Ruta UI: `/pages/panel-admin/catalogo-publico` (+ `/import-resultado`).
+## Picker presupuestos (consumo del catálogo)
 
-Picker presupuestos (`concepto-catalogo-manual-modal`): al añadir concepto abre en **Catálogo**. Filtros: Todos (acordeones por empresa + mis conceptos), Mis conceptos, Catálogo empresas (cards → productos).
+Modal `concepto-catalogo-manual-modal`:
 
+- Cards empresas → `GET /catalogo/empresas` (proveedores `is_proveedor_catalogo` + productos publicados).
+- Productos de empresa → `GET /catalogo/empresas/{proveedor}/productos`.
+- Facets OPUS → `…/productos/facets` (familia; sin marca).
+- Detalle → `…/productos/{producto}`.
+- Snapshot: `nombre`→descripcion, unidad, `precio_base`, imagen; sin FK.
+- Servicios: `PresupuestoCatalogoConceptosService` (`fetchEmpresasCatalogoPublico`, `fetchProductosCatalogoEmpresa`, …).
+
+## Feed admin `catalogo-publico` (deprecado)
+
+Pantalla admin `panel-administrativo/pages/catalogo-publico/` sigue en el repo pero **fuera del picker**. Plan de apagado completo (API + UI). No usar para nuevas features.
