@@ -6,6 +6,7 @@ use App\Http\Requests\Producto\Concerns\MapsProductoCatalogoUniversales;
 use App\Models\Categoria;
 use App\Models\Marca;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ProductoUpdateRequest extends FormRequest
 {
@@ -16,77 +17,114 @@ class ProductoUpdateRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->normalizePreciosInput();
+    }
+
     public function rules(): array
     {
         $proveedorId = $this->route('proveedor')->id ?? $this->input('proveedor_id');
 
         return array_merge([
             'nombre' => ['sometimes', 'required', 'string', 'max:100'],
-            'descripcion' => ['sometimes', 'required', 'string', 'max:255'],
+            'descripcion' => ['sometimes', 'nullable', 'string', 'max:255'],
             'codigo_interno' => ['sometimes', 'required', 'string', 'max:50'],
             'proveedor_id' => ['sometimes', 'required', 'integer', 'exists:proveedores,id'],
 
-            'precio_base' => ['sometimes', 'numeric'],
-            'precio_mayoreo' => ['sometimes', 'numeric'],
-            'precio_menudeo' => ['sometimes', 'numeric'],
-
-            'unidad_medida_id' => ['sometimes', 'required', 'integer', 'exists:unidad_medidas,id'],
+            'unidad_medida_id' => ['sometimes', 'nullable', 'integer', 'exists:unidad_medidas,id'],
 
             'categoria_id' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'integer',
                 'exists:categorias,id',
+                Rule::requiredIf(fn () => $this->filled('subcategoria_id')),
                 function ($attribute, $value, $fail) use ($proveedorId) {
-                    if (! Categoria::where('id', $value)->where('proveedor_id', $proveedorId)->exists()) {
-                        $fail('La categoría seleccionada no pertenece a este proveedor.');
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
+                    $categoria = Categoria::delProveedor($proveedorId)->find($value);
+
+                    if (! $categoria) {
+                        return $fail('La categoría no pertenece al proveedor.');
+                    }
+
+                    if ((int) $categoria->nivel !== 0) {
+                        return $fail('La categoría debe estar en el nivel 0 (categoría padre).');
                     }
                 },
             ],
 
             'subcategoria_id' => [
+                'sometimes',
                 'nullable',
                 'integer',
                 'exists:categorias,id',
                 function ($attribute, $value, $fail) use ($proveedorId) {
-                    if (! Categoria::where('id', $value)
-                        ->where('proveedor_id', $proveedorId)
-                        ->whereNotNull('parent_id')
-                        ->exists()) {
-                        $fail('La subcategoría seleccionada no es válida o no pertenece a una categoría padre.');
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
+                    $subcategoria = Categoria::with('parent')->delProveedor($proveedorId)->find($value);
+
+                    if (! $subcategoria) {
+                        return $fail('La subcategoría no pertenece al proveedor.');
+                    }
+
+                    if (! $subcategoria->parent_id) {
+                        return $fail('La subcategoría seleccionada no es válida o no pertenece a una categoría padre.');
+                    }
+
+                    $categoriaId = $this->input('categoria_id');
+                    if ($categoriaId !== null && $categoriaId !== '' && (int) $subcategoria->parent_id !== (int) $categoriaId) {
+                        return $fail('La subcategoría no pertenece a la categoría indicada.');
                     }
                 },
             ],
 
             'marca_id' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'integer',
                 'exists:marcas,id',
                 function ($attribute, $value, $fail) use ($proveedorId) {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
                     if (! Marca::where('id', $value)->where('proveedor_id', $proveedorId)->exists()) {
                         $fail('La marca seleccionada no pertenece a este proveedor.');
                     }
                 },
             ],
-        ], $this->reglasCamposUniversales(true));
+        ], $this->reglasPrecios(true), $this->reglasCamposUniversales(true));
     }
 
     public function messages(): array
     {
-        return [
+        return array_merge([
             'nombre.required' => 'El nombre es obligatorio.',
-            'descripcion.required' => 'La descripción es obligatoria.',
+            'nombre.string' => 'El nombre debe ser texto.',
+            'nombre.max' => 'El nombre no puede superar 100 caracteres.',
+            'descripcion.string' => 'La descripción debe ser texto.',
+            'descripcion.max' => 'La descripción no puede superar 255 caracteres.',
             'codigo_interno.required' => 'El código interno es obligatorio.',
+            'codigo_interno.string' => 'El código interno debe ser texto.',
+            'codigo_interno.max' => 'El código interno no puede superar 50 caracteres.',
             'proveedor_id.required' => 'El proveedor es obligatorio.',
             'proveedor_id.exists' => 'El proveedor seleccionado no es válido.',
-            'unidad_medida_id.required' => 'La unidad de medida es obligatoria.',
+            'proveedor_id.integer' => 'El proveedor debe ser un identificador numérico.',
+            'unidad_medida_id.integer' => 'La unidad de medida debe ser un identificador numérico.',
             'unidad_medida_id.exists' => 'La unidad de medida seleccionada no es válida.',
-            'categoria_id.required' => 'La categoría es obligatoria.',
+            'categoria_id.required' => 'La categoría es obligatoria cuando se indica subcategoría.',
+            'categoria_id.integer' => 'La categoría debe ser un identificador numérico.',
             'categoria_id.exists' => 'La categoría seleccionada no es válida.',
+            'subcategoria_id.integer' => 'La subcategoría debe ser un identificador numérico.',
             'subcategoria_id.exists' => 'La subcategoría seleccionada no es válida.',
-            'marca_id.required' => 'La marca es obligatoria.',
+            'marca_id.integer' => 'La marca debe ser un identificador numérico.',
             'marca_id.exists' => 'La marca seleccionada no es válida.',
-        ];
+        ], $this->mensajesCamposUniversales());
     }
 }
