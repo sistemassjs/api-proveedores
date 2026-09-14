@@ -26,7 +26,7 @@ Los módulos y el menú (`PROVEEDOR_CATALOG` / tipo catálogo) siguen existiendo
 
 Al trabajar el front de catálogo: verificar si hay que **volver a registrar** lazy routes, no asumir que ya navegan.
 
-**Pendiente UI:** exponer `mostrar_en_catalogo_publico` en el form de producto para publicar al picker de PPTOs.
+**Pendiente UI:** form producto alineado a [producto-form-validaciones-angular.md](./producto-form-validaciones-angular.md) (campos opcionales + familia/subfamilia OPUS aparte de categoría); exponer `mostrar_en_catalogo_publico` para publicar al picker de PPTOs.
 
 ## Picker presupuestos (consumo del catálogo)
 

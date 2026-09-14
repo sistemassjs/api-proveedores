@@ -36,16 +36,20 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 
 ### Producto — campos / specs
 
-- Store/update aceptan campos universales opcionales (`tipo`, `familia_id`, `subfamilia_id`, presentación/conversión, `tags`, etc.).
+- **Create required:** solo `nombre` y `codigo_interno`. Opcionales: descripción, categoría/subcategoría local, marca, unidad, tres precios, y universales.
+- **Taxonomías en paralelo:** `categoria_id`/`subcategoria_id` (local proveedor) y `familia_id`/`subfamilia_id` (OPUS). En CRUD son independientes (sin auto-homologación). En bulk/CSV se intenta empatar OPUS desde textos familia o, si faltan, categoría local para reducir nulls.
+- Store/update: campos universales opcionales (`tipo`, presentación/conversión, `tags`, etc.). Update usa `sometimes` (solo aplica keys enviadas).
 - Array `especificaciones[]` (`atributo`|`clave`, `valor`, `unidad`, `orden`) se sincroniza en create/update.
-- Precios siguen en columnas: `precio_base`, `precio_mayoreo`, `precio_menudeo`.
+- Precios: `precio_base`, `precio_mayoreo`, `precio_menudeo` — opcionales; `''` → `null`.
 - **`mostrar_en_catalogo_publico`** (bool, default `false`): si el producto se lista en el picker de presupuestos vía `/catalogo/empresas`.
+- Guía Angular (validaciones/mensajes): [producto-form-validaciones-angular.md](./producto-form-validaciones-angular.md).
 
 ### Import CSV (plantilla v1.0)
 
 - `plantilla_version` / `plantilla_fecha` en `ImportAudit` (`CatalogoImportPlantilla`).
+- **Headers required:** solo `codigo`, `producto`. Marca, categoría, unidad y precios opcionales.
 - Columnas opcionales: `familia`, `subfamilia`, más campos universales; `PropiedadN_Clave` / `PropiedadN_Valor` → EAV.
-- Homologación OPUS no bloqueante: match por `familia`/`subfamilia` o, si faltan, por `categoria`/`subcategoria` local (`CatalogoOpusHomologacionService`).
+- Homologación OPUS no bloqueante: match por `familia`/`subfamilia` o, si faltan, por `categoria`/`subcategoria` local (`CatalogoOpusHomologacionService`). Si no hay match de familia → OPUS null; local se guarda igual.
 - Columna `precio` → `precio_base`.
 - Formato genérico vs lineamiento NEXPROV (columnas actuales, gaps y encabezado v1.1): [plantilla-importacion.md](./plantilla-importacion.md).
 - Tabla temporal de import guarda `payload` JSON con la fila completa (p. ej. `PropiedadN_*`, `familia`, `tags`) para que el job persista especificaciones EAV.

@@ -45,6 +45,7 @@ Administrar productos, categorías/subcategorías **por empresa**, marcas; asign
 - [database.md](./database.md)
 - [front.md](./front.md)
 - [plantilla-importacion.md](./plantilla-importacion.md)
+- [producto-form-validaciones-angular.md](./producto-form-validaciones-angular.md) — create/update para form Angular
 - Ejemplo CSV: [plantilla-importacion-ejemplo-v1.1.csv](./plantilla-importacion-ejemplo-v1.1.csv)
 
 Ver también: [../cross-domain.md](../cross-domain.md)

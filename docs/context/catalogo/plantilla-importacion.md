@@ -52,22 +52,22 @@ No eliminar columnas opcionales de la plantilla solo porque un proveedor no las 
 
 | # | Columna CSV | Lineamiento | Notas |
 |---|-------------|-------------|--------|
-| 1 | `codigo` | Código / SKU | Obligatorio API |
-| 2 | `producto` | Producto | Nombre comercial |
-| 3 | `marca` | Marca | Obligatorio API hoy |
-| 4 | `categoria` | Grupo / Categoría | Local proveedor |
-| 5 | `unidad_medida` | Unidad de venta | Catálogo global de unidades |
-| 6 | `precio` | Precio | → `precio_base` |
+| 1 | `codigo` | Código / SKU | Obligatorio API / CSV |
+| 2 | `producto` | Producto | Nombre comercial (obligatorio) |
 
-### 3.2 Recomendadas / opcionales ya soportadas por la API (v1.0)
+### 3.2 Recomendadas / opcionales ya soportadas por la API
 
 | Columna CSV | Lineamiento | Estado API |
 |-------------|-------------|------------|
+| `marca` | Marca | OK (opcional) |
+| `categoria` | Grupo / Categoría | OK (opcional; local) |
+| `unidad_medida` | Unidad de venta | OK (opcional) |
+| `precio` | Precio | → `precio_base` (opcional) |
 | `descripcion` | Descripción | OK |
 | `subcategoria` | Subcategoría | OK |
 | `precio_mayoreo` | Precio mayoreo | OK |
 | `precio_menudeo` | Precio menudeo | OK |
-| `familia` | Familia (OPUS) | OK (homologación) |
+| `familia` | Familia (OPUS) | OK (homologación en bulk/CSV) |
 | `subfamilia` | Subfamilia OPUS | OK |
 | `tipo` | Tipo (Producto / Servicio / Renta) | OK |
 | `modelo` | Modelo | OK |
