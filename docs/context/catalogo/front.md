@@ -1,4 +1,4 @@
-﻿# Catálogo de productos — Frontend
+# Catálogo de productos — Frontend
 
 Repo: `app-proveedores`. Carpetas bajo `src/app/pages/proveedor/`:
 
@@ -9,8 +9,8 @@ Repo: `app-proveedores`. Carpetas bajo `src/app/pages/proveedor/`:
 | `marcas-proveedor/` | Marcas |
 | `unidades-proveedor/` | Unidades (**catálogo global**; UI bajo proveedor por compatibilidad) |
 | `sucursales-proveedor/` | Sucursales (+ stock) |
-| `import-productos/` | Flujo import + historial |
-| `csv-import/` | Alternativa CSV (upload → confirm → results) |
+| `import-productos/` | Flujo editable + historial → `POST productos/bulk` (localStorage; ≤~1000). **No** tocar al endurecer masivo |
+| `csv-import/` | Importación masiva servidor: upload → confirm → poll status/results (`camino: csv-import-servidor`) |
 
 Modelos compartidos: `shared/models/producto.model.ts`.
 
@@ -26,9 +26,30 @@ Los módulos y el menú (`PROVEEDOR_CATALOG` / tipo catálogo) siguen existiendo
 
 Al trabajar el front de catálogo: verificar si hay que **volver a registrar** lazy routes, no asumir que ya navegan.
 
-## Catálogo público
+**Pendiente UI:** form producto alineado a [producto-form-validaciones-angular.md](./producto-form-validaciones-angular.md) (campos opcionales + familia/subfamilia OPUS aparte de categoría); exponer `mostrar_en_catalogo_publico` para publicar al picker de PPTOs.
 
-Admin: `src/app/pages/panel-administrativo/pages/catalogo-publico/` — import Excel/CSV + listado seccionado por empresas (cards cuadradas/largas, hueco de imagen, edición de empresa y producto, filtros laterales marca/empresa/categoría, barra sticky de búsqueda+filtro, página de resultado de importación). Ruta UI: `/pages/panel-admin/catalogo-publico` (+ `/import-resultado`).
+## Picker presupuestos (consumo del catálogo)
 
-Picker presupuestos (`concepto-catalogo-manual-modal`): al añadir concepto abre en **Catálogo**. Filtros: Todos (acordeones por empresa + mis conceptos), Mis conceptos, Catálogo empresas (cards → productos).
+Modal `concepto-catalogo-manual-modal`:
 
+- Cards empresas → `GET /catalogo/empresas` (proveedores `is_proveedor_catalogo` + productos publicados).
+- Productos de empresa → `GET /catalogo/empresas/{proveedor}/productos`.
+- Facets OPUS → `…/productos/facets` (árbol familia→subfamilias; sin marca).
+- Picker PPTOs: barra de chips de familia; al elegir una, segunda barra anidada de subfamilias.
+- Detalle → `…/productos/{producto}`.
+- Snapshot: `nombre`→descripcion, unidad, `precio_base`, imagen; sin FK.
+
+## Gestión admin (reemplazo de catalogo-publico)
+
+Pantalla: `panel-administrativo/pages/catalogo-empresas/` — ruta UI `/pages/panel-admin/catalogo-empresas`.
+
+- Cards de empresas catálogo → productos con **multiselección** (publicar / despublicar).
+  - «Seleccionar visibles» marca la página cargada; si hay más resultados, banner **Seleccionar los N** aplica el filtro completo.
+- Import CSV NEXPROV vía `admin/catalogos/proveedores/{id}/csv-import`.
+- Nueva empresa: `proveedores/form?catalogo=1` (flag `is_proveedor_catalogo` + **logo** en el form; multipart al API).
+
+Menú admin: **Catálogo de empresas** (ya no «Catálogo público»).
+
+## Feed admin `catalogo-publico` (deprecado)
+
+Pantalla legacy `catalogo-publico/` puede seguir en el repo/ruta pero **fuera del menú**. No usar para nuevas features.

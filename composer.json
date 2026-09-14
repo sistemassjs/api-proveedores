@@ -80,7 +80,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74,#34d399\" \"php artisan serve --host 0.0.0.0 --port 8088\" \"php artisan queue:work  --queue=imports,notifications,default --sleep=3 --tries=3\" \"powershell -Command 'Get-Content -Path ./storage/logs/laravel.log -Wait -Tail 10'\" \"npm run dev\" \"php artisan reverb:start\" --names=server,queue,logs,vite,reverb"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php -d memory_limit=512M artisan serve --host 0.0.0.0 --port 8088\" \"php -d memory_limit=1024M artisan queue:work --queue=imports,notifications,default --sleep=3 --tries=3 --timeout=1800\" \"npm run dev\" \"php artisan reverb:start\" --names=server,queue,vite,reverb"
         ]
     },
     "extra": {

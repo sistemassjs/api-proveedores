@@ -11,14 +11,19 @@ class CSVImportProductValidator
     private array $optionalFields = [
         'descripcion',
         'subcategoria',
+        'marca',
+        'categoria',
+        'unidad_medida',
+        'precio',
+        'precio_mayoreo',
+        'precio_menudeo',
+        'familia',
+        'subfamilia',
     ];
 
     private array $requiredFields = [
         'codigo',
         'producto',
-        'marca',
-        'categoria',
-        'unidad_medida',
     ];
 
     private array $numericFields = [
@@ -154,10 +159,10 @@ class CSVImportProductValidator
             'codigo' => 'required',
             'producto' => 'required',
             'descripcion' => 'optional',
-            'marca' => 'required',
-            'categoria' => 'required',
+            'marca' => 'optional',
+            'categoria' => 'optional',
             'subcategoria' => 'optional',
-            'unidad_medida' => 'required',
+            'unidad_medida' => 'optional',
             'precio' => 'optional',
             'precio_mayoreo' => 'optional',
             'precio_menudeo' => 'optional',

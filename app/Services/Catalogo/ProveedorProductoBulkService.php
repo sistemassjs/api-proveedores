@@ -75,23 +75,16 @@ class ProveedorProductoBulkService
                     );
                     $unidadId = $this->resolveUnidad($row, $unidadCache);
 
-                    if (! $unidadId) {
-                        $errors[] = "Fila {$rowNum} ({$codigo}): no se pudo resolver unidad de medida.";
-                        continue;
-                    }
+                    // Homologación OPUS para reducir nulls: textos familia/subfamilia o, si faltan, categoría/subcategoría.
+                    // IDs explícitos de familia/subfamilia tienen prioridad.
+                    [$familiaId, $subfamiliaId, $opusMatched, $opusAttempted] = $this->resolveOpus($row);
 
-                    if (! $categoriaId || ! $subcategoriaId || ! $marcaId) {
-                        $errors[] = "Fila {$rowNum} ({$codigo}): faltan marca/categoría/subcategoría.";
-                        continue;
-                    }
-
-                    $familiaTxt = trim((string) ($row['familia'] ?? $row['categoria_nombre'] ?? ''));
-                    $subfamiliaTxt = trim((string) ($row['subfamilia'] ?? $row['subcategoria_nombre'] ?? ''));
-                    $opus = $this->opusMatch->match($familiaTxt, $subfamiliaTxt);
-                    if ($opus['matched']) {
-                        $opusOk++;
-                    } elseif ($familiaTxt !== '' || $subfamiliaTxt !== '') {
-                        $opusMiss++;
+                    if ($opusAttempted) {
+                        if ($opusMatched) {
+                            $opusOk++;
+                        } else {
+                            $opusMiss++;
+                        }
                     }
 
                     $precioBase = $this->normalizePrecio(
@@ -113,17 +106,28 @@ class ProveedorProductoBulkService
                         'nombre' => $row['nombre'],
                         'descripcion' => $row['descripcion'] ?? null,
                         'modelo' => $row['modelo'] ?? null,
+                        'tipo' => $row['tipo'] ?? null,
+                        'codigo_fabricante' => $row['codigo_fabricante'] ?? null,
+                        'codigo_barras' => $row['codigo_barras'] ?? null,
                         'sku' => $codigo,
                         'marca_id' => $marcaId,
                         'categoria_id' => $categoriaId,
                         'subcategoria_id' => $subcategoriaId,
                         'unidad_medida_id' => $unidadId,
-                        'familia_id' => $row['familia_id'] ?? $opus['familia_id'],
-                        'subfamilia_id' => $row['subfamilia_id'] ?? $opus['subfamilia_id'],
+                        'familia_id' => $familiaId,
+                        'subfamilia_id' => $subfamiliaId,
                         'precio_base' => $precioBase,
                         'precio_mayoreo' => $precioMayoreo,
                         'precio_menudeo' => $precioMenudeo,
+                        'presentacion' => $row['presentacion'] ?? null,
+                        'disponibilidad' => $row['disponibilidad'] ?? null,
+                        'tiempo_entrega' => $row['tiempo_entrega'] ?? null,
+                        'url_producto' => $row['url_producto'] ?? null,
+                        'tags' => $row['tags'] ?? null,
                         'activo' => array_key_exists('activo', $row) ? (bool) $row['activo'] : true,
+                        'mostrar_en_catalogo_publico' => array_key_exists('mostrar_en_catalogo_publico', $row)
+                            ? (bool) $row['mostrar_en_catalogo_publico']
+                            : false,
                         'stock' => (int) ($row['stock'] ?? $row['stock_inicial'] ?? 0),
                         'estatus' => EstadoGeneral::ACTIVO->value,
                     ];
@@ -256,8 +260,7 @@ class ProveedorProductoBulkService
 
         $nombre = trim((string) ($row['subcategoria_nombre'] ?? ''));
         if ($nombre === '') {
-            // Si no hay subcategoría, reutilizar la categoría como “general”
-            $nombre = 'General';
+            return null;
         }
 
         $key = $categoriaId.'|'.mb_strtolower($nombre);
@@ -288,7 +291,7 @@ class ProveedorProductoBulkService
 
         $nombre = trim((string) ($row['unidad_medida'] ?? ''));
         if ($nombre === '') {
-            $nombre = 'Pieza';
+            return null;
         }
 
         $key = mb_strtolower($nombre);
@@ -313,6 +316,59 @@ class ProveedorProductoBulkService
         }
 
         return $cache[$key];
+    }
+
+    /**
+     * Resuelve familia/subfamilia OPUS.
+     * Prioridad: IDs explícitos → match por textos familia/subfamilia → fallback categoría/subcategoría.
+     * Regla: si no hay match de familia, no se guarda OPUS; si familia sí y subfamilia no, solo familia.
+     *
+     * @return array{0: ?int, 1: ?int, 2: bool, 3: bool} [familia_id, subfamilia_id, matched, attempted]
+     */
+    private function resolveOpus(array $row): array
+    {
+        $hasExplicitFamilia = array_key_exists('familia_id', $row) && $row['familia_id'] !== null && $row['familia_id'] !== '';
+        $hasExplicitSubfamilia = array_key_exists('subfamilia_id', $row) && $row['subfamilia_id'] !== null && $row['subfamilia_id'] !== '';
+
+        if ($hasExplicitFamilia || $hasExplicitSubfamilia) {
+            $familiaId = $hasExplicitFamilia ? (int) $row['familia_id'] : null;
+            $subfamiliaId = $hasExplicitSubfamilia ? (int) $row['subfamilia_id'] : null;
+
+            // Sin familia explícita no persistimos subfamilia suelta.
+            if ($familiaId === null) {
+                $subfamiliaId = null;
+            }
+
+            return [$familiaId, $subfamiliaId, $familiaId !== null, true];
+        }
+
+        $familiaTxt = trim((string) ($row['familia'] ?? ''));
+        $subfamiliaTxt = trim((string) ($row['subfamilia'] ?? ''));
+
+        if ($familiaTxt === '') {
+            $familiaTxt = trim((string) ($row['categoria_nombre'] ?? ''));
+        }
+        if ($subfamiliaTxt === '') {
+            $subfamiliaTxt = trim((string) ($row['subcategoria_nombre'] ?? ''));
+        }
+
+        if ($familiaTxt === '' && $subfamiliaTxt === '') {
+            return [null, null, false, false];
+        }
+
+        $opus = $this->opusMatch->match($familiaTxt, $subfamiliaTxt);
+
+        // Estricto respecto a familia: si no hubo familia_id, no guardar OPUS (ignora fallback solo-subfamilia).
+        if ($opus['familia_id'] === null) {
+            return [null, null, false, true];
+        }
+
+        return [
+            (int) $opus['familia_id'],
+            $opus['subfamilia_id'] !== null ? (int) $opus['subfamilia_id'] : null,
+            (bool) $opus['matched'],
+            true,
+        ];
     }
 
     /**

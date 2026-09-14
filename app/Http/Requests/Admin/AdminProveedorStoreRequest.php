@@ -19,6 +19,17 @@ class AdminProveedorStoreRequest extends FormRequest
             'rfc' => 'required|string|max:13|unique:proveedores,rfc',
             'email' => 'required|email|max:255|unique:proveedores,email',
             'telefono' => 'nullable|string|max:20',
+            'is_proveedor_catalogo' => 'sometimes|boolean',
+            'is_proveedor_sp' => 'sometimes|boolean',
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'logo.image' => 'El archivo debe ser una imagen válida.',
+            'logo.mimes' => 'El logo debe estar en formato JPG o PNG.',
         ];
     }
 }

@@ -1,4 +1,4 @@
-﻿# Catálogo de productos — Base de datos
+# Catálogo de productos — Base de datos
 
 ## Models
 
@@ -11,8 +11,8 @@
 | `UnidadMedida` | Unidades **globales** (sin `proveedor_id`); unique `nombre` |
 | `Sucursal` | Sucursales; pivot con producto |
 | `ProductoImagen` / `ProductoEspecificacion` / `ProductoDocumento` | Satélites (EAV specs, galería, fichas/docs) |
-| `ImportAudit` / `ImportValidationCache` | Import CSV (+ `plantilla_version` / `plantilla_fecha`) |
-| `CatalogoPublicoItem` | Feed plano global (`catalogo_publico_items`); unique `(empresa, codigo)` |
+| `ImportAudit` / `ImportValidationCache` | Import CSV (+ `plantilla_version` / `plantilla_fecha`); masivo usa tablas temporales + job cola `imports` |
+| `CatalogoPublicoItem` | **Deprecado** — feed plano legacy; sustituido por `productos.mostrar_en_catalogo_publico` |
 
 ## Clasificación dual
 
@@ -38,10 +38,11 @@ Se mantienen columnas en `productos`: `precio_base`, `precio_mayoreo`, `precio_m
 
 `tipo`, `codigo_fabricante`, `codigo_barras`, `disponibilidad`, `tiempo_entrega`, `url_producto`, `tags` (json), más presentación/conversión y FKs OPUS anteriores.
 
-## Catálogo público (feed)
+**`mostrar_en_catalogo_publico`** (boolean, default `false`): publica el producto en el picker de presupuestos (`/catalogo/empresas`). Índice `(proveedor_id, mostrar_en_catalogo_publico)`.
 
-Tabla plana, **sin** `proveedor_id`. `empresa` y `logo` vienen del Excel; `imagen` es la foto del producto. Columnas típicas de import: codigo, producto/nombre, descripcion, marca, categoria, subcategoria, unidad, modelo, empresa, logo, imagen, precio, precio_mayoreo, precio_menudeo. Extras → JSON `propiedades`.
+## Feed admin `catalogo_publico` (deprecado)
 
+Tabla plana legacy `catalogo_publico_items`, **sin** `proveedor_id`. Sustituida por productos publicados. Plan de apagado del CRUD admin/import.
 ## Relaciones
 
 ```

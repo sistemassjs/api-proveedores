@@ -133,15 +133,16 @@ class Proveedor extends BaseModel
 
     public static function eagerLodable(): array
     {
+        // No incluir `productos` ni `solicitudesPago`: pueden ser decenas de miles
+        // y tumbar endpoints de sesión (p.ej. GET proveedores/user/{id}) por memoria.
         return [
             'categorias',
             'marcas',
             'sucursales',
-            'productos',
             'cuentasBancarias',
             'regimenesFiscales',
             'empresasConstrucc',
-            'solicitudesPago',
+            'tipos_empresa',
         ];
     }
 

@@ -15,7 +15,7 @@ Repo: `api-proveedores`. Prefijo gerente: `proveedores/{proveedor}/…` + `prove
 | | `GET /proveedores-registrados` | Receptores = proveedores del sistema |
 | Cartera | `{proveedor}/presupuestos/cartera-clientes` | `ProveedorPresupuestoCarteraClientesController` |
 | Catálogo conceptos | `{proveedor}/presupuestos/presupuesto-catalogo-conceptos` | `ProveedorPresupuestoCatalogoConceptosController` |
-| | `GET …/sugerencias` | Interno + catálogo público (snapshot al elegir) |
+| | `GET …/sugerencias` | Interno + productos publicados de empresas catálogo (snapshot al elegir; sin FK) |
 | Plantillas | `{proveedor}/presupuestos/plantillas` | `ProveedorPresupuestoPlantillaController` |
 | | `GET/POST /`, `GET/PUT/PATCH/DELETE /{plantilla}` | CRUD aislado del documento |
 | | `POST …/plantillas/desde-presupuesto/{presupuesto}` | Snapshot PPTO → plantilla (sin receptor) |

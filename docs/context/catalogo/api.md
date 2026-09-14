@@ -7,28 +7,92 @@ Repo: `api-proveedores`. Núcleo en `routes/segmented/gerente.php` bajo `proveed
 | Prefijo | Controller |
 |---------|------------|
 | `{proveedor}/productos` | `ProveedorProductoController` (+ logo) |
-| `{proveedor}/productos/bulk` | `POST` importación masiva (front import-productos) |
+| `{proveedor}/productos/bulk` | `POST` importación editable ≤1000 (front `import-productos` + localStorage). **No** usar para ~50k |
 | `{proveedor}/productos/{producto}/documentos` | `ProveedorProductoDocumentoController` |
 | `{proveedor}/categorias` | `ProveedorCategoriaController` (+ subcategorías, logo, counts) |
 | `{proveedor}/marcas` | `ProveedorMarcaController` (+ logo) |
 | `{proveedor}/unidades` | `ProveedorUnidadMedidaController` — **catálogo global** (rutas bajo proveedor por compatibilidad; ya no filtra por `proveedor_id`) |
 | `{proveedor}/sucursales/{sucursal}/productos` | `SucursalProductoController` (asignar / desasignar / stock) |
-| `{proveedor}/csv-import` | `CsvImportController` (+ job `CSVImportJob`) |
+| `{proveedor}/csv-import` | `CsvImportController` — importación **masiva servidor** (~50k; temp tables + `CSVImportJob`) |
+
+### Dos caminos de importación (no mezclar)
+
+| Camino | Front | API | Límite práctico |
+|--------|-------|-----|-----------------|
+| Editable / pequeño | `import-productos` + localStorage | `POST …/productos/bulk` | ≤ ~1000 filas |
+| Masivo servidor | `csv-import` | `upload` → `confirm` → `status`/`results` | ~50 MB / ~50k filas |
+
+Flujo masivo:
+
+1. `POST …/csv-import/upload` — max 50 MB; respuesta incluye `camino: csv-import-servidor`, `audit_id`, `preview_token`, plantilla.
+2. `POST …/csv-import/confirm` — solo si `estado=preview` (409 si ya confirmado); despacha `CSVImportJob` en cola `imports` con `afterResponse()`.
+3. Poll `GET …/csv-import/status/{audit}` / `results/{audit}`.
+
+**Ops (local):** `QUEUE_CONNECTION=database`, `QUEUE_RETRY_AFTER=1900`, worker `queue:work --queue=imports,… --timeout=1800` (`composer dev`). Con `sync`, el job corre en el request HTTP y puede timeout. El `confirm` despacha a la cola de inmediato (sin `afterResponse`) para que `artisan serve` no retrase el JSON y el front no se quede en “Confirmando…”. En imports grandes el progreso del job se escribe con menos frecuencia; el log live se quitó de `composer dev` (usar `storage/logs/laravel.log`) para no congelar la consola.
+
+Controllers tipan `Proveedor $proveedor` (route model binding).
 
 Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.marca`, `proveedor.unidad` (solo resuelve la unidad; no valida ownership), `proveedor.sucursal` (según ruta).
 
 ### Producto — campos / specs
 
-- Store/update aceptan campos universales opcionales (`tipo`, `familia_id`, `subfamilia_id`, presentación/conversión, `tags`, etc.).
+- **Create required:** solo `nombre` y `codigo_interno`. Opcionales: descripción, categoría/subcategoría local, marca, unidad, tres precios, y universales.
+- **Taxonomías en paralelo:** `categoria_id`/`subcategoria_id` (local proveedor) y `familia_id`/`subfamilia_id` (OPUS). En CRUD son independientes (sin auto-homologación). En bulk/CSV se intenta empatar OPUS desde textos familia o, si faltan, categoría local para reducir nulls.
+- Store/update: campos universales opcionales (`tipo`, presentación/conversión, `tags`, etc.). Update usa `sometimes` (solo aplica keys enviadas).
 - Array `especificaciones[]` (`atributo`|`clave`, `valor`, `unidad`, `orden`) se sincroniza en create/update.
-- Precios siguen en columnas: `precio_base`, `precio_mayoreo`, `precio_menudeo`.
+- Precios: `precio_base`, `precio_mayoreo`, `precio_menudeo` — opcionales; `''` → `null`.
+- **`mostrar_en_catalogo_publico`** (bool, default `false`): si el producto se lista en el picker de presupuestos vía `/catalogo/empresas`.
+- Guía Angular (validaciones/mensajes): [producto-form-validaciones-angular.md](./producto-form-validaciones-angular.md).
 
 ### Import CSV (plantilla v1.0)
 
 - `plantilla_version` / `plantilla_fecha` en `ImportAudit` (`CatalogoImportPlantilla`).
+- **Headers required:** solo `codigo`, `producto`. Marca, categoría, unidad y precios opcionales.
 - Columnas opcionales: `familia`, `subfamilia`, más campos universales; `PropiedadN_Clave` / `PropiedadN_Valor` → EAV.
-- Homologación OPUS no bloqueante: match por `familia`/`subfamilia` o, si faltan, por `categoria`/`subcategoria` local (`CatalogoOpusHomologacionService`).
+- Homologación OPUS no bloqueante: match por `familia`/`subfamilia` o, si faltan, por `categoria`/`subcategoria` local (`CatalogoOpusHomologacionService`). Si no hay match de familia → OPUS null; local se guarda igual.
 - Columna `precio` → `precio_base`.
+- Formato genérico vs lineamiento NEXPROV (columnas actuales, gaps y encabezado v1.1): [plantilla-importacion.md](./plantilla-importacion.md).
+- Tabla temporal de import guarda `payload` JSON con la fila completa (p. ej. `PropiedadN_*`, `familia`, `tags`) para que el job persista especificaciones EAV.
+
+## Catálogo empresas admin (gestión)
+
+UI: `/pages/panel-admin/catalogo-empresas` (reemplaza menú «Catálogo público»).
+
+| Acción | API |
+|--------|-----|
+| Listar empresas catálogo | `GET /admin/catalogo-empresas` |
+| Productos de empresa | `GET /admin/catalogo-empresas/{proveedor}/productos` |
+| Publicar/despublicar masivo | `POST /admin/catalogo-empresas/{proveedor}/productos/bulk-flags` |
+| Marcar empresa como catálogo | `POST /admin/catalogo-empresas/{proveedor}/marcar-catalogo` |
+| Import CSV | `POST /admin/catalogos/proveedores/{proveedor}/csv-import/upload\|confirm` (+ status/results) |
+
+Alta empresa con `is_proveedor_catalogo`: form admin `proveedores/form?catalogo=1` (incluye **logo** opcional vía multipart en `POST/PATCH admin/catalogos/proveedores`).
+
+Multiselección en listado de productos: publicar / despublicar `mostrar_en_catalogo_publico`.
+Body: `producto_ids[]` **o** `aplicar_filtro=true` (+ `search`, `filtro_mostrar_en_catalogo_publico`) para actuar sobre todo el filtro (no solo visibles).
+
+## Catálogo empresas (picker PPTOs)
+
+Rutas en `routes/segmented/shared.php` (`auth:sanctum`). Controller: `Catalogo\CatalogoEmpresasController`.
+
+| Método | Path | Rol |
+|--------|------|-----|
+| `GET` | `/catalogo/empresas` | Cards: proveedores `is_proveedor_catalogo` con ≥1 producto publicado. Query `search` (empresa o producto; resultado agrupado por empresa). Respuesta: `proveedor_id`, `empresa` (label), `razon_social`, `nombre_comercial`, `logo`, `total_productos` |
+| `GET` | `/catalogo/empresas/{proveedor}/productos` | Productos `activo` + `mostrar_en_catalogo_publico`. Query: `search`, `familia` / `familia_id`, `subfamilia` / `subfamilia_id`, `per_page`. Shape tipo sugerencia PPTOs (`origen: catalogo`) |
+| `GET` | `/catalogo/empresas/{proveedor}/productos/facets` | Facets OPUS: `arbol` (familia→subfamilias), `familias`, `subfamilias` (+ alias `categorias`; `marcas` vacío) |
+| `GET` | `/catalogo/empresas/{proveedor}/productos/{producto}` | Detalle para ficha del picker |
+
+### Snapshot a línea de presupuesto (acordado v1)
+
+| Campo línea PPTO | Origen producto |
+|------------------|-----------------|
+| `descripcion` | `nombre` |
+| `unidad` | nombre/clave de `unidad_medida` (default UI `pza` si falta) |
+| `precio_unitario` | `precio_base` |
+| imagen | `imagen_principal` |
+| `cantidad` | usuario en el modal |
+
+Sin `producto_id` en `presupuesto_conceptos`.
 
 ## Catálogos globales OPUS
 
@@ -42,8 +106,8 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 
 | Archivo | Uso |
 |---------|-----|
-| `admin.php` | CRUD admin global / catálogos / OPUS / catálogo público |
-| `shared.php` | Búsqueda / tienda / lectura OPUS |
+| `admin.php` | CRUD admin / OPUS; **`/admin/catalogo-empresas`** gestión productos; catalogo-publico feed = deprecado |
+| `shared.php` | `/catalogo/empresas`, tienda, lectura OPUS; `catalogo-publico/*` legacy temporal |
 | `public.php` | Indexes read-only |
 | `construcc.php` | Búsqueda productos para Construcc (**no** es lógica SP) |
 
@@ -51,22 +115,20 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 
 - `app/Services/CSVImport/` — processor, validators, export
 - `app/Services/Catalogo/CatalogoOpusHomologacionService` — match import → FKs OPUS
-- `CatalogoPublicoImportService` — feed público (no mezclar con CSV gerente)
+- `CatalogoPublicoImportService` — feed admin legacy (no mezclar con CSV gerente; **plan de apagado**)
 
-## Catálogo público (feed admin)
+## Feed admin `catalogo_publico` (deprecado)
 
-| Prefijo | Controller |
-|---------|------------|
-| `admin/catalogo-publico` | `AdminCatalogoPublicoController` |
-| `catalogo-publico` (shared, auth) | `CatalogoPublicoItemController` |
-
-Import: upsert por `(empresa, codigo)`.
+| Prefijo | Estado |
+|---------|--------|
+| `admin/catalogo-publico` | Legacy; plan de apagado completo |
+| `catalogo-publico` (shared) | Legacy; picker PPTOs usa `/catalogo/empresas` |
 
 ## Postman
 
 | Archivo | Contenido |
 |---------|-----------|
-| `postman/Catalogo.postman_collection.json` | Colección v2.1: gerente, shared/tienda, admin OPUS y catálogo público |
+| `postman/Catalogo.postman_collection.json` | Colección v2.1: gerente, shared/tienda, admin OPUS y catálogo público (actualizar con `/catalogo/empresas`) |
 | `postman/catalogo-json-schemas.json` | JSON Schema (bodies + resources + ApiResponse) |
 
 Variables útiles: `base_url`, `sanctum_token`, `proveedor_id` (demo Ferreteria LM: `19`).

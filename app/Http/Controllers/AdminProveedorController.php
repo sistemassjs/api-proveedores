@@ -37,6 +37,8 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 use App\Support\AdminListOrdering;
 
@@ -148,13 +150,13 @@ class AdminProveedorController extends Controller
 
         $validated = $request->validated();
 
-
-
-        // Crear proveedor
+        unset($validated['logo']);
 
         $proveedor = Proveedor::create($validated);
 
-
+        if ($request->hasFile('logo')) {
+            $this->storeProveedorLogo($proveedor, $request->file('logo'));
+        }
 
         return $this->success(
 
@@ -575,9 +577,15 @@ class AdminProveedorController extends Controller
 
         $validated = $request->validated();
 
+        unset($validated['logo']);
+
         $estatusAnterior = $proveedor->estatus;
 
         $proveedor->update($validated);
+
+        if ($request->hasFile('logo')) {
+            $this->storeProveedorLogo($proveedor, $request->file('logo'));
+        }
 
         if (array_key_exists('es_cuenta_de_pruebas', $validated)) {
             \App\Support\MetricasPlataforma::forgetCache();
@@ -598,7 +606,23 @@ class AdminProveedorController extends Controller
 
     }
 
+    /**
+     * Guarda el logo de la empresa en storage público (logos_empresas).
+     */
+    protected function storeProveedorLogo(Proveedor $proveedor, UploadedFile $file): void
+    {
+        if ($proveedor->logo && Storage::disk('public')->exists($proveedor->logo)) {
+            Storage::disk('public')->delete($proveedor->logo);
+        }
 
+        $idPadded = str_pad((string) $proveedor->id, 6, '0', STR_PAD_LEFT);
+        $randomStr = strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+        $extension = $file->getClientOriginalExtension() ?: 'jpg';
+        $filename = "{$idPadded}_{$randomStr}.{$extension}";
+        $path = $file->storeAs('logos_empresas', $filename, 'public');
+
+        $proveedor->update(['logo' => $path]);
+    }
 
     /**
 

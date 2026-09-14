@@ -53,12 +53,34 @@ find /var/www/api_proveedores/storage /var/www/api_proveedores/bootstrap/cache -
 chmod 640 /var/www/api_proveedores/.env
 ```
 
-No hacer `git pull` como **root** en esta carpeta (rompe `.git/objects`). Usar siempre `deploy`:
+No hacer `git pull` / `git fetch` como **root** en esta carpeta (rompe `.git/objects` y el deploy de Actions falla con exit 128). Usar siempre `deploy`:
 
 ```bash
 sudo -u deploy -H git -C /var/www/api_proveedores pull
 ```
 
+### Recuperación rápida: `insufficient permission … .git/objects`
+
+Si Actions falla en `git fetch` con ese error, **alguien ejecutó git como root** (o creó objetos root en `.git`). En el VPS como root:
+
+```bash
+chown -R deploy:www-data /var/www/api_proveedores
+find /var/www/api_proveedores/storage /var/www/api_proveedores/bootstrap/cache -type d -exec chmod 2775 {} \;
+find /var/www/api_proveedores/storage /var/www/api_proveedores/bootstrap/cache -type f -exec chmod 664 {} \;
+chmod 640 /var/www/api_proveedores/.env
+sudo -u deploy -H git -C /var/www/api_proveedores status
+```
+
+Luego en GitHub → Actions → **Desplegar a VPS** → **Run workflow**.
+
+Opcional (auto-reparación en el próximo deploy): permitir a `deploy` arreglar solo `.git` sin password:
+
+```bash
+# /etc/sudoers.d/api-proveedores-git  (validar con visudo -cf)
+deploy ALL=(root) NOPASSWD: /usr/bin/chown -R deploy\:www-data /var/www/api_proveedores/.git
+```
+
+El workflow intenta ese `chown` si `.git/objects` no es escribible; sin este sudoers, falla en segundos con el comando exacto de arriba.
 ### Remoto Git por SSH
 
 ```bash
@@ -96,18 +118,33 @@ sudo -u deploy -H ssh -i /home/deploy/.ssh/github_actions_deploy \
 
 1. SSH al VPS con `VPS_*`
 2. `php artisan down --retry=60` (si falla, el `trap` hace `up`)
-3. `git fetch origin main` + `git reset --hard origin/main`
-4. `composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction`
-5. `php artisan migrate --force --no-interaction`
-6. `optimize:clear`, `config:cache`, `route:cache`, `view:cache`
-7. Asegura `public/storage` como **symlink** (`storage:link`):
+3. Comprueba escritura en `.git/objects`; si falta, intenta `sudo chown` de `.git` (sudoers opcional)
+4. `git fetch origin main` + `git reset --hard origin/main`
+5. `composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction`
+6. `php artisan migrate --force --no-interaction`
+7. `optimize:clear`, `config:cache`, `route:cache`, `view:cache`
+8. Asegura `public/storage` como **symlink** (`storage:link`):
    - Si existe como carpeta real (p. ej. por un `.gitkeep` viejo), la elimina
    - Si el symlink ya está, no lo recrea
    - Falla el deploy si al final no es un enlace simbólico
-8. `php artisan up`
-9. `GET https://api.rorisafe.com/gestion/api/status` desde el runner
+9. `php artisan up`
+10. `timeout 60 sudo supervisorctl restart api-proveedores-worker:*` (recarga cola tras `config:cache`; evita cuelgues de 15m)
+11. `GET https://api.rorisafe.com/gestion/api/status` desde el runner
 
 No ejecuta seeders, `migrate:fresh`, `key:generate` ni modifica `.env`.
+
+### Cola / Supervisor (requerido para import CSV masivo)
+
+En el VPS debe existir el programa Supervisor `api-proveedores-worker` (`queue:work` con colas `imports,notifications,default`, `--timeout=1800`). En `.env`: `QUEUE_CONNECTION=database`, `QUEUE_RETRY_AFTER=1900`.
+
+El usuario `deploy` necesita sudo sin password solo para reiniciar ese worker, p. ej.:
+
+```bash
+# /etc/sudoers.d/api-proveedores-worker  (validar con visudo -cf)
+deploy ALL=(root) NOPASSWD: /usr/bin/supervisorctl restart api-proveedores-worker\:*, /usr/bin/supervisorctl status api-proveedores-worker\:*
+```
+
+Sin ese sudoers, el paso 10 del workflow falla el deploy.
 
 **Importante:** los archivos públicos viven en `storage/app/public/`. `public/storage` solo es el enlace; no debe versionarse ni crearse como directorio.
 
@@ -131,12 +168,15 @@ Tras un deploy:
 | `could not read Username for 'https://github.com'` | Remoto HTTPS → `git remote set-url` a SSH |
 | `Host key verification failed` | `deploy` sin `github.com` en `known_hosts` |
 | `Permission denied (publickey)` hacia GitHub | Llave de cuenta no en GitHub o no en home de `deploy` |
-| `insufficient permission … .git/objects` | `git` hecho como root → `chown -R deploy:www-data` del proyecto |
+| `insufficient permission … .git/objects` / exit 128 en `git fetch` | `git` hecho como root → ver **Recuperación rápida** arriba (`chown -R deploy:www-data`) |
 | Job OK pero versión vieja | No se subió `VERSION` o caché de CDN/proxy; hard refresh / curl directo |
 | Logos /storage 404 tras deploy | `public/storage` era carpeta, no symlink; el workflow ya lo corrige; en VPS: `rm -rf public/storage && php artisan storage:link` |
+| `sudo: a password is required` / falló restart worker | Falta sudoers de `deploy` para `supervisorctl` (ver sección Cola / Supervisor) o el programa Supervisor no existe aún |
+| `Run Command Timeout` (~15m) tras `Application is now live` | `supervisorctl restart` colgado; el workflow ahora usa `timeout 60`. En VPS: `sudo supervisorctl status api-proveedores-worker:*` y reiniciar/arreglar el conf de Supervisor |
 
 ## Límites
 
 - No toca el front en GoDaddy.
-- CORS, Reverb, `APP_KEY` y MySQL viven en el `.env` del VPS.
+- CORS, Reverb, `APP_KEY`, MySQL y `QUEUE_*` viven en el `.env` del VPS.
 - Recargar PHP-FPM no forma parte de este flujo.
+- El restart de Supervisor sí forma parte del workflow; el conf de Supervisor y el `.env` de cola se preparan una vez en el servidor.

@@ -18,7 +18,8 @@ return [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 90,
+            // Importaciones masivas (~50k) pueden superar 30 min; alinear con CSVImportJob::$timeout
+            'retry_after' => (int) env('QUEUE_RETRY_AFTER', 1900),
             'after_commit' => false,
         ],
     ],

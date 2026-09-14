@@ -149,6 +149,7 @@ class ProveedorUpdateRequest extends FormRequest
             'is_proveedor_catalogo' => ['sometimes', 'boolean'],
             'tipos_empresa_id' => ['sometimes', 'nullable', 'integer', 'exists:tipos_empresa,id'],
             'tipos_empresa_otro' => ['nullable', 'string', 'max:255'],
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg'],
         ];
 
         if ($admin) {

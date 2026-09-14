@@ -14,6 +14,7 @@ use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\TipoEmpresaController;
 use App\Http\Controllers\UnidadMedidaController;
 use App\Http\Controllers\Catalogo\CatalogoPublicoItemController;
+use App\Http\Controllers\Catalogo\CatalogoEmpresasController;
 use App\Http\Controllers\Catalogo\CatalogoFamiliaController;
 
 /*
@@ -70,7 +71,19 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     /**
-     * CATÁLOGO PÚBLICO (lectura; importado por admin)
+     * CATÁLOGO EMPRESAS (productos del dominio catálogo publicados para PPTOs)
+     * Reemplaza la lectura de catalogo-publico en el picker de presupuestos.
+     */
+    Route::prefix('catalogo/empresas')->group(function () {
+        Route::get('/', [CatalogoEmpresasController::class, 'index'])->middleware(['audit']);
+        Route::get('{proveedor}/productos/facets', [CatalogoEmpresasController::class, 'facets'])->middleware(['audit']);
+        Route::get('{proveedor}/productos/{producto}', [CatalogoEmpresasController::class, 'show'])->middleware(['audit']);
+        Route::get('{proveedor}/productos', [CatalogoEmpresasController::class, 'productos'])->middleware(['audit']);
+    });
+
+    /**
+     * CATÁLOGO PÚBLICO legacy (feed admin) — deprecado; preferir catalogo/empresas.
+     * Se mantiene temporalmente hasta apagar admin/catalogo-publico.
      */
     Route::prefix('catalogo-publico')->group(function () {
         Route::get('/', [CatalogoPublicoItemController::class, 'index'])->middleware(['audit']);

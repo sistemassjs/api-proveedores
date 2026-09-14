@@ -233,7 +233,7 @@ Clientes, conceptos, tarjetas y preview **no** llevan `guideKey` en v1.
 
 - Plantillas listado: `plantillas-search`, `plantillas-view-mode`, `plantillas-card`, `plantillas-card-actions`, `plantillas-add` (`presupuesto-plantilla-card`, list page).
 - Plantillas formulario: `plantilla-datos`, `plantilla-conceptos`, `plantilla-estilo`, anexos, `plantilla-tarjeta-contacto`, `plantilla-footer` (`presupuesto-page-modals`).
-- Presupuestos listado: `ppto-card-header`, `ppto-card-body`, `ppto-card-actions` (`presupuesto-card`; primer card del listado).
+- Presupuestos listado: `ppto-card-header`, `ppto-card-body`, `ppto-card-actions` + un `data-tour` por botón (`ppto-action-edit|duplicate|plantilla|historial|delete|mail|whatsapp|link`). Card: folio + fecha (sin hora), badge de estado en esquina, `nombre_presupuesto`, receptor; total solo si `config_mostrar_totales`; acciones en **una sola fila** con ancho uniforme (sin ojito: ver = tap en card). Tutorial: un paso intro de acciones y **un paso por botón** (los que no existan en el DOM se omiten). Confirmación de eliminar con `accent: 'danger'`. Búsqueda incluye nombre.
 - Presupuestos formulario: `ppto-receptor`, `ppto-descripcion`, `ppto-conceptos`, `ppto-totales`, `ppto-anexos`, `ppto-footer` (`presupuesto-page-modals`).
 
 ### Comportamiento
@@ -269,5 +269,6 @@ Regenerar el PDF tras cambios de contenido en el HTML o imágenes bajo `src/asse
 - Modal de concepto (hoy):
   - Tab Catálogo: listar / buscar / filtrar; click = snapshot a la línea; editar / eliminar; **Nuevo en catálogo**.
   - Tab Manual: checkbox «Guardar también en el catálogo» (+ categoría producto/servicio) al añadir línea. En **móvil**, el modal usa altura ~`96dvh` y el pie (CANCELAR / Añadir) queda **fijo fuera del scroll** para que no se oculte al marcar el checkbox.
-- Badge Plus en tab y acciones de catálogo. El tab Catálogo también puede listar el **catálogo público** (origen `catalogo`, empresa/logo del Excel) junto a los conceptos internos; al elegir se hace snapshot. Editar/eliminar solo aplica a conceptos internos.
+- Badge Plus en tab y acciones de catálogo. El tab Catálogo lista **empresas tipo catálogo** (`GET /catalogo/empresas`) con productos `mostrar_en_catalogo_publico`; cards muestran **nombre comercial** + **razón social** (si difieren); al elegir se hace **snapshot** (sin FK). Filtros avanzados solo dentro de una empresa: barra de chips OPUS (familia + subfamilias anidadas; sin marca). Editar/eliminar solo aplica a conceptos internos.
 - Sección **Catálogo de conceptos** en rutas propias (`…/catalogo-conceptos` + crear/editar/detalle); el modal de captura sigue pudiendo elegir/snapshot.
+- El feed admin `catalogo-publico` quedó fuera del picker (deprecado / plan de apagado). Ver [../cross-domain.md](../cross-domain.md) y [../catalogo/api.md](../catalogo/api.md).

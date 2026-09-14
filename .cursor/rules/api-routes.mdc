@@ -15,7 +15,7 @@ El archivo principal `api.php` incluye `routes/segmented/routes-segmented.php`, 
 | 0.1 | construcc.php | Módulo construcción (API token) |
 | 1 | public.php | Sin autenticación |
 | 2 | auth.php | Login, registro, recuperación contraseña |
-| 3 | shared.php | Todos los roles autenticados |
+| 3 | shared.php | Todos los roles autenticados (`/catalogo/empresas` picker PPTOs) |
 | 4 | cliente.php | Rol CLIENTE |
 | 4 | gerente.php | Rol GERENTE (proveedor) |
 | 4 | admin.php | Rol ADMINISTRADOR |

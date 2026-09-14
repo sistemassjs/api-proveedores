@@ -4,10 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Presupuesto\ProveedorStorePresupuestoCatalogoConceptoRequest;
 use App\Http\Requests\Presupuesto\ProveedorUpdatePresupuestoCatalogoConceptoRequest;
+use App\Http\Resources\Catalogo\CatalogoEmpresaProductoSugerenciaResource;
 use App\Http\Resources\Presupuesto\PresupuestoSugerenciaLineaResource;
 use App\Http\Resources\Presupuesto\ProveedorPresupuestoCatalogoConceptoResource;
-use App\Models\CatalogoPublicoItem;
 use App\Models\PresupuestoCatalogoConcepto;
+use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Support\PresupuestoAnexoArchivoResponse;
 use App\Support\PresupuestoAnexoImagenOptimizer;
@@ -57,7 +58,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
     }
 
     /**
-     * Sugerencias combinadas: catálogo interno del proveedor + catálogo público.
+     * Sugerencias combinadas: catálogo interno del proveedor + productos publicados (empresas catálogo).
      */
     public function sugerencias(Request $request, Proveedor $proveedor): JsonResponse
     {
@@ -75,7 +76,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
         $search = trim((string) $request->input('search', ''));
         $categoria = trim((string) $request->input('categoria', ''));
         $empresa = trim((string) $request->input('empresa', ''));
-        $marca = trim((string) $request->input('marca', ''));
+        $empresaProveedorId = $request->input('proveedor_id', $request->input('empresa_proveedor_id'));
         $familia = trim((string) $request->input('familia', ''));
         $perPage = (int) $request->input('per_page', 50);
         $limit = max(1, min($perPage, 100));
@@ -83,7 +84,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
         $conceptosItems = [];
         $catalogoItems = [];
 
-        if (in_array($origen, ['todos', 'concepto'], true) && $empresa === '') {
+        if (in_array($origen, ['todos', 'concepto'], true) && $empresa === '' && ($empresaProveedorId === null || $empresaProveedorId === '')) {
             $conceptosQuery = PresupuestoCatalogoConcepto::query()
                 ->where('proveedor_id', $proveedor->id)
                 ->where('activo', true);
@@ -128,20 +129,33 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
             && ($categoria === '' || $categoria === 'todos' || $categoria === 'producto');
 
         if ($incluyeCatalogo) {
-            $catalogoQuery = CatalogoPublicoItem::query()
+            $catalogoQuery = Producto::query()
                 ->where('activo', true)
-                ->where('mostrar_en_listado', true);
+                ->where('mostrar_en_catalogo_publico', true)
+                ->whereHas('proveedor', function ($q) {
+                    $q->where('is_proveedor_catalogo', true);
+                })
+                ->with(['unidad_medida', 'marca', 'familia', 'subfamilia', 'proveedor']);
+
+            if ($empresaProveedorId !== null && $empresaProveedorId !== '') {
+                $catalogoQuery->where('proveedor_id', (int) $empresaProveedorId);
+            } elseif ($empresa !== '') {
+                $catalogoQuery->whereHas('proveedor', function ($q) use ($empresa) {
+                    $q->where('is_proveedor_catalogo', true)
+                        ->where(function ($inner) use ($empresa) {
+                            $inner->where('razon_social', $empresa)
+                                ->orWhere('nombre_comercial', $empresa);
+                        });
+                });
+            }
+
             if ($search !== '') {
                 $catalogoQuery->filter(['search' => $search]);
             }
-            if ($empresa !== '') {
-                $catalogoQuery->where('empresa', $empresa);
-            }
-            if ($marca !== '') {
-                $catalogoQuery->where('marca', $marca);
-            }
             if ($familia !== '') {
-                $catalogoQuery->where('categoria', $familia);
+                $catalogoQuery->whereHas('familia', function ($q) use ($familia) {
+                    $q->where('nombre', $familia);
+                });
             }
 
             $catalogoRows = $catalogoQuery
@@ -149,32 +163,10 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                 ->limit($limit)
                 ->get();
 
-            foreach ($catalogoRows as $item) {
-                $precio = $item->precio_base;
-                $catalogoItems[] = [
-                    'origen' => 'catalogo',
-                    'id' => $item->id,
-                    'nombre' => $item->nombre,
-                    'unidad' => $item->unidad,
-                    'precio_unitario' => $precio !== null && $precio !== ''
-                        ? (float) $precio
-                        : null,
-                    'empresa' => $item->empresa,
-                    'logo' => $item->logo,
-                    'categoria_ui' => $item->categoria ?: 'producto',
-                    'marca' => $item->marca,
-                    'familia' => $item->categoria,
-                    'subcategoria' => $item->subcategoria,
-                    'descripcion' => $item->descripcion,
-                    'codigo' => $item->codigo,
-                    'imagen_url' => $item->imagen ?: null,
-                    'imagen_path' => null,
-                    'imagen_base64' => null,
-                ];
-            }
+            $catalogoItems = CatalogoEmpresaProductoSugerenciaResource::collection($catalogoRows)->resolve();
         }
 
-        // Catálogo público primero (agrupable por empresa en UI), luego mis conceptos.
+        // Productos de empresas catálogo primero (agrupable por empresa en UI), luego mis conceptos.
         $items = array_merge($catalogoItems, $conceptosItems);
         $data = PresupuestoSugerenciaLineaResource::collection(collect($items))->resolve();
 

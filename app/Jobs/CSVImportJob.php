@@ -10,6 +10,7 @@ use App\Models\UnidadMedida;
 use App\Services\CSVImport\CSVImportProductValidator;
 use App\Services\CSVImport\CSVProcessorService;
 use App\Services\Catalogo\CatalogoOpusHomologacionService;
+use App\Support\Catalogo\CatalogoImportPlantilla;
 use Exception;
 use Illuminate\Bus\Queueable as BusQueueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -60,7 +61,11 @@ class CSVImportJob implements ShouldQueue
 
     protected float $startTime;
 
-    protected CatalogoOpusHomologacionService $opusMatch;
+    /** Resuelto en handle() para no serializar el servicio en el payload del job. */
+    protected ?CatalogoOpusHomologacionService $opusMatch = null;
+
+    /** Evita saturar la consola / BD en imports de decenas de miles de filas. */
+    protected int $lastLoggedProgressPct = -1;
 
     /**
      * Create a new job instance.
@@ -68,20 +73,34 @@ class CSVImportJob implements ShouldQueue
     public function __construct(ImportAudit $importAudit, array $options = [])
     {
         $this->importAudit = $importAudit;
-        $this->opusMatch = new CatalogoOpusHomologacionService;
         $this->options = array_merge([
-            'chunk_size' => 500,
+            'chunk_size' => CatalogoImportPlantilla::JOB_CHUNK_DEFAULT,
             'skip_duplicates' => false,
             'update_existing' => true,
             'create_missing_relations' => true,
         ], $options);
+
+        $this->options['chunk_size'] = max(
+            CatalogoImportPlantilla::JOB_CHUNK_MIN,
+            min(
+                CatalogoImportPlantilla::JOB_CHUNK_MAX,
+                (int) $this->options['chunk_size']
+            )
+        );
     }
 
     /**
      * Execute the job.
      */
-    public function handle(CSVProcessorService $csvProcessor): void
+    public function handle(CSVProcessorService $csvProcessor, CatalogoOpusHomologacionService $opusMatch): void
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit($this->timeout);
+        }
+        @ini_set('max_execution_time', (string) $this->timeout);
+        @ini_set('memory_limit', CatalogoImportPlantilla::MEMORY_LIMIT_JOB);
+
+        $this->opusMatch = $opusMatch;
         $this->startTime = microtime(true);
         $validator = new CSVImportProductValidator($this->importAudit->proveedor_id);
 
@@ -89,6 +108,8 @@ class CSVImportJob implements ShouldQueue
             'audit_id' => $this->importAudit->id,
             'proveedor_id' => $this->importAudit->proveedor_id,
             'options' => $this->options,
+            'php_max_execution_time' => ini_get('max_execution_time'),
+            'php_memory_limit' => ini_get('memory_limit'),
         ]);
 
         try {
@@ -128,7 +149,7 @@ class CSVImportJob implements ShouldQueue
             $this->updateProgress(15, 0); // 15% después de catálogos
 
             // Procesar productos en chunks desde la tabla temporal
-            $chunkSize = 200; // Chunks más pequeños para mejor control de memoria
+            $chunkSize = (int) $this->options['chunk_size'];
             $offset = 0;
             $processedCount = $this->importAudit->numero_registros_procesados;
 
@@ -154,14 +175,18 @@ class CSVImportJob implements ShouldQueue
 
                 // Liberar memoria después de cada chunk
                 unset($chunk);
-                gc_collect_cycles();
+                if (($offset / $chunkSize) % 25 === 0) {
+                    gc_collect_cycles();
+                }
 
-                // Log cada 10 chunks
-                if (($offset / $chunkSize) % 10 === 0) {
+                // Log de auditoría solo cada ~5% (menos I/O y menos ruido en consola)
+                $pctDone = (int) floor(($processedCount / max(1, $totalRegistros)) * 100);
+                if ($pctDone >= $this->lastLoggedProgressPct + 5) {
+                    $this->lastLoggedProgressPct = $pctDone;
                     $this->logProcessingStep('Progreso de importación', [
                         'procesados' => $processedCount,
                         'total' => $totalRegistros,
-                        'porcentaje' => round(($processedCount / $totalRegistros) * 100, 2).'%',
+                        'porcentaje' => $pctDone.'%',
                     ]);
                 }
             }
@@ -244,6 +269,14 @@ class CSVImportJob implements ShouldQueue
             // Extract units
             if (! empty($row['unidad_medida']) && ! in_array($row['unidad_medida'], $catalogs['unidades'])) {
                 $catalogs['unidades'][] = trim($row['unidad_medida']);
+            }
+            foreach (['unidad_contenido', 'unidad_base'] as $unidadCol) {
+                if (! empty($row[$unidadCol])) {
+                    $u = trim((string) $row[$unidadCol]);
+                    if ($u !== '' && ! in_array($u, $catalogs['unidades'], true)) {
+                        $catalogs['unidades'][] = $u;
+                    }
+                }
             }
 
             // Extract categories with hierarchy
@@ -497,6 +530,14 @@ class CSVImportJob implements ShouldQueue
         }
 
         $unidadId = $this->catalogMappings['unidades'][$productData['unidad_medida']] ?? null;
+        $unidadContenidoId = null;
+        if (! empty($productData['unidad_contenido'])) {
+            $unidadContenidoId = $this->catalogMappings['unidades'][$productData['unidad_contenido']] ?? null;
+        }
+        $unidadBaseId = null;
+        if (! empty($productData['unidad_base'])) {
+            $unidadBaseId = $this->catalogMappings['unidades'][$productData['unidad_base']] ?? null;
+        }
 
         $familiaTxt = trim((string) ($productData['familia'] ?? ''));
         $subfamiliaTxt = trim((string) ($productData['subfamilia'] ?? ''));
@@ -528,6 +569,8 @@ class CSVImportJob implements ShouldQueue
             'categoria_id' => $categoriaId,
             'subcategoria_id' => $subcategoriaId,
             'unidad_medida_id' => $unidadId,
+            'unidad_contenido_id' => $unidadContenidoId,
+            'unidad_base_id' => $unidadBaseId,
             'familia_id' => $opus['familia_id'],
             'subfamilia_id' => $opus['subfamilia_id'],
             'precio_base' => $this->parseNullablePrice($precioBase),
@@ -606,11 +649,23 @@ class CSVImportJob implements ShouldQueue
             }
             $n = $m[1];
             $clave = trim((string) $value);
-            $valor = trim((string) ($row["propiedad{$n}_valor"] ?? $row["Propiedad{$n}_Valor"] ?? ''));
+            $valorKey = 'propiedad'.$n.'_valor';
+            $valor = '';
+            if (array_key_exists($valorKey, $row)) {
+                $valor = trim((string) $row[$valorKey]);
+            } else {
+                foreach ($row as $k => $v) {
+                    if (is_string($k) && strcasecmp($k, $valorKey) === 0) {
+                        $valor = trim((string) $v);
+                        break;
+                    }
+                }
+            }
             if ($clave === '') {
                 continue;
             }
-            $props[] = [
+            // Unique (producto_id, atributo): última clave gana si se repite
+            $props[$clave] = [
                 'atributo' => $clave,
                 'valor' => $valor,
                 'orden' => (int) $n,
@@ -622,7 +677,7 @@ class CSVImportJob implements ShouldQueue
         }
 
         $producto->especificaciones()->delete();
-        foreach ($props as $prop) {
+        foreach (array_values($props) as $prop) {
             $producto->especificaciones()->create($prop);
         }
     }
@@ -721,6 +776,16 @@ class CSVImportJob implements ShouldQueue
             'sin_match' => $this->processingStats['opus_sin_match'],
         ]);
 
+        $previewData = $this->importAudit->preview_data ?? [];
+        $previewData['opus'] = [
+            'homologados' => $this->processingStats['opus_homologados'],
+            'sin_match' => $this->processingStats['opus_sin_match'],
+        ];
+        $this->importAudit->update([
+            'preview_data' => $previewData,
+            'logs' => $this->importAudit->logs,
+        ]);
+
         // Cleanup temporary data
         $this->cleanupTemporaryData($csvProcessor, $previewToken);
     }
@@ -760,13 +825,19 @@ class CSVImportJob implements ShouldQueue
      */
     protected function updateProgress(float $percentage, int $count_registros_procesados): void
     {
-        $this->importAudit->progreso = min(100, max(0, $percentage));
-        $this->importAudit->numero_registros_procesados = $count_registros_procesados;
+        $pct = min(100, max(0, $percentage));
+        // Evitar UPDATE por cada chunk: solo cuando cambia al menos 1 punto porcentual
+        $prev = (float) ($this->importAudit->progreso ?? 0);
+        if ($pct < 100 && abs($pct - $prev) < 1) {
+            $this->importAudit->numero_registros_procesados = $count_registros_procesados;
+
+            return;
+        }
+
         $this->importAudit->update([
-            'progreso' => min(100, max(0, $percentage)),
+            'progreso' => $pct,
             'numero_registros_procesados' => $count_registros_procesados,
         ]);
-        $this->importAudit->save();
     }
 
     /**
@@ -806,7 +877,19 @@ class CSVImportJob implements ShouldQueue
         $this->logProcessingStep('Error crítico en importación', [
             'error' => $e->getMessage(),
             'estadisticas_parciales' => $this->processingStats,
-        ], 'error');
+        ]);
+
+        $previewToken = $this->importAudit->preview_data['preview_token'] ?? null;
+        if ($previewToken) {
+            try {
+                app(CSVProcessorService::class)->cleanupTempTable($previewToken);
+            } catch (Exception $cleanupError) {
+                Log::warning('Error limpiando datos temporales tras fallo de job', [
+                    'preview_token' => $previewToken,
+                    'error' => $cleanupError->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**
