@@ -62,7 +62,7 @@ UI: `/pages/panel-admin/catalogo-empresas` (reemplaza menú «Catálogo público
 | Marcar empresa como catálogo | `POST /admin/catalogo-empresas/{proveedor}/marcar-catalogo` |
 | Import CSV | `POST /admin/catalogos/proveedores/{proveedor}/csv-import/upload\|confirm` (+ status/results) |
 
-Alta empresa con `is_proveedor_catalogo`: form admin `proveedores/form?catalogo=1`.
+Alta empresa con `is_proveedor_catalogo`: form admin `proveedores/form?catalogo=1` (incluye **logo** opcional vía multipart en `POST/PATCH admin/catalogos/proveedores`).
 
 Multiselección en listado de productos: publicar / despublicar `mostrar_en_catalogo_publico`.
 Body: `producto_ids[]` **o** `aplicar_filtro=true` (+ `search`, `filtro_mostrar_en_catalogo_publico`) para actuar sobre todo el filtro (no solo visibles).
@@ -73,7 +73,7 @@ Rutas en `routes/segmented/shared.php` (`auth:sanctum`). Controller: `Catalogo\C
 
 | Método | Path | Rol |
 |--------|------|-----|
-| `GET` | `/catalogo/empresas` | Cards: proveedores `is_proveedor_catalogo` con ≥1 producto publicado. Query `search` (empresa o producto; resultado agrupado por empresa). Respuesta: `proveedor_id`, `empresa` (razón social), `logo`, `total_productos` |
+| `GET` | `/catalogo/empresas` | Cards: proveedores `is_proveedor_catalogo` con ≥1 producto publicado. Query `search` (empresa o producto; resultado agrupado por empresa). Respuesta: `proveedor_id`, `empresa` (label), `razon_social`, `nombre_comercial`, `logo`, `total_productos` |
 | `GET` | `/catalogo/empresas/{proveedor}/productos` | Productos `activo` + `mostrar_en_catalogo_publico`. Query: `search`, `familia` / `familia_id`, `subfamilia` / `subfamilia_id`, `per_page`. Shape tipo sugerencia PPTOs (`origen: catalogo`) |
 | `GET` | `/catalogo/empresas/{proveedor}/productos/facets` | Facets OPUS: `arbol` (familia→subfamilias), `familias`, `subfamilias` (+ alias `categorias`; `marcas` vacío) |
 | `GET` | `/catalogo/empresas/{proveedor}/productos/{producto}` | Detalle para ficha del picker |

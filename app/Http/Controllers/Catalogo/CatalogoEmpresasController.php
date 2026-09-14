@@ -60,11 +60,17 @@ class CatalogoEmpresasController extends Controller
             ->orderByRaw('COALESCE(NULLIF(razon_social, ""), nombre_comercial)')
             ->get()
             ->map(function (Proveedor $proveedor) {
-                $nombre = trim((string) ($proveedor->razon_social ?: $proveedor->nombre_comercial));
+                $razonSocial = trim((string) ($proveedor->razon_social ?? ''));
+                $nombreComercial = trim((string) ($proveedor->nombre_comercial ?? ''));
+                $empresa = $nombreComercial !== ''
+                    ? $nombreComercial
+                    : ($razonSocial !== '' ? $razonSocial : ('Proveedor #'.$proveedor->id));
 
                 return [
                     'proveedor_id' => (int) $proveedor->id,
-                    'empresa' => $nombre !== '' ? $nombre : ('Proveedor #'.$proveedor->id),
+                    'empresa' => $empresa,
+                    'razon_social' => $razonSocial !== '' ? $razonSocial : null,
+                    'nombre_comercial' => $nombreComercial !== '' ? $nombreComercial : null,
                     'logo' => PublicStorageUrl::make($proveedor->logo),
                     'total_productos' => (int) $proveedor->total_productos,
                 ];

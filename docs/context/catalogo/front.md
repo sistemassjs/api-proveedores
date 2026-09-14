@@ -46,7 +46,7 @@ Pantalla: `panel-administrativo/pages/catalogo-empresas/` — ruta UI `/pages/pa
 - Cards de empresas catálogo → productos con **multiselección** (publicar / despublicar).
   - «Seleccionar visibles» marca la página cargada; si hay más resultados, banner **Seleccionar los N** aplica el filtro completo.
 - Import CSV NEXPROV vía `admin/catalogos/proveedores/{id}/csv-import`.
-- Nueva empresa: `proveedores/form?catalogo=1` (flag `is_proveedor_catalogo`).
+- Nueva empresa: `proveedores/form?catalogo=1` (flag `is_proveedor_catalogo` + **logo** en el form; multipart al API).
 
 Menú admin: **Catálogo de empresas** (ya no «Catálogo público»).
 

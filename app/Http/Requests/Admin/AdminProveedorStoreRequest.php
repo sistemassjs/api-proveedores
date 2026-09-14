@@ -21,6 +21,15 @@ class AdminProveedorStoreRequest extends FormRequest
             'telefono' => 'nullable|string|max:20',
             'is_proveedor_catalogo' => 'sometimes|boolean',
             'is_proveedor_sp' => 'sometimes|boolean',
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'logo.image' => 'El archivo debe ser una imagen válida.',
+            'logo.mimes' => 'El logo debe estar en formato JPG o PNG.',
         ];
     }
 }
