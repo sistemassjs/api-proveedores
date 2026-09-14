@@ -35,10 +35,10 @@ class ProductoStoreRequest extends FormRequest
             'unidad_medida_id' => ['nullable', 'integer', 'exists:unidad_medidas,id'],
 
             'categoria_id' => [
+                Rule::requiredIf(fn () => $this->filled('subcategoria_id')),
                 'nullable',
                 'integer',
                 'exists:categorias,id',
-                Rule::requiredIf(fn () => $this->filled('subcategoria_id')),
                 function ($attribute, $value, $fail) use ($proveedorId) {
                     if ($value === null || $value === '') {
                         return;

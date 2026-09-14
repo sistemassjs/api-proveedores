@@ -82,12 +82,12 @@ trait MapsProductoCatalogoUniversales
             'url_producto' => array_merge($prefix, ['nullable', 'string', 'max:500']),
             'tags' => array_merge($prefix, ['nullable', 'array']),
             'tags.*' => ['string', 'max:100'],
-            'familia_id' => array_merge($prefix, [
+            'familia_id' => [
+                Rule::requiredIf(fn () => $this->filled('subfamilia_id')),
                 'nullable',
                 'integer',
                 'exists:catalogo_familias,id',
-                Rule::requiredIf(fn () => $this->filled('subfamilia_id')),
-            ]),
+            ],
             'subfamilia_id' => array_merge($prefix, [
                 'nullable',
                 'integer',
