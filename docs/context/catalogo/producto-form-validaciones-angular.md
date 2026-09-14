@@ -294,10 +294,78 @@ Reemplazar specs:
 
 ---
 
+## 3. Ajustes requeridos en front (nexprov)
+
+Repo: `nexprov` (`C:/repositorio/app/nexprov`).  
+Estos cambios son de **front** (y datos). El 422 de categoría **no** se resuelve solo leyendo este MD: hay que alinear el form.
+
+### 3.1 No confundir con subcategoría vacía
+
+Categoría y subcategoría son **independientes**. `subcategoria_id` puede ir `null` / omitida.
+
+El error:
+
+> `La categoría debe estar en el nivel 0 (categoría padre).`
+
+**no** significa “falta subcategoría”. Significa que el `categoria_id` enviado existe pero en BD tiene `nivel !== 0` (p. ej. se mandó un hijo, o una “raíz” mal cargada con `nivel = 1`).
+
+### 3.2 `producto-proveedor-form`
+
+Rutas:
+
+- `src/app/pages/proveedor/producto-proveedor/components/producto-proveedor-form/producto-proveedor-form.component.ts`
+- `…/producto-proveedor-form.component.html`
+
+| Problema actual | Ajuste |
+|-----------------|--------|
+| Select `categoria_id` usa `[options]="categorias"` de `GET …/categorias` | Asegurar que solo se ofrezcan **raíces** válidas para API (`nivel === 0`). El listado API filtra `parent_id` null, pero si el dato tiene `nivel ≠ 0` igual falla al guardar. |
+| `categoriasJerarquicas` **nunca se llena** | `loadSubcategorias()` busca en ese array vacío → subcategorías no cargan. Usar `children` / `subcategorias` del ítem padre (el index ya hace `with(['children'])`) o `GET …/categorias/{id}/…` de subcategorías. |
+| `initForms()` aún marca `required` en `categoria_id`, `marca_id`, `unidad_medida_id`, `descripcion`, `precio_base`, etc. | Alinear validators a este documento (§1): solo `nombre` + `codigo_interno` obligatorios; resto opcional; precios `min(0)` si vienen. |
+| Payload | `categoria_id` = solo padre; `subcategoria_id` opcional (hija de ese padre). No poner el ID de la sub en `categoria_id`. |
+| Familia/subfamilia OPUS | Campos **aparte** de categoría; aún no están en el form — agregarlos si el producto debe publicarse/filtrarse en picker PPTOs. |
+
+Al guardar, mapear errores 422 (`errors.categoria_id[0]`, etc.) a inline / modal según §1.3.
+
+### 3.3 `categoria-form` (origen frecuente de `nivel` incorrecto)
+
+Ruta:
+
+- `src/app/pages/proveedor/categorias-proveedor/components/categoria-form/categoria-form.component.ts`
+
+Hoy el default es `nivel: [1, …]`. Si se persiste en categorías con `parent_id: null`, quedan “padres” con `nivel = 1`: aparecen en el select del producto y el API de producto las rechaza.
+
+| Ajuste | Detalle |
+|--------|---------|
+| Raíces | `parent_id: null` → **`nivel: 0`** (o no enviar `nivel` y dejar que el API lo calcule, como en `ProveedorCategoriaController::store`) |
+| Hijas | `nivel = padre.nivel + 1` |
+| Datos existentes | Revisar/corregir categorías raíz con `nivel ≠ 0` en BD si ya se crearon mal |
+
+### 3.4 Opcional en back (api-proveedores)
+
+No es bloqueante para el fix de front, pero ayuda:
+
+| Cambio | Para qué |
+|--------|----------|
+| Exponer `nivel` (y `parent_id`) en `CategoriaResource` | Que el front pueda filtrar/validar opciones sin adivinar |
+| Consistencia datos | Script o migración puntual: raíces `parent_id` null → `nivel = 0` |
+| Relajar regla `nivel === 0` | Solo si negocio acepta otra definición de “padre”; hoy create/update de producto la exigen |
+
+### 3.5 Checklist rápido nexprov
+
+1. Corregir default/persistencia de `nivel` en form de categorías.  
+2. En form producto: padre/hijo correctos + subcats desde `children`.  
+3. Validators create/update según §1 y §2.  
+4. Probar create con solo categoría padre (sub vacía) y con ambos.  
+5. Si sigue el 422: inspeccionar en network el `categoria_id` y su `nivel` en BD.
+
+---
+
 ## Referencias código
 
 - `app/Http/Requests/Producto/ProductoStoreRequest.php`
 - `app/Http/Requests/Producto/ProductoUpdateRequest.php`
 - `app/Http/Requests/Producto/Concerns/MapsProductoCatalogoUniversales.php`
 - `app/Http/Controllers/ProveedorProductoController.php`
+- `app/Http/Resources/CategoriaResource.php` (opcional: añadir `nivel`)
+- Front nexprov: `producto-proveedor-form`, `categoria-form` (§3)
 - Contexto API: [api.md](./api.md)
