@@ -54,6 +54,8 @@ class ProveedorProductoController extends Controller
     public function store(ProductoStoreRequest $request, Proveedor $proveedor)
     {
         $data = $request->validated();
+        // Taxonomía local (categoria) y OPUS (familia) son independientes; sin auto-homologación en CRUD.
+        unset($data['proveedor_id']);
         $data['proveedor_id'] = $proveedor->id;
         $especificaciones = $data['especificaciones'] ?? null;
         unset($data['especificaciones']);
@@ -94,13 +96,17 @@ class ProveedorProductoController extends Controller
             throw new ResourceNotFoundException('Producto no relacionado al proveedor.');
         }
 
+        // Solo keys presentes en el request (sometimes): no pisar categoria/familia ni demás si no vienen.
         $data = $request->validated();
+        unset($data['proveedor_id']);
         $hasEspecs = array_key_exists('especificaciones', $data);
         $especificaciones = $data['especificaciones'] ?? null;
         unset($data['especificaciones']);
 
         $producto = DB::transaction(function () use ($producto, $data, $hasEspecs, $especificaciones) {
-            $producto->update($data);
+            if ($data !== []) {
+                $producto->update($data);
+            }
             if ($hasEspecs) {
                 $this->syncEspecificaciones($producto, $especificaciones ?? []);
             }
