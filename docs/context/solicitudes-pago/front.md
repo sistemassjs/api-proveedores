@@ -42,6 +42,8 @@ Consulta (solo lectura) de SPP y anexos para rol `ADMINISTRADOR`.
 
 Card: `@Input() showDocumentChips`, `showProveedor`, `showEmpresaConstrucc` en `sp-dashboard-card`.
 
+Chip COMP / `url_comprobante_pago`: el API resuelve comprobante desde la SPP **o** el último `PagoSPP` asociado (no asumir solo `ruta_archivo_comprobante_pago` vacío = sin archivo). En detalle, preferir también la lista `pagos[].datos_comprobante`.
+
 ## Dashboard OC-SP
 
 Tabs OC + SP, conversión OC→SP, histórico, métricas (`oc-sp-converter`, etc.).

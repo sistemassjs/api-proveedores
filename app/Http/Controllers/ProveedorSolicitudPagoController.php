@@ -594,12 +594,14 @@ class ProveedorSolicitudPagoController extends Controller
             return $this->error('Solicitud no pertenece a la empresa en GestionPlus', 403);
         }
 
-        if (! $solicitudPago->ruta_archivo_comprobante_pago || ! Storage::disk('private')->exists($solicitudPago->ruta_archivo_comprobante_pago)) {
+        $rutaComprobante = $solicitudPago->resolverRutaComprobantePago();
+
+        if (! $rutaComprobante || ! Storage::disk('private')->exists($rutaComprobante)) {
             return $this->success(['archivo_no_disponible' => true], 'Comprobante no disponible', 200);
         }
 
         return response()->download(
-            Storage::disk('private')->path($solicitudPago->ruta_archivo_comprobante_pago)
+            Storage::disk('private')->path($rutaComprobante)
         );
     }
 

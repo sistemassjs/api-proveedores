@@ -6,7 +6,28 @@
 2. **Autorización** — roles Construcc (flags por rol) → autorizada o rechazada.
 3. **Factura** — si faltaba, subir PDF/XML.
 4. **Pago** — completo o parcial (`PagoSPP` + pivot, `origen=spp`) → pagado.
-5. **Comprobantes** — en SP y/o en pago parcial.
+5. **Comprobantes** — fuente de verdad en el **pago**; espejo en la SPP para listados/descarga por SP.
+
+## Comprobante de pago (importante)
+
+Al registrar pago desde Construcc (`POST .../pagos-spp/proveedor/{proveedor}/pagos`):
+
+| Dónde | Campo | Rol |
+|-------|--------|-----|
+| `pagos_spp` | `comprobante_pago` | **Fuente de verdad** (disco `private`, carpeta `comprobantes/`) |
+| `solicitudes_pago` | `ruta_archivo_comprobante_pago` | Campo legado / espejo opcional (`sincronizarComprobanteDesdePago`) |
+
+**Dos caminos válidos** (API Resources de SPP):
+
+1. Comprobante en la SPP → `url_comprobante_pago` = descarga por solicitud.
+2. Sin ruta en SPP pero con pago asociado que tiene archivo → `url_comprobante_pago` = descarga por pago (`pagos-spp/.../descargar-comprobante`).
+
+Helpers: `resolverPagoConComprobante()`, `resolverRutaComprobantePago()`, `resolverUrlComprobantePago()`.  
+Expuestos en `SolicitudPagoResource`, `ConstruccSolicitudPagoResource` y **`ConstruccPagoSPPResource`** (listado GestionPlus `.../pagos-spp/proveedor/{id}/spp`).  
+`ruta_archivo_comprobante_pago` en response = ruta efectiva (SPP o pago) para chips; la URL apunta al origen real.
+
+- Un pago puede liquidar **varias** SPP: el archivo vive en el pago; las resources resuelven el enlace sin exigir espejo en cada SPP.
+- Flujo legado DA `confirmarPago` escribe solo en la SPP; el flujo vigente de GestionPlus es pagos-spp.
 
 ## Pago directo (sin SPP)
 

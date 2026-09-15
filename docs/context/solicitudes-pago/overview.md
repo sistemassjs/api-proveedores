@@ -9,7 +9,7 @@ Crear y dar seguimiento a solicitudes de pago; subir facturas PDF/XML; recibir c
 ## Límites (qué entra)
 
 - Solicitud de pago y estados / verificación / autorizaciones por rol
-- Facturas, cotización adjunta, comprobantes
+- Facturas, cotización adjunta, comprobantes (en **pago** + espejo en SP; ver [workflows.md](./workflows.md#comprobante-de-pago-importante))
 - Pagos SPP (parciales) y pivot
 - **Pagos directos** (`origen=directo`): sin SPP; N facturas + complementos de pago en el propio pago
 - Empresas constructoras + vínculo proveedor

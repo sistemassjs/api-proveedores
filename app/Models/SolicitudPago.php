@@ -54,7 +54,7 @@ class SolicitudPago extends BaseModel
         // 'fecha_confirmacion_pago',
         // 'fecha_registro_pendiente',
         // 'fecha_inicio_procesamiento',
-        // 'fecha_con_comprobante',
+        'fecha_con_comprobante',
         // 'fecha_rechazado',
         // 'fecha_aprobado',
 
@@ -1023,6 +1023,75 @@ class SolicitudPago extends BaseModel
     }
 
     /**
+     * Último pago asociado con comprobante (flujo pagos-spp).
+     */
+    public function resolverPagoConComprobante(): ?PagoSPP
+    {
+        if ($this->relationLoaded('pagos')) {
+            return $this->pagos
+                ->filter(fn (PagoSPP $pago) => filled($pago->comprobante_pago))
+                ->sortByDesc(fn (PagoSPP $pago) => $pago->fecha_pago ?? $pago->fecha_registro ?? $pago->created_at)
+                ->first();
+        }
+
+        return $this->pagos()
+            ->whereNotNull('pagos_spp.comprobante_pago')
+            ->where('pagos_spp.comprobante_pago', '!=', '')
+            ->orderByDesc('pagos_spp.fecha_pago')
+            ->orderByDesc('pagos_spp.id')
+            ->first();
+    }
+
+    /**
+     * Ruta efectiva del comprobante: campo legado en la SPP o último pago asociado.
+     * Fuente de verdad del archivo en flujo pagos-spp: pagos_spp.comprobante_pago.
+     */
+    public function resolverRutaComprobantePago(): ?string
+    {
+        if (filled($this->ruta_archivo_comprobante_pago)) {
+            return $this->ruta_archivo_comprobante_pago;
+        }
+
+        return $this->resolverPagoConComprobante()?->comprobante_pago;
+    }
+
+    /**
+     * URL de descarga del comprobante.
+     * Camino 1: archivo en la SPP → descarga por solicitud.
+     * Camino 2: archivo en un pago asociado → descarga por pago.
+     */
+    public function resolverUrlComprobantePago(): ?string
+    {
+        if (filled($this->ruta_archivo_comprobante_pago)) {
+            return route('construcc.solicitudes-pago.descargar-comprobante', $this->id);
+        }
+
+        $pago = $this->resolverPagoConComprobante();
+        if (! $pago) {
+            return null;
+        }
+
+        return route('construcc.pagos-spp.proveedor.spp.descargar-comprobante', [
+            'pago' => $pago->id,
+        ]);
+    }
+
+    /**
+     * Espejo en la SPP del comprobante del pago (listados/chips/descargas por SP).
+     * Un pago puede aplicar a varias SPP: se comparte la misma ruta en disco private.
+     */
+    public function sincronizarComprobanteDesdePago(
+        string $rutaComprobante,
+        $fechaComprobante = null
+    ): void {
+        $this->update([
+            'ruta_archivo_comprobante_pago' => $rutaComprobante,
+            'fecha_con_comprobante' => now(),
+            'fecha_comprobante_pago' => $fechaComprobante ?? now(),
+        ]);
+    }
+
+    /**
      * Envía por correo el comprobante de pago al usuario principal del proveedor.
      */
     public function enviarCorreoComprobantePagoAProveedor(
@@ -1036,7 +1105,7 @@ class SolicitudPago extends BaseModel
             return;
         }
 
-        $rutaComprobante = $rutaComprobante ?: $this->ruta_archivo_comprobante_pago;
+        $rutaComprobante = $rutaComprobante ?: $this->resolverRutaComprobantePago();
         if (! $rutaComprobante || ! Storage::disk($diskComprobante)->exists($rutaComprobante)) {
             return;
         }

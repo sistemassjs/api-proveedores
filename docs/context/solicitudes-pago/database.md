@@ -4,8 +4,8 @@
 
 | Model | Tabla | Rol |
 |-------|-------|-----|
-| `SolicitudPago` | `solicitudes_pago` | Núcleo SP (montos, facturas, comprobante, roles, OC) |
-| `PagoSPP` | `pagos_spp` | Pago a una o varias SP **o** pago directo (`origen`) |
+| `SolicitudPago` | `solicitudes_pago` | Núcleo SP (montos, facturas, comprobante espejo, roles, OC) |
+| `PagoSPP` | `pagos_spp` | Pago a una o varias SP **o** pago directo (`origen`); **comprobante fuente de verdad** |
 | `PagoSolicitudPago` | `pago_solicitud_pago` | Pivot monto aplicado (solo `origen=spp`) |
 | `PagoFactura` | `pago_facturas` | N facturas ligadas a un pago (flujo directo; PDF/XML opcionales) |
 | `PagoComplemento` | `pago_complementos` | Complementos CFDI tipo P por factura (PPD) |
@@ -28,7 +28,12 @@ Folio: `folio_pago_spp_consecutivo` (misma serie por empresa si `config('pagos.p
 
 Por factura del pago: `factura_pdf`, `factura_xml`; si `metodo_pago=PPD` y `config('pagos.marcar_complemento_faltante_si_ppd')`: `complemento_pago_pdf` / `complemento_pago_xml`.
 
-Storage disco `private`: `comprobantes/`, `facturas/pdf|xml/`, `complementos_pago/pdf|xml/`.
+Storage disco `private`: `comprobantes/` (pago y espejo SP), `facturas/pdf|xml/`, `complementos_pago/pdf|xml/`.
+
+### Comprobante: dos campos
+
+- **`pagos_spp.comprobante_pago`**: archivo del registro de pago (Construcc / GestionPlus).
+- **`solicitudes_pago.ruta_archivo_comprobante_pago`**: legado DA / `subir-comprobante` / espejo opcional al registrar pago. API: `resolverRutaComprobantePago()` + `resolverUrlComprobantePago()` (enlace por SPP o por pago asociado).
 
 ## Enums de estado
 

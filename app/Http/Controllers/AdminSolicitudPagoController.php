@@ -78,7 +78,7 @@ class AdminSolicitudPagoController extends Controller
     public function descargarComprobantePago(SolicitudPago $solicitudPago)
     {
         return $this->descargarArchivoPrivado(
-            $solicitudPago->ruta_archivo_comprobante_pago,
+            $solicitudPago->resolverRutaComprobantePago(),
             'Comprobante no disponible'
         );
     }

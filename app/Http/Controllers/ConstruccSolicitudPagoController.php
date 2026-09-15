@@ -1139,15 +1139,17 @@ class ConstruccSolicitudPagoController extends Controller
      */
     public function descargarComprobante(SolicitudPago $solicitudPago)
     {
+        $rutaComprobante = $solicitudPago->resolverRutaComprobantePago();
+
         if (
-            ! $solicitudPago->ruta_archivo_comprobante_pago ||
-            ! Storage::disk('private')->exists($solicitudPago->ruta_archivo_comprobante_pago)
+            ! $rutaComprobante ||
+            ! Storage::disk('private')->exists($rutaComprobante)
         ) {
             return $this->error('Comprobante no disponible', null, 404);
         }
 
         return response()->download(
-            Storage::disk('private')->path($solicitudPago->ruta_archivo_comprobante_pago)
+            Storage::disk('private')->path($rutaComprobante)
         );
     }
 

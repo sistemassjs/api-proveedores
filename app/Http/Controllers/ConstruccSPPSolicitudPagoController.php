@@ -368,6 +368,11 @@ class ConstruccSPPSolicitudPagoController extends Controller
                 'comprobante_pago' => $comprobantePath,
             ]);
 
+            $solicitud = SolicitudPago::find($sppId);
+            if ($solicitud) {
+                $solicitud->sincronizarComprobanteDesdePago($comprobantePath);
+            }
+
             DB::commit();
 
             return $this->success([
@@ -537,6 +542,10 @@ class ConstruccSPPSolicitudPagoController extends Controller
                 // Actualizar los saldos de la solicitud de pago si el estado es aplicado
                 if ($solicitudData['estado_pago'] === 'aplicado' || $solicitudData['estado_pago'] === 'completado') {
                     $solicitudPago->actualizarSaldos($solicitudData['monto_aplicado']);
+                    $solicitudPago->sincronizarComprobanteDesdePago(
+                        $comprobantePath,
+                        $pago->fecha_pago
+                    );
                 }
             }
 

@@ -14,6 +14,10 @@ class SolicitudPagoResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Comprobante: camino SPP (legado) o pago asociado (pagos-spp); URL según origen
+        $rutaComprobante = $this->resolverRutaComprobantePago();
+        $urlComprobante = $this->resolverUrlComprobantePago();
+
         return [
             'id' => $this->id,
             'numero_folio_solicitud' => $this->numero_folio_solicitud,
@@ -57,16 +61,14 @@ class SolicitudPagoResource extends JsonResource
             'sucursal_id' => $this->sucursal_id,
             'cotizacion_id' => $this->cotizacion_id,
 
-            // Archivos
+            // Archivos (comprobante efectivo para chips; URL apunta al origen real)
             'ruta_archivo_factura_xml' => $this->ruta_archivo_factura_xml,
             'ruta_archivo_factura_pdf' => $this->ruta_archivo_factura_pdf,
             'ruta_archivo_cotizacion' => $this->ruta_archivo_cotizacion,
-            'ruta_archivo_comprobante_pago' => $this->ruta_archivo_comprobante_pago,
+            'ruta_archivo_comprobante_pago' => $rutaComprobante,
 
             // Archivos con URLs correctas
-            'url_comprobante_pago' => $this->ruta_archivo_comprobante_pago
-                ? route('construcc.solicitudes-pago.descargar-comprobante', $this->id)
-                : null,
+            'url_comprobante_pago' => $urlComprobante,
 
             'url_factura_pdf' => $this->ruta_archivo_factura_pdf
                 ? route('construcc.solicitudes-pago.descargar-factura-pdf', $this->id)

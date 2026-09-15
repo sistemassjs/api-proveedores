@@ -19,6 +19,10 @@ class ConstruccPagoSPPResource extends JsonResource
         $montoPagado    = (float) ($this->total_pagado ?? 0);
         $montoAutorizado = (float) ($this->monto_autorizado ?? 0);
 
+        // Listado GestionPlus/Construcc: chip/descarga miran estos campos (SPP o pago asociado)
+        $rutaComprobante = $this->resolverRutaComprobantePago();
+        $urlComprobante = $this->resolverUrlComprobantePago();
+
         return [
             'id' => $this->id,
             'folio_sp_consecutivo'   => $this->folio_sp_consecutivo,
@@ -30,6 +34,10 @@ class ConstruccPagoSPPResource extends JsonResource
             'monto_pagado'     => $montoTotal - $this->calcularSaldoRestante(),
             'monto_pendiente'  => $this->calcularSaldoRestante(),
             'monto_autorizado' => $montoAutorizado,
+
+            // Comprobante (legado en SPP o último pago asociado)
+            'ruta_archivo_comprobante_pago' => $rutaComprobante,
+            'url_comprobante_pago' => $urlComprobante,
 
             // Bandera de factura 
             'tiene_factura' => $this->tiene_factura,

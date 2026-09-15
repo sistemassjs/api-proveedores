@@ -21,6 +21,11 @@ class ConstruccSolicitudPagoResource extends JsonResource
                 ->first();
             $fechaUltimoPago = $ultimoPago?->pivot->fecha_aplicacion?->toDateTimeString();
         }
+
+        // Comprobante: camino SPP (legado) o pago asociado (pagos-spp); URL según origen
+        $rutaComprobante = $this->resolverRutaComprobantePago();
+        $urlComprobante = $this->resolverUrlComprobantePago();
+
         return [
             'id' => $this->id,
             'numero_folio_solicitud' => $this->numero_folio_solicitud,
@@ -44,7 +49,7 @@ class ConstruccSolicitudPagoResource extends JsonResource
             'ruta_archivo_factura_xml' => $this->ruta_archivo_factura_xml,
             'ruta_archivo_factura_pdf' => $this->ruta_archivo_factura_pdf,
             'ruta_archivo_cotizacion' => $this->ruta_archivo_cotizacion,
-            'ruta_archivo_comprobante_pago' => $this->ruta_archivo_comprobante_pago,
+            'ruta_archivo_comprobante_pago' => $rutaComprobante,
 
             // NUEVO CAMPO
             'verificada' => $this->verificada ? 1 : 0,
@@ -64,10 +69,8 @@ class ConstruccSolicitudPagoResource extends JsonResource
             'utilizara' => $this->utilizara,
             'equipo' => $this->equipo,
 
-            // Archivos con URLs correctas
-            'url_comprobante_pago' => $this->ruta_archivo_comprobante_pago
-                ? route('construcc.solicitudes-pago.descargar-comprobante', $this->id)
-                : null,
+            // Archivos con URLs correctas (SPP o pago asociado)
+            'url_comprobante_pago' => $urlComprobante,
 
             'url_factura_pdf' => $this->ruta_archivo_factura_pdf
                 ? route('construcc.solicitudes-pago.descargar-factura-pdf', $this->id)

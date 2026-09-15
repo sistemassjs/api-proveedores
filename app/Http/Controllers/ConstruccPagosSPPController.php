@@ -429,6 +429,8 @@ class ConstruccPagosSPPController extends Controller
                 'comprobante_pago' => $comprobantePath,
             ]);
 
+            $spp->sincronizarComprobanteDesdePago($comprobantePath);
+
             $proveedor->notify(
                 new SolicitudPagoComprobanteActualizadoNotification(
                     $spp->numero_folio_solicitud,
@@ -699,6 +701,10 @@ class ConstruccPagosSPPController extends Controller
                 ]);
 
                 $spPagoCompleto = $solicitudPago->actualizarSaldos($solicitudData['monto_pago']);
+                $solicitudPago->sincronizarComprobanteDesdePago(
+                    $comprobantePath,
+                    $pago->fecha_pago
+                );
                 $solicitudPago->enviarCorreoComprobantePagoAProveedor($comprobantePath);
 
                 $saldoRestante = (float) $solicitudPago->saldo_pendiente;

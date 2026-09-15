@@ -15,6 +15,8 @@ Repo: `api-proveedores`.
 
 Endpoints SP frecuentes: `GET/POST /`, `POST /sin-factura`, `GET /historico`, `/conteo-por-estado`, `/dashboard/metricas`, `POST /{id}/subir-factura*`, `subir-comprobante`, `confirmar-pago`, descargas.
 
+Resources SPP (`SolicitudPagoResource`, `ConstruccSolicitudPagoResource`, `ConstruccPagoSPPResource`): `url_comprobante_pago` / `ruta_archivo_comprobante_pago` resuelven dos caminos — archivo en la SPP o en un `PagoSPP` asociado (`resolverUrlComprobantePago()`). El listado GestionPlus (`GET .../pagos-spp/proveedor/{id}/spp`) usa `ConstruccPagoSPPResource`.
+
 ## Lado administrador (`routes/segmented/admin.php`)
 
 Rol `ADMINISTRADOR`. Consulta de SPP y documentos anexos (sin crear/editar/subir).
@@ -25,7 +27,7 @@ Rol `ADMINISTRADOR`. Consulta de SPP y documentos anexos (sin crear/editar/subir
 | `GET` | `/admin/solicitudes-pago/{solicitudPago}` | Detalle |
 | `GET` | `/admin/solicitudes-pago/{id}/descargar-factura-pdf\|xml` | Descarga factura |
 | `GET` | `/admin/solicitudes-pago/{id}/descargar-cotizacion` | Descarga cotización |
-| `GET` | `/admin/solicitudes-pago/{id}/descargar-comprobante` | Descarga comprobante |
+| `GET` | `/admin/solicitudes-pago/{id}/descargar-comprobante` | Descarga comprobante (SP o fallback último pago) |
 
 Controller: `AdminSolicitudPagoController`. Preview en ficha empresa: `GET /admin/catalogos/proveedores/{id}/resumen` → `ultimas_spp` (máx. 10).
 
@@ -37,7 +39,7 @@ Middleware ApiKey. Controllers: `ConstruccSolicitudPagoController`, `ConstruccPa
 
 | Método | Ruta | Notas |
 |--------|------|-------|
-| `POST` | `/proveedor/{proveedor}/pagos` | Pago con SPP (autorización previa) |
+| `POST` | `/proveedor/{proveedor}/pagos` | Pago con SPP (autorización previa). Comprobante → `pagos_spp` + espejo en cada SPP |
 | `POST` | `/proveedor/{proveedor}/pagos-directos` | Pago sin SPP; comprobante required; facturas/complementos opcionales |
 | `POST` | `/pagos/{pago}/facturas` | Agregar factura al pago |
 | `POST` | `/pagos/{pago}/facturas/{factura}/complementos` | Agregar complemento |
