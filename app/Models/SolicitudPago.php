@@ -1077,6 +1077,16 @@ class SolicitudPago extends BaseModel
     }
 
     /**
+     * Extensión real del comprobante efectivo (pdf|jpg|jpeg|png).
+     */
+    public function extensionComprobantePago(): ?string
+    {
+        $ruta = $this->resolverRutaComprobantePago();
+
+        return $ruta ? \App\Support\PrivateFileDownload::extension($ruta) : null;
+    }
+
+    /**
      * Espejo en la SPP del comprobante del pago (listados/chips/descargas por SP).
      * Un pago puede aplicar a varias SPP: se comparte la misma ruta en disco private.
      */

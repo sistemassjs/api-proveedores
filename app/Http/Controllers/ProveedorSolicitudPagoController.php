@@ -14,6 +14,7 @@ use App\Models\Proveedor;
 use App\Models\SolicitudPago;
 use App\Notifications\Presupuesto\PresupuestoRecibidoClienteProveedorNotification;
 use App\Services\InterApiService;
+use App\Support\PrivateFileDownload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -600,8 +601,9 @@ class ProveedorSolicitudPagoController extends Controller
             return $this->success(['archivo_no_disponible' => true], 'Comprobante no disponible', 200);
         }
 
-        return response()->download(
-            Storage::disk('private')->path($rutaComprobante)
+        return PrivateFileDownload::download(
+            $rutaComprobante,
+            'comprobante_'.$solicitudPago->numero_folio_solicitud
         );
     }
 
@@ -618,8 +620,11 @@ class ProveedorSolicitudPagoController extends Controller
             return $this->success(['archivo_no_disponible' => true], 'Comprobante no disponible', 200);
         }
 
-        return response()->download(
-            Storage::disk('private')->path($pago->comprobante_pago)
+        $folio = $pago->folio_pago_spp_consecutivo ?: $pago->id;
+
+        return PrivateFileDownload::download(
+            $pago->comprobante_pago,
+            'comprobante_pago_'.$folio
         );
     }
 

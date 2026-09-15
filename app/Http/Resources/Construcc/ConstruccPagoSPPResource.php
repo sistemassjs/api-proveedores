@@ -38,6 +38,9 @@ class ConstruccPagoSPPResource extends JsonResource
             // Comprobante (legado en SPP o último pago asociado)
             'ruta_archivo_comprobante_pago' => $rutaComprobante,
             'url_comprobante_pago' => $urlComprobante,
+            'extension_comprobante_pago' => $rutaComprobante
+                ? $this->extensionComprobantePago()
+                : null,
 
             // Bandera de factura 
             'tiene_factura' => $this->tiene_factura,

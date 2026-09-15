@@ -26,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Support\PrivateFileDownload;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use App\Http\Requests\Construcc\SolicitudPagoUpdateConprobantePagoRequest;
@@ -1148,8 +1149,9 @@ class ConstruccSolicitudPagoController extends Controller
             return $this->error('Comprobante no disponible', null, 404);
         }
 
-        return response()->download(
-            Storage::disk('private')->path($rutaComprobante)
+        return PrivateFileDownload::download(
+            $rutaComprobante,
+            'comprobante_'.$solicitudPago->numero_folio_solicitud
         );
     }
 

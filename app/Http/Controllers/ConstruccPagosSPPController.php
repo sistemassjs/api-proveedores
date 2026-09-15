@@ -33,9 +33,10 @@ use App\Models\SolicitudPago;
 use App\Models\PagoSolicitudPago;
 use App\Notifications\SolicitudPago\SolicitudPagoAbonadaNotification;
 use App\Notifications\SolicitudPago\SolicitudPagoComprobanteActualizadoNotification;
+use App\Support\PrivateFileDownload;
+use App\Support\PublicStorageUrl;
 use App\Notifications\SolicitudPago\SolicitudPagoFacturaPendienteNotification;
 use App\Notifications\SolicitudPago\SolicitudPagoPagadaNotification;
-use App\Support\PublicStorageUrl;
 use App\Services\InterApiService;
 use Carbon\Carbon;
 
@@ -880,8 +881,11 @@ class ConstruccPagosSPPController extends Controller
         if (! $pago->comprobante_pago || ! Storage::disk('private')->exists($pago->comprobante_pago)) {
             return $this->error('Comprobante de pago no disponible.', null, 404);
         }
-        return response()->download(
-            Storage::disk('private')->path($pago->comprobante_pago)
+        $folio = $pago->folio_pago_spp_consecutivo ?: $pago->id;
+
+        return PrivateFileDownload::download(
+            $pago->comprobante_pago,
+            'comprobante_pago_'.$folio
         );
     }
 

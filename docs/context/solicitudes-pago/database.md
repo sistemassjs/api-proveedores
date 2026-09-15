@@ -28,12 +28,13 @@ Folio: `folio_pago_spp_consecutivo` (misma serie por empresa si `config('pagos.p
 
 Por factura del pago: `factura_pdf`, `factura_xml`; si `metodo_pago=PPD` y `config('pagos.marcar_complemento_faltante_si_ppd')`: `complemento_pago_pdf` / `complemento_pago_xml`.
 
-Storage disco `private`: `comprobantes/` (pago y espejo SP), `facturas/pdf|xml/`, `complementos_pago/pdf|xml/`.
+Storage disco `private`: `comprobantes/` (pdf|jpg|jpeg|png; pago y espejo SP), `facturas/pdf|xml/`, `complementos_pago/pdf|xml/`.
 
 ### Comprobante: dos campos
 
 - **`pagos_spp.comprobante_pago`**: archivo del registro de pago (Construcc / GestionPlus).
 - **`solicitudes_pago.ruta_archivo_comprobante_pago`**: legado DA / `subir-comprobante` / espejo opcional al registrar pago. API: `resolverRutaComprobantePago()` + `resolverUrlComprobantePago()` (enlace por SPP o por pago asociado).
+- Descarga: `PrivateFileDownload` (nombre + `Content-Type` según extensión). Resources: `extension_comprobante_pago`.
 
 ## Enums de estado
 

@@ -69,6 +69,9 @@ class SolicitudPagoResource extends JsonResource
 
             // Archivos con URLs correctas
             'url_comprobante_pago' => $urlComprobante,
+            'extension_comprobante_pago' => $rutaComprobante
+                ? $this->extensionComprobantePago()
+                : null,
 
             'url_factura_pdf' => $this->ruta_archivo_factura_pdf
                 ? route('construcc.solicitudes-pago.descargar-factura-pdf', $this->id)

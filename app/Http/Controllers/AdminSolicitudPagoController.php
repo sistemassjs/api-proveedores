@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\SolicitudPago\SolicitudPagoResource;
 use App\Models\SolicitudPago;
+use App\Support\PrivateFileDownload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -77,9 +78,15 @@ class AdminSolicitudPagoController extends Controller
 
     public function descargarComprobantePago(SolicitudPago $solicitudPago)
     {
-        return $this->descargarArchivoPrivado(
-            $solicitudPago->resolverRutaComprobantePago(),
-            'Comprobante no disponible'
+        $ruta = $solicitudPago->resolverRutaComprobantePago();
+
+        if (! $ruta || ! Storage::disk('private')->exists($ruta)) {
+            return $this->success(['archivo_no_disponible' => true], 'Comprobante no disponible', 200);
+        }
+
+        return PrivateFileDownload::download(
+            $ruta,
+            'comprobante_'.$solicitudPago->numero_folio_solicitud
         );
     }
 

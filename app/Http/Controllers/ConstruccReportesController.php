@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PagoSPP;
 use App\Models\SolicitudPago;
+use App\Support\PrivateFileDownload;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use ZipArchive;
@@ -296,8 +297,11 @@ class ConstruccReportesController extends Controller
       return $this->error('Comprobante de pago no disponible.', null, 404);
     }
 
-    return response()->download(
-      Storage::disk('private')->path($pago->comprobante_pago)
+    $folio = $pago->folio_pago_spp_consecutivo ?: $pago->id;
+
+    return PrivateFileDownload::download(
+      $pago->comprobante_pago,
+      'comprobante_pago_'.$folio
     );
   }
 }
