@@ -15,6 +15,7 @@ use App\Http\Controllers\AdminDashboardController;
 use App\Enums\UserRoleEnumerate;
 use App\Http\Controllers\AdminPedidosController;
 use App\Http\Controllers\AdminProveedorController;
+use App\Http\Controllers\AdminSolicitudPagoController;
 use App\Http\Controllers\ProveedorUsuarioController;
 use App\Http\Controllers\Admin\ProveedorHomologacionController;
 use App\Http\Controllers\Admin\AdminCatalogoPublicoController;
@@ -212,6 +213,18 @@ Route::middleware(['auth:sanctum', 'role:' . UserRoleEnumerate::ADMINISTRADOR->v
     //         
     //         ->name('admin.pedidos.audit');
     // });
+
+    /**
+     * SOLICITUDES DE PAGO (SPP) — consulta documentos / listado global
+     */
+    Route::prefix('solicitudes-pago')->group(function () {
+        Route::get('/', [AdminSolicitudPagoController::class, 'index']);
+        Route::get('{solicitudPago}', [AdminSolicitudPagoController::class, 'show']);
+        Route::get('{solicitudPago}/descargar-factura-pdf', [AdminSolicitudPagoController::class, 'descargarFacturaPdf']);
+        Route::get('{solicitudPago}/descargar-factura-xml', [AdminSolicitudPagoController::class, 'descargarFacturaXml']);
+        Route::get('{solicitudPago}/descargar-comprobante', [AdminSolicitudPagoController::class, 'descargarComprobantePago']);
+        Route::get('{solicitudPago}/descargar-cotizacion', [AdminSolicitudPagoController::class, 'descargarCotizacion']);
+    });
 
     /**
      * DASHBOARD ADMINISTRATIVO

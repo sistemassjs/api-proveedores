@@ -15,6 +15,20 @@ Repo: `api-proveedores`.
 
 Endpoints SP frecuentes: `GET/POST /`, `POST /sin-factura`, `GET /historico`, `/conteo-por-estado`, `/dashboard/metricas`, `POST /{id}/subir-factura*`, `subir-comprobante`, `confirmar-pago`, descargas.
 
+## Lado administrador (`routes/segmented/admin.php`)
+
+Rol `ADMINISTRADOR`. Consulta de SPP y documentos anexos (sin crear/editar/subir).
+
+| Método | Ruta | Notas |
+|--------|------|-------|
+| `GET` | `/admin/solicitudes-pago` | Listado global paginado. Filtros Filterable: `proveedor_id`, `search` / `numero_folio_solicitud`, `fecha_registro_pendiente_desde\|hasta`, `empresa_construcc_id`, `estado_solicitud`, etc. Resource: `SolicitudPagoResource` |
+| `GET` | `/admin/solicitudes-pago/{solicitudPago}` | Detalle |
+| `GET` | `/admin/solicitudes-pago/{id}/descargar-factura-pdf\|xml` | Descarga factura |
+| `GET` | `/admin/solicitudes-pago/{id}/descargar-cotizacion` | Descarga cotización |
+| `GET` | `/admin/solicitudes-pago/{id}/descargar-comprobante` | Descarga comprobante |
+
+Controller: `AdminSolicitudPagoController`. Preview en ficha empresa: `GET /admin/catalogos/proveedores/{id}/resumen` → `ultimas_spp` (máx. 10).
+
 ## Lado Construcc (`routes/segmented/construcc.php`)
 
 Middleware ApiKey. Controllers: `ConstruccSolicitudPagoController`, `ConstruccPagosSPPController`, `ConstruccProveedorSolicitudPagoController`, etc.

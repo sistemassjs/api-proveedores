@@ -34,6 +34,8 @@ Crear y dar seguimiento a solicitudes de pago; subir facturas PDF/XML; recibir c
 
 Maduro; rutas front activas (`sp`, `dashboard-oc-sp`, empresas). Pagos directos: API Construcc lista; UI pendiente.
 
+**Admin:** listado/consulta de documentos SPP en panel (`/pages/panel-admin/spp`) + endpoints `/admin/solicitudes-pago` (lectura y descargas).
+
 ## Docs del dominio
 
 - [api.md](./api.md)
