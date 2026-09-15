@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PresupuestoConcepto extends BaseModel
 {
@@ -25,6 +26,7 @@ class PresupuestoConcepto extends BaseModel
         'presupuesto_id',
         'numero',
         'tipo',
+        'tiene_matriz',
         'descripcion',
         'cantidad',
         'unidad',
@@ -36,6 +38,7 @@ class PresupuestoConcepto extends BaseModel
     ];
 
     protected $casts = [
+        'tiene_matriz' => 'boolean',
         'cantidad' => 'decimal:4',
         'precio_unitario' => 'decimal:2',
         'precio_total' => 'decimal:2',
@@ -47,6 +50,15 @@ class PresupuestoConcepto extends BaseModel
     public function presupuesto(): BelongsTo
     {
         return $this->belongsTo(Presupuesto::class);
+    }
+
+    /**
+     * Componentes de la matriz de costos (P.U. calculado).
+     */
+    public function componentes(): HasMany
+    {
+        return $this->hasMany(PresupuestoConceptoComponente::class, 'presupuesto_concepto_id')
+            ->orderBy('orden');
     }
 
     /**

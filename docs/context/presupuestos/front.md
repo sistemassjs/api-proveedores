@@ -207,16 +207,19 @@ Cuando una capacidad sea **Plus** (plan superior / no incluida en el esquema gra
 
 Tours contextuales con **Driver.js** (CDN en `src/index.html`, dependencia `driver.js` en `package.json`). Disparo desde el botón ℹ️ del `app-sub-header` cuando la página define `guideKey`.
 
-### Alcance v1 (solo estos cuatro tours)
+### Alcance de tours
 
-| `guideKey` | Pantalla | Qué recorre | Qué **no** incluye |
-|------------|----------|-------------|-------------------|
-| `plantillas-listado` | `presupuesto-plantillas-list` | buscar, vista, card, acciones, botón + | — |
-| `plantillas-formulario` | captura plantilla (`presupuesto-page-modals`, `capturaMode: plantilla`) | datos, conceptos, estilo, anexos, tarjeta, guardar | modales (ajustes, concepto, etc.) |
-| `presupuestos-listado` | `presupuesto-proveedor-list` | card (header, body, acciones) | tabs enviados/recibidos, filtros, FAB |
-| `presupuestos-formulario` | captura PPTO (`presupuesto-page-modals`) | receptor, descripción, conceptos, totales, anexos, footer | modales |
+| `guideKey` | Pantalla | Qué recorre |
+|------------|----------|-------------|
+| `plantillas-listado` | `presupuesto-plantillas-list` | buscar, vista, card, acciones, botón + |
+| `plantillas-formulario` | captura plantilla | datos, conceptos, estilo, anexos, tarjeta, guardar |
+| `presupuestos-listado` | `presupuesto-proveedor-list` | card (header, body, acciones) |
+| `presupuestos-formulario` | captura PPTO | receptor, conceptos, totales, desglose matriz PDF, anexos, footer |
+| `catalogo-conceptos-listado` | listado catálogo | buscar, filtros (incl. Compuestos), botón + |
+| `catalogo-conceptos-formulario` | form concepto básico | categoría, clave |
+| `catalogo-compuesto-formulario` | form compuesto | categoría, clave, matriz |
 
-Clientes, conceptos, tarjetas y preview **no** llevan `guideKey` en v1.
+Clientes, tarjetas y preview **no** llevan `guideKey` en este alcance.
 
 ### Archivos
 
@@ -234,7 +237,9 @@ Clientes, conceptos, tarjetas y preview **no** llevan `guideKey` en v1.
 - Plantillas listado: `plantillas-search`, `plantillas-view-mode`, `plantillas-card`, `plantillas-card-actions`, `plantillas-add` (`presupuesto-plantilla-card`, list page).
 - Plantillas formulario: `plantilla-datos`, `plantilla-conceptos`, `plantilla-estilo`, anexos, `plantilla-tarjeta-contacto`, `plantilla-footer` (`presupuesto-page-modals`).
 - Presupuestos listado: `ppto-card-header`, `ppto-card-body`, `ppto-card-actions` + un `data-tour` por botón (`ppto-action-edit|duplicate|plantilla|historial|delete|mail|whatsapp|link`). Card: folio + fecha (sin hora), badge de estado en esquina, `nombre_presupuesto`, receptor; total solo si `config_mostrar_totales`; acciones en **una sola fila** con ancho uniforme (sin ojito: ver = tap en card). Tutorial: un paso intro de acciones y **un paso por botón** (los que no existan en el DOM se omiten). Confirmación de eliminar con `accent: 'danger'`. Búsqueda incluye nombre.
-- Presupuestos formulario: `ppto-receptor`, `ppto-descripcion`, `ppto-conceptos`, `ppto-totales`, `ppto-anexos`, `ppto-footer` (`presupuesto-page-modals`).
+- Presupuestos formulario: `ppto-receptor`, `ppto-info-general`, `ppto-conceptos`, `ppto-totales`, `ppto-config-matriz-pdf`, anexos, `ppto-footer`. En modal concepto: `ppto-matriz-toggle`, `ppto-matriz-editor`.
+- Catálogo listado: `catalogo-search`, `catalogo-filtros`, `catalogo-add`.
+- Catálogo form: `catalogo-categoria`, `catalogo-clave`, `catalogo-matriz` (compuestos).
 
 ### Comportamiento
 
@@ -267,8 +272,9 @@ Regenerar el PDF tras cambios de contenido en el HTML o imágenes bajo `src/asse
 
 - API: `{proveedor}/presupuestos/presupuesto-catalogo-conceptos` (CRUD).
 - Modal de concepto (hoy):
-  - Tab Catálogo: listar / buscar / filtrar; click = snapshot a la línea; editar / eliminar; **Nuevo en catálogo**.
-  - Tab Manual: checkbox «Guardar también en el catálogo» (+ categoría producto/servicio) al añadir línea. En **móvil**, el modal usa altura ~`96dvh` y el pie (CANCELAR / Añadir) queda **fijo fuera del scroll** para que no se oculte al marcar el checkbox.
+  - Tab Catálogo: listar / buscar / filtrar; click = snapshot a la línea; editar / eliminar; **Nuevo en catálogo**. Compuestos del catálogo interno cargan matriz (`tiene_matriz` + snapshot de componentes).
+  - Tab Manual: checkbox «Guardar también en el catálogo» (+ categoría producto/servicio). Opcional **Desglosar con matriz de costos** (Plus). En **móvil**, pie fijo fuera del scroll.
 - Badge Plus en tab y acciones de catálogo. El tab Catálogo lista **empresas tipo catálogo** (`GET /catalogo/empresas`) con productos `mostrar_en_catalogo_publico`; cards muestran **nombre comercial** + **razón social** (si difieren); al elegir se hace **snapshot** (sin FK). Filtros avanzados solo dentro de una empresa: barra de chips OPUS (familia + subfamilias anidadas; sin marca). Editar/eliminar solo aplica a conceptos internos.
-- Sección **Catálogo de conceptos** en rutas propias (`…/catalogo-conceptos` + crear/editar/detalle); el modal de captura sigue pudiendo elegir/snapshot.
+- Sección **Catálogo de conceptos** en rutas propias (`…/catalogo-conceptos` + crear/editar/detalle); ActionSheet básico vs compuesto; filtro Compuestos; badge en card/detalle.
+- Captura PPTO: switch **Mostrar desglose de costos en PDF** (`config_mostrar_matriz_costos`, default off). Preview, PDF y enlace público muestran el desglose bajo la descripción.
 - El feed admin `catalogo-publico` quedó fuera del picker (deprecado / plan de apagado). Ver [../cross-domain.md](../cross-domain.md) y [../catalogo/api.md](../catalogo/api.md).

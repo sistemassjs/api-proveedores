@@ -20,6 +20,8 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 | Conceptos libres (línea / párrafo) | **Hecho** | Snapshot; sin `producto_id` |
 | Picker desde catálogo productos | **Hecho** | Empresas `is_proveedor_catalogo` + productos `mostrar_en_catalogo_publico`; snapshot |
 | Catálogo de conceptos reutilizable | **Hecho** | API + modal captura (Plus) + sección menú **Catálogo de conceptos** (list/form/detail) |
+| Catálogo compuestos (matriz P.U.) | **Hecho** | API + front catálogo (list/form/detail, filtro Compuestos, ActionSheet básico/compuesto) |
+| Matriz de costos en línea PPTO | **Hecho** | Captura: toggle + editor; PDF/preview: `config_mostrar_matriz_costos` (default off) |
 | Tarjetas Presentación (emisor / Atte.) | **Hecho** | API config + sección menú **Tarjetas** (list/form/detail); Perfil enlaza al listado |
 | Menú producto (Generar / Mis presupuestos / …) | **Hecho** | Ver [front.md](./front.md) |
 | Descuentos, IVA, términos y condiciones | **Hecho** | En formulario / PDF |

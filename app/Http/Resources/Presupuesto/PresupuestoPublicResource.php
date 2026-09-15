@@ -42,6 +42,7 @@ class PresupuestoPublicResource extends JsonResource
             'impuestos_activo' => ($this->config_mostrar_totales ?? true)
                 && $this->term_cond_impuestos_en_pdf !== false,
             'config_mostrar_totales' => (bool) ($this->config_mostrar_totales ?? true),
+            'config_mostrar_matriz_costos' => (bool) ($this->config_mostrar_matriz_costos ?? false),
             'anticipo_porcentaje' => $this->term_cond_inicio_trabajo_porcentaje,
             'tiempo_entrega_dias' => $this->term_cond_tiempo_entrega_dias,
             'inicio_trabajo' => $this->term_cond_inicio_trabajo,
@@ -91,6 +92,7 @@ class PresupuestoPublicResource extends JsonResource
             'iva_total' => (float) $this->iva_total,
             'total' => (float) $this->total,
             'config_mostrar_totales' => (bool) ($this->config_mostrar_totales ?? true),
+            'config_mostrar_matriz_costos' => (bool) ($this->config_mostrar_matriz_costos ?? false),
 
             // Compatibilidad temporal con front público legacy
             'condiciones' => $condiciones,

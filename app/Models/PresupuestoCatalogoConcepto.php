@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PresupuestoCatalogoConcepto extends BaseModel
 {
@@ -12,6 +13,8 @@ class PresupuestoCatalogoConcepto extends BaseModel
 
     public const DESCRIPCION_MAX = 500;
 
+    public const CLAVE_MAX = 40;
+
     protected $table = 'presupuesto_catalogo_conceptos';
 
     protected static $filters = [
@@ -19,12 +22,15 @@ class PresupuestoCatalogoConcepto extends BaseModel
         'categoria' => 'Categoria',
         'search' => 'Search',
         'activo' => 'Activo',
+        'es_compuesto' => 'EsCompuesto',
     ];
 
     protected $fillable = [
         'proveedor_id',
         'descripcion',
         'categoria',
+        'es_compuesto',
+        'clave',
         'unidad',
         'precio_unitario',
         'imagen_path',
@@ -34,6 +40,7 @@ class PresupuestoCatalogoConcepto extends BaseModel
     protected $casts = [
         'precio_unitario' => 'decimal:4',
         'activo' => 'boolean',
+        'es_compuesto' => 'boolean',
     ];
 
     /**
@@ -42,6 +49,25 @@ class PresupuestoCatalogoConcepto extends BaseModel
     public function proveedor(): BelongsTo
     {
         return $this->belongsTo(Proveedor::class);
+    }
+
+    /**
+     * Componentes de la matriz (solo compuestos).
+     */
+    public function componentes(): HasMany
+    {
+        return $this->hasMany(PresupuestoCatalogoConceptoComponente::class, 'catalogo_concepto_id')
+            ->orderBy('orden');
+    }
+
+    public function esCompuesto(): bool
+    {
+        return (bool) $this->es_compuesto;
+    }
+
+    public function esBasico(): bool
+    {
+        return ! $this->esCompuesto();
     }
 
     /**
@@ -69,7 +95,20 @@ class PresupuestoCatalogoConcepto extends BaseModel
     }
 
     /**
-     * Búsqueda general en descripción / unidad / id.
+     * Filtro por compuesto (true|false|1|0).
+     */
+    public function filterByEsCompuesto($query, $value)
+    {
+        $bool = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($bool === null) {
+            return $query;
+        }
+
+        return $query->where('es_compuesto', $bool);
+    }
+
+    /**
+     * Búsqueda general en descripción / unidad / clave / id.
      */
     public function filterBySearch($query, string $value)
     {
@@ -77,7 +116,8 @@ class PresupuestoCatalogoConcepto extends BaseModel
 
         return $query->where(function ($q) use ($value, $numericId) {
             $q->where('descripcion', 'like', "%{$value}%")
-                ->orWhere('unidad', 'like', "%{$value}%");
+                ->orWhere('unidad', 'like', "%{$value}%")
+                ->orWhere('clave', 'like', "%{$value}%");
             if ($numericId !== null) {
                 $q->orWhere('id', $numericId);
             }

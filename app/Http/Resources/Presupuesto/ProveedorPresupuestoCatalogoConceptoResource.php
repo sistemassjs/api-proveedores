@@ -18,8 +18,17 @@ class ProveedorPresupuestoCatalogoConceptoResource extends JsonResource
             'proveedor_id' => $this->proveedor_id,
             'descripcion' => $this->descripcion,
             'categoria' => $this->categoria,
+            'es_compuesto' => (bool) ($this->es_compuesto ?? false),
+            'clave' => $this->clave,
             'unidad' => $this->unidad,
             'precio_unitario' => (float) $this->precio_unitario,
+            'componentes_count' => $this->when(
+                isset($this->resource->componentes_count) || $this->relationLoaded('componentes'),
+                fn () => (int) ($this->resource->componentes_count ?? $this->componentes->count())
+            ),
+            'componentes' => PresupuestoCatalogoConceptoComponenteResource::collection(
+                $this->whenLoaded('componentes')
+            ),
             'imagen_path' => PresupuestoAnexoArchivoResponse::archivoPathPublico($this->imagen_path),
             'imagen_url' => PresupuestoAnexoArchivoResponse::archivoUrl($this->imagen_path),
             'imagen_base64' => PresupuestoAnexoArchivoResponse::solicitaArchivoBase64($request)

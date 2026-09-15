@@ -75,6 +75,7 @@ class PresupuestoResource extends JsonResource
             'iva_total' => (float) $this->iva_total,
             'total' => (float) $this->total,
             'config_mostrar_totales' => (bool) ($this->config_mostrar_totales ?? true),
+            'config_mostrar_matriz_costos' => (bool) ($this->config_mostrar_matriz_costos ?? false),
 
             // terminos y condiciones 
             'term_cond_dias_vigencia' => $this->term_cond_dias_vigencia,

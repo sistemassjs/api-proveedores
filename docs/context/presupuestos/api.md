@@ -15,7 +15,8 @@ Repo: `api-proveedores`. Prefijo gerente: `proveedores/{proveedor}/…` + `prove
 | | `GET /proveedores-registrados` | Receptores = proveedores del sistema |
 | Cartera | `{proveedor}/presupuestos/cartera-clientes` | `ProveedorPresupuestoCarteraClientesController` |
 | Catálogo conceptos | `{proveedor}/presupuestos/presupuesto-catalogo-conceptos` | `ProveedorPresupuestoCatalogoConceptosController` |
-| | `GET …/sugerencias` | Interno + productos publicados de empresas catálogo (snapshot al elegir; sin FK) |
+| | `GET …/sugerencias` | Interno + productos publicados; ítems internos incluyen `es_compuesto`, `clave` |
+| | body store/update | `es_compuesto`, `clave`, `componentes[]` (producto\|servicio); compuesto recalcula P.U. |
 | Plantillas | `{proveedor}/presupuestos/plantillas` | `ProveedorPresupuestoPlantillaController` |
 | | `GET/POST /`, `GET/PUT/PATCH/DELETE /{plantilla}` | CRUD aislado del documento |
 | | `POST …/plantillas/desde-presupuesto/{presupuesto}` | Snapshot PPTO → plantilla (sin receptor) |
@@ -27,7 +28,19 @@ Repo: `api-proveedores`. Prefijo gerente: `proveedores/{proveedor}/…` + `prove
 | Anexos PDF | `…/anexos-pdf` | `ProveedorPresupuestoAnexoPdfController` |
 | Config | `{proveedor}/config-emisor-receptor-presupuestos` | `ProveedorPresupuestoConfigController` |
 
-`show` carga `estadoLogs.user`. Payload incluye `estado_logs`, fechas derivadas, `ppto_config`.
+`show` carga `estadoLogs.user` y `conceptos.componentes`. Payload incluye `estado_logs`, fechas derivadas, `ppto_config`, `config_mostrar_matriz_costos`, `conceptos[].tiene_matriz` + `componentes[]`.
+
+## Matriz de P.U. (API)
+
+| Superficie | Contrato |
+|------------|----------|
+| Catálogo store/update | `es_compuesto`, `clave`, `componentes[]` (`categoria` producto\|servicio, cant, precio o `catalogo_concepto_componente_id`). Compuesto: P.U. recalculado (`PresupuestoMatrizCalculoService`). |
+| Catálogo index | Filtro `es_compuesto`; `withCount` → `componentes_count`. Show carga `componentes`. |
+| Presupuesto store/update | `config_mostrar_matriz_costos` (bool, default false). Por línea: `tiene_matriz` + `componentes[]` (o componentes sin flag ⇒ matriz). Sin matriz: `precio_unitario` obligatorio. |
+| Duplicar | Copia `config_mostrar_matriz_costos` y componentes de línea (snapshot). |
+| Motor | `App\Services\Presupuesto\PresupuestoMatrizCalculoService` — `importe = cant × precio`; anti-ciclo en catálogo. |
+
+**Pendiente:** UI front compuestos/matriz; render PDF del desglose; plantillas con matriz.
 
 ## Público (`routes/segmented/public.php`)
 
@@ -86,8 +99,9 @@ Flujo de disparo, casos receptor registrado/no registrado y formato de título/m
 - `nombre_presupuesto`: `nullable|string|max:120` en Store/Update. Resources lo exponen tal cual. PDF: si hay valor, se usa como título del bloque de descripción; `concepto_general` sigue siendo el cuerpo. Duplicar copia el campo. Al aplicar plantilla el PPTO nace con `concepto_general` = `Borrador` (sin copiar descripción de la plantilla).
 - `titulo_anexos`: `nullable|string|max:80` en `StorePresupuestoRequest` / `UpdatePresupuestoRequest`. Resources y Blade (sección imágenes) normalizan vacío → **Anexos**.
 - `titulo_anexos_pdf`: `nullable|string|max:80`. Resources normalizan vacío → **Anexos PDF**. En el PDF generado: título principal del **estampado** de cada hoja mergeada (`PresupuestoPdfAnexoEstampado`). Si el anexo PDF tiene `titulo` propio distinto, se muestra como subtítulo.
-- Duplicar: body opcional (bool, default `true`): `mantener_cliente`, `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`. Si `false`, el borrador nuevo omite receptor, anexos imagen/PDF (copia de archivos propios) o tarjeta emisor según el flag. No copia columnas legacy droppeadas (`obs_traslados`, `obs_viaticos`, `term_cond_anticipo_porcentaje`). Copia `titulo_anexos` / `titulo_anexos_pdf`, términos vía `term_cond_*` / `term_cond_visibilidad`, y `pdf_theme` / `ppto_config`. Resetea `motivo_rechazo`, `item_visto`, folio y `fecha_emision`. Front: modal de confirmación en Mis presupuestos con switches.
-- Plantillas: CRUD en `…/plantillas`. Contenido de la receta: **conceptos**, **anexos imagen/PDF**, **tema**, **tarjeta**. **Sin** descripción general del documento (`concepto_general` nullable/legacy; captura y aplicar/desde-presupuesto no lo usan). `POST …/aplicar` → borrador nuevo vía `PresupuestoPlantillaAplicarService::aplicar`. `POST …/aplicar-sobre/{presupuesto}` → `aplicarSobre` sobre el PPTO actual (reemplaza conceptos/anexos y copia layout; no toca receptor/fecha/descripción/nombre). `POST …/desde-presupuesto/{presupuesto}` → `PresupuestoPlantillaDesdePresupuestoService` (body opcional bool default `true`: `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`, `mantener_tema`; **sin** receptor ni descripción general). Anexos en tablas hijas + endpoints anidados.
+- Duplicar: body opcional (bool, default `true`): `mantener_cliente`, `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`. Si `false`, el borrador nuevo omite receptor, anexos imagen/PDF (copia de archivos propios) o tarjeta emisor según el flag. No copia columnas legacy droppeadas (`obs_traslados`, `obs_viaticos`, `term_cond_anticipo_porcentaje`). Copia `titulo_anexos` / `titulo_anexos_pdf`, términos vía `term_cond_*` / `term_cond_visibilidad`, `pdf_theme` / `ppto_config`, `config_mostrar_matriz_costos`, y matrices de línea. Resetea `motivo_rechazo`, `item_visto`, folio y `fecha_emision`. Front: modal de confirmación en Mis presupuestos con switches.
+- Matriz P.U.: ver sección **Matriz de P.U. (API)** arriba. Categorías de componente solo `producto` \| `servicio`.
+- Plantillas: CRUD en `…/plantillas`. Contenido de la receta: **conceptos**, **anexos imagen/PDF**, **tema**, **tarjeta**. **Sin** descripción general del documento (`concepto_general` nullable/legacy; captura y aplicar/desde-presupuesto no lo usan). `POST …/aplicar` → borrador nuevo vía `PresupuestoPlantillaAplicarService::aplicar`. `POST …/aplicar-sobre/{presupuesto}` → `aplicarSobre` sobre el PPTO actual (reemplaza conceptos/anexos y copia layout; no toca receptor/fecha/descripción/nombre). `POST …/desde-presupuesto/{presupuesto}` → `PresupuestoPlantillaDesdePresupuestoService` (body opcional bool default `true`: `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`, `mantener_tema`; **sin** receptor ni descripción general). Anexos en tablas hijas + endpoints anidados. **Aún no** persisten `tiene_matriz` / componentes (pendiente #7).
 - PDF tabla de conceptos: columna `#` centrada (`td:first-child`) en concepto y párrafo.
 - Anexos imagen: **sin** límite de cantidad en API (el tope de 4 es solo front).
 - No hay endpoints de cobro PayPal/Stripe ni de “finalizar por pago” en presupuestos (roadmap).

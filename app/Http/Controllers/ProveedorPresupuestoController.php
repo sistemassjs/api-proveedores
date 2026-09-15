@@ -8,6 +8,7 @@ use App\Http\Requests\Presupuesto\UpdatePresupuestoRequest;
 use App\Http\Resources\Presupuesto\PresupuestoResource;
 use App\Http\Resources\ProveedorResource;
 use App\Services\Presupuesto\PresupuestoThemeService;
+use App\Services\Presupuesto\PresupuestoMatrizCalculoService;
 use App\Support\PresupuestoAnexoArchivoResponse;
 use App\Support\PresupuestoAnexoImagenOptimizer;
 use App\Support\PresupuestoPdf;
@@ -35,6 +36,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -47,6 +49,7 @@ class ProveedorPresupuestoController extends Controller
 
     public function __construct(
         private readonly PresupuestoThemeService $presupuestoThemeService,
+        private readonly PresupuestoMatrizCalculoService $matrizCalculo,
     ) {}
 
     /**
@@ -370,6 +373,8 @@ class ProveedorPresupuestoController extends Controller
                 'Presupuesto creado correctamente.',
                 201
             );
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
         } catch (Throwable $e) {
             $this->log('Error al crear presupuesto', ['error' => $e->getMessage()]);
 
@@ -478,6 +483,8 @@ class ProveedorPresupuestoController extends Controller
                 new PresupuestoResource($presupuesto),
                 'Presupuesto actualizado correctamente.'
             );
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
         } catch (Throwable $e) {
             $this->log('Error al actualizar presupuesto', [
                 'presupuesto_id' => $presupuesto->id,
@@ -700,7 +707,7 @@ class ProveedorPresupuestoController extends Controller
                 return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
             }
 
-            $presupuesto->load(['conceptos', 'anexos', 'anexosPdf']);
+            $presupuesto->load(['conceptos.componentes', 'anexos', 'anexosPdf']);
 
             $mantenerCliente = $this->boolFromRequest($request, 'mantener_cliente', true);
             $mantenerAnexosImagen = $this->boolFromRequest($request, 'mantener_anexos_imagen', true);
@@ -739,6 +746,7 @@ class ProveedorPresupuestoController extends Controller
                     'validacion_alcances',
                     'obs_garantia_dias',
                     'config_mostrar_totales',
+                    'config_mostrar_matriz_costos',
                     'pdf_theme',
                     'ppto_config',
                     'incluir_leyenda_atentamente',
@@ -797,8 +805,10 @@ class ProveedorPresupuestoController extends Controller
                 $nuevo->asegurarTokenPublico();
 
                 $conceptos = $presupuesto->conceptos->map(function (PresupuestoConcepto $c) {
+                    $c->loadMissing('componentes');
                     $fila = [
                         'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                        'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
                         'descripcion' => $c->descripcion,
                         'cantidad' => (float) $c->cantidad,
                         'unidad' => $c->unidad,
@@ -806,6 +816,21 @@ class ProveedorPresupuestoController extends Controller
                         'proveedor_nombre' => $c->proveedor_nombre,
                         'proveedor_logo_url' => $c->proveedor_logo_url,
                     ];
+
+                    if ($c->tiene_matriz && $c->componentes->isNotEmpty()) {
+                        $fila['componentes'] = $c->componentes->map(static function ($comp) {
+                            return [
+                                'orden' => (int) $comp->orden,
+                                'categoria' => $comp->categoria,
+                                'catalogo_concepto_id' => $comp->catalogo_concepto_id,
+                                'clave_snapshot' => $comp->clave_snapshot,
+                                'descripcion' => $comp->descripcion,
+                                'unidad' => $comp->unidad,
+                                'cantidad' => (float) $comp->cantidad,
+                                'precio_unitario' => (float) $comp->precio_unitario,
+                            ];
+                        })->values()->all();
+                    }
 
                     // Se re-almacena como copia propia del nuevo presupuesto (evita compartir archivo).
                     $imagenBase64 = PresupuestoAnexoArchivoResponse::archivoBase64($c->imagen_path);
@@ -846,6 +871,8 @@ class ProveedorPresupuestoController extends Controller
                 'Presupuesto duplicado correctamente.',
                 201
             );
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
         } catch (Throwable $e) {
             $this->log('Error al duplicar presupuesto', [
                 'presupuesto_id' => $presupuesto->id,
@@ -1632,6 +1659,7 @@ class ProveedorPresupuestoController extends Controller
         $presupuesto->conceptos()->delete();
 
         $pathsConservados = [];
+        $proveedorId = (int) $presupuesto->proveedor_id;
 
         foreach ($conceptos as $index => $conceptoData) {
             $imagenPath = $this->resolverImagenConcepto($presupuesto, $conceptoData, $pathsAnteriores);
@@ -1648,19 +1676,36 @@ class ProveedorPresupuestoController extends Controller
                 $proveedorLogo = mb_substr($proveedorLogo, 0, 500);
             }
 
+            $tipo = $conceptoData['tipo'] ?? PresupuestoConcepto::TIPO_CONCEPTO;
+            $componentes = $conceptoData['componentes'] ?? [];
+            $tieneMatriz = $tipo !== PresupuestoConcepto::TIPO_PARRAFO
+                && (
+                    filter_var($conceptoData['tiene_matriz'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                    || (is_array($componentes) && count($componentes) > 0)
+                );
+
             $concepto = new PresupuestoConcepto([
                 'numero' => $index + 1,
-                'tipo' => $conceptoData['tipo'] ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                'tipo' => $tipo,
+                'tiene_matriz' => $tieneMatriz,
                 'descripcion' => $conceptoData['descripcion'],
                 'cantidad' => $conceptoData['cantidad'],
                 'unidad' => $conceptoData['unidad'],
-                'precio_unitario' => $conceptoData['precio_unitario'],
+                'precio_unitario' => $tieneMatriz ? 0 : ($conceptoData['precio_unitario'] ?? 0),
                 'imagen_path' => $imagenPath,
                 'proveedor_nombre' => $proveedorNombre !== '' ? $proveedorNombre : null,
                 'proveedor_logo_url' => $proveedorLogo !== '' ? $proveedorLogo : null,
             ]);
             $concepto->calcularImporte();
             $presupuesto->conceptos()->save($concepto);
+
+            if ($tieneMatriz) {
+                $this->matrizCalculo->sincronizarComponentesLinea(
+                    $concepto,
+                    is_array($componentes) ? $componentes : [],
+                    $proveedorId
+                );
+            }
         }
 
         // Elimina del storage las imágenes de conceptos que ya no se referencian (patrón delete+insert).

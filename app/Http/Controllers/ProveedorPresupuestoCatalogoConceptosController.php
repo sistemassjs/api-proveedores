@@ -10,18 +10,26 @@ use App\Http\Resources\Presupuesto\ProveedorPresupuestoCatalogoConceptoResource;
 use App\Models\PresupuestoCatalogoConcepto;
 use App\Models\Producto;
 use App\Models\Proveedor;
+use App\Services\Presupuesto\PresupuestoMatrizCalculoService;
 use App\Support\PresupuestoAnexoArchivoResponse;
 use App\Support\PresupuestoAnexoImagenOptimizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Throwable;
 
 class ProveedorPresupuestoCatalogoConceptosController extends Controller
 {
     private bool $logEnabled = true;
+
+    public function __construct(
+        private PresupuestoMatrizCalculoService $matrizCalculo
+    ) {
+    }
 
     /**
      * Listado del catálogo de conceptos del proveedor.
@@ -41,7 +49,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
         $order = $request->input('order', 'asc');
         $perPage = $request->input('per_page', 15);
 
-        $allowedSort = ['descripcion', 'categoria', 'unidad', 'precio_unitario', 'created_at', 'id'];
+        $allowedSort = ['descripcion', 'categoria', 'unidad', 'precio_unitario', 'created_at', 'id', 'clave', 'es_compuesto'];
         if (! in_array($sortBy, $allowedSort, true)) {
             $sortBy = 'descripcion';
         }
@@ -49,6 +57,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
 
         $originalPaginator = PresupuestoCatalogoConcepto::query()
             ->filter($filters)
+            ->withCount('componentes')
             ->orderBy($sortBy, $order)
             ->paginate($perPage);
 
@@ -111,11 +120,13 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                     'empresa' => null,
                     'logo' => null,
                     'categoria_ui' => $concepto->categoria,
+                    'es_compuesto' => (bool) $concepto->es_compuesto,
+                    'clave' => $concepto->clave,
                     'marca' => null,
                     'familia' => null,
                     'subcategoria' => null,
                     'descripcion' => $concepto->descripcion,
-                    'codigo' => null,
+                    'codigo' => $concepto->clave,
                     'imagen_url' => PresupuestoAnexoArchivoResponse::archivoUrl($concepto->imagen_path),
                     'imagen_path' => PresupuestoAnexoArchivoResponse::archivoPathPublico($concepto->imagen_path),
                     'imagen_base64' => PresupuestoAnexoArchivoResponse::solicitaArchivoBase64($request)
@@ -188,6 +199,8 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
             }
 
             $validated = $request->validated();
+            $esCompuesto = (bool) ($validated['es_compuesto'] ?? false);
+            $clave = $this->matrizCalculo->normalizarClave($validated['clave'] ?? null);
 
             $imagenPath = null;
             $base64 = $validated['imagen_base64'] ?? null;
@@ -195,18 +208,32 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                 $imagenPath = $this->guardarImagenBase64((int) $proveedor->id, $base64);
             }
 
-            $concepto = PresupuestoCatalogoConcepto::create([
-                'proveedor_id' => $proveedor->id,
-                'descripcion' => $validated['descripcion'],
-                'categoria' => $validated['categoria'],
-                'unidad' => $validated['unidad'],
-                'precio_unitario' => $validated['precio_unitario'],
-                'imagen_path' => $imagenPath,
-            ]);
+            $concepto = DB::transaction(function () use ($validated, $proveedor, $esCompuesto, $clave, $imagenPath) {
+                $concepto = PresupuestoCatalogoConcepto::create([
+                    'proveedor_id' => $proveedor->id,
+                    'descripcion' => $validated['descripcion'],
+                    'categoria' => $validated['categoria'],
+                    'es_compuesto' => $esCompuesto,
+                    'clave' => $clave,
+                    'unidad' => $validated['unidad'],
+                    'precio_unitario' => $esCompuesto ? 0 : (float) ($validated['precio_unitario'] ?? 0),
+                    'imagen_path' => $imagenPath,
+                ]);
+
+                if ($esCompuesto) {
+                    return $this->matrizCalculo->sincronizarComponentesCatalogo(
+                        $concepto,
+                        $validated['componentes'] ?? []
+                    );
+                }
+
+                return $concepto->load('componentes');
+            });
 
             $this->log('Concepto agregado al catálogo de presupuestos', [
                 'catalogo_concepto_id' => $concepto->id,
                 'proveedor_id' => $proveedor->id,
+                'es_compuesto' => $esCompuesto,
             ]);
 
             return $this->success(
@@ -214,6 +241,8 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                 'Concepto agregado al catálogo.',
                 201
             );
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
         } catch (Throwable $e) {
             $this->log('Error al crear concepto de catálogo', [
                 'error' => $e->getMessage(),
@@ -240,6 +269,8 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
         if ((int) $presupuestoCatalogoConcepto->proveedor_id !== (int) $proveedor->id) {
             return $this->error('El concepto no pertenece a este proveedor.', null, 403);
         }
+
+        $presupuestoCatalogoConcepto->load(['componentes']);
 
         return $this->success(
             new ProveedorPresupuestoCatalogoConceptoResource($presupuestoCatalogoConcepto)
@@ -304,27 +335,74 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                 $imagenPath = null;
             }
 
+            $esCompuesto = array_key_exists('es_compuesto', $validated)
+                ? (bool) $validated['es_compuesto']
+                : (bool) $presupuestoCatalogoConcepto->es_compuesto;
+
             $payload = [
                 'descripcion' => $validated['descripcion'],
                 'categoria' => $validated['categoria'],
                 'unidad' => $validated['unidad'],
-                'precio_unitario' => $validated['precio_unitario'],
+                'es_compuesto' => $esCompuesto,
                 'imagen_path' => $imagenPath,
             ];
+            if (array_key_exists('clave', $validated)) {
+                $payload['clave'] = $this->matrizCalculo->normalizarClave($validated['clave']);
+            }
             if (array_key_exists('activo', $validated)) {
                 $payload['activo'] = (bool) $validated['activo'];
             }
+            if (! $esCompuesto && array_key_exists('precio_unitario', $validated)) {
+                $payload['precio_unitario'] = (float) $validated['precio_unitario'];
+            }
 
-            $presupuestoCatalogoConcepto->update($payload);
+            $concepto = DB::transaction(function () use (
+                $presupuestoCatalogoConcepto,
+                $payload,
+                $esCompuesto,
+                $validated
+            ) {
+                $presupuestoCatalogoConcepto->update($payload);
+                $presupuestoCatalogoConcepto->refresh();
+
+                if ($esCompuesto) {
+                    $componentes = $validated['componentes']
+                        ?? $presupuestoCatalogoConcepto->componentes()
+                            ->get()
+                            ->map(fn ($c) => [
+                                'orden' => $c->orden,
+                                'categoria' => $c->categoria,
+                                'catalogo_concepto_componente_id' => $c->catalogo_concepto_componente_id,
+                                'clave_snapshot' => $c->clave_snapshot,
+                                'descripcion' => $c->descripcion,
+                                'unidad' => $c->unidad,
+                                'cantidad' => $c->cantidad,
+                                'precio_unitario' => $c->precio_unitario,
+                            ])
+                            ->all();
+
+                    return $this->matrizCalculo->sincronizarComponentesCatalogo(
+                        $presupuestoCatalogoConcepto,
+                        $componentes
+                    );
+                }
+
+                $presupuestoCatalogoConcepto->componentes()->delete();
+
+                return $presupuestoCatalogoConcepto->fresh(['componentes']);
+            });
 
             $this->log('Concepto de catálogo actualizado', [
-                'catalogo_concepto_id' => $presupuestoCatalogoConcepto->id,
+                'catalogo_concepto_id' => $concepto->id,
+                'es_compuesto' => $esCompuesto,
             ]);
 
             return $this->success(
-                new ProveedorPresupuestoCatalogoConceptoResource($presupuestoCatalogoConcepto->fresh()),
+                new ProveedorPresupuestoCatalogoConceptoResource($concepto),
                 'Concepto actualizado correctamente.'
             );
+        } catch (InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
         } catch (Throwable $e) {
             $this->log('Error al actualizar concepto de catálogo', [
                 'catalogo_concepto_id' => $presupuestoCatalogoConcepto->id,

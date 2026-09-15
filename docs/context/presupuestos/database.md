@@ -13,7 +13,9 @@
 | `PresupuestoPlantillaAnexo` | `presupuesto_plantilla_anexos` | Anexos imagen de plantilla |
 | `PresupuestoPlantillaAnexoPdf` | `presupuesto_plantilla_anexo_pdf` | Anexos PDF de plantilla |
 | `CarteraCliente` | `cartera_clientes` | Clientes del emisor (dominio presupuestos) |
-| `PresupuestoCatalogoConcepto` | `presupuesto_catalogo_conceptos` | Biblioteca reutilizable de conceptos (Plus) |
+| `PresupuestoCatalogoConcepto` | `presupuesto_catalogo_conceptos` | Biblioteca reutilizable de conceptos (Plus); básico o **compuesto** |
+| `PresupuestoCatalogoConceptoComponente` | `presupuesto_catalogo_concepto_componentes` | Matriz de P.U. del compuesto en catálogo |
+| `PresupuestoConceptoComponente` | `presupuesto_concepto_componentes` | Matriz de P.U. de una línea del documento (snapshot) |
 | `PresupuestoEstadoLog` | `presupuesto_estado_logs` | Histórico de cambios de estado (timeline) |
 | `ConfigEmisorReceptorPresupuesto` | `config_emisor_receptor_presupuestos` | Tarjetas emisor/receptor |
 
@@ -22,9 +24,10 @@
 - Emisor: `proveedor_id` → `Proveedor`
 - Receptor: `empresa_receptora_id` → `CarteraCliente` **o** `proveedor_receptor_id` → `Proveedor` **o** solo campos texto
 - Snapshot emisor: `config_emisor_presupuesto_id` + campos `empresa_emisora_*`
-- Hijos: `conceptos`, `anexos`, `anexosPdf`, `estadoLogs`
+- Hijos: `conceptos.componentes`, `anexos`, `anexosPdf`, `estadoLogs`
 - Público: `token_publico`
 - Layout PDF: `ppto_config` (JSON plano key→mm; whitelist en `PresupuestoPdfDocumentConfig::PPTO_CONFIG_KEYS`)
+- Desglose costos en PDF/preview: `config_mostrar_matriz_costos` (bool, default **false**)
 
 ## Estados
 
@@ -52,10 +55,35 @@ Campo típico `term_cond_moneda`: valores admitidos **MXN** | **USD** | **EUR** 
 
 Tipos: `concepto` | `parrafo`. Campos libres: descripción, cantidad, unidad, precios, imagen. **Sin `producto_id`.** El picker puede rellenar la línea desde productos publicados (snapshot: nombre→descripcion, unidad, precio_base, imagen).
 
-Catálogo de conceptos reutilizable: tabla `presupuesto_catalogo_conceptos` (`descripcion`, `categoria` producto|servicio, `unidad`, `precio_unitario` decimal(15,4) para Opus, `imagen_path` opcional, `activo` boolean default true — baja/reactivar sin hard delete). Al usarlo en un presupuesto se hace **snapshot** a la línea (sin FK). UI de precios: `environment.presupuestoPrecioDecimals` (storage 4 / display 2 por defecto). Sugerencias PPTO: conceptos `activo=true` + productos `mostrar_en_catalogo_publico` de empresas catálogo.
+### Matriz de P.U. (línea)
+
+- `presupuesto_conceptos.tiene_matriz` (bool): si true, el `precio_unitario` se **calcula** desde `presupuesto_concepto_componentes`.
+- Componentes: `categoria` solo `producto` \| `servicio`; `cantidad × precio_unitario = importe`; P.U. línea = Σ importes (redondeo 2 en la línea).
+- Snapshot al guardar: puede traer `catalogo_concepto_id` (mismo proveedor) o renglón manual.
+- Párrafos: sin matriz.
+- Motor: `App\Services\Presupuesto\PresupuestoMatrizCalculoService` (mismo que catálogo compuesto).
+
+### Catálogo de conceptos
+
+Tabla `presupuesto_catalogo_conceptos`:
+
+| Campo | Notas |
+|-------|--------|
+| `categoria` | `producto` \| `servicio` (sin “otro”) |
+| `es_compuesto` | bool; si true → P.U. calculado |
+| `clave` | nullable, unique por `(proveedor_id, clave)` (ej. `+CUA-01`) |
+| `precio_unitario` | decimal(15,4); manual si básico, Σ si compuesto |
+| `activo` | baja/reactivar sin hard delete |
+
+Tabla `presupuesto_catalogo_concepto_componentes`: renglones de la matriz del compuesto (`catalogo_concepto_componente_id` nullable + snapshots). Anti-ciclo al anidar compuestos.
+
+Al usarlo en un presupuesto se hace **snapshot** a la línea/componente (sin FK viva obligatoria). UI de precios front: `environment.presupuestoPrecioDecimals` (storage 4 / display 2 por defecto). Sugerencias PPTO: conceptos `activo=true` (+ `es_compuesto`, `clave`) + productos publicados.
+
 `cartera_clientes`: mismo patrón `activo` (baja/reactivar). Tarjetas (`config_emisor_receptor_presupuestos`): `estado` inactivo = baja; listado de gestión con `incluir_inactivos=1`.
 
 Traslados / viáticos: **no** hay columnas `obs_traslados` / `obs_viaticos` (drop fase 3). Fuente de verdad: `term_cond_visibilidad.incluye_traslados` / `incluye_viaticos`. La API puede exponer `obs_traslados` / `obs_viaticos` en Resources como **alias derivados** de esa visibilidad (compat front).
+
+**Pendiente front:** UI de compuestos / matriz en captura (#3, #5). **Pendiente:** render PDF del desglose (#6); plantillas con matriz (#7).
 
 ## Plantillas (`presupuesto_plantillas`)
 
@@ -71,6 +99,7 @@ Recurso **aislado** del documento `presupuestos` (no `es_plantilla`). Guarda lo 
 | `titulo_anexos` | `presupuestos` | `varchar(80)` nullable; mig. `2026_07_23_095249_…`. Vacío → **Anexos** (Resource, Blade sección imágenes, preview) |
 | `titulo_anexos_pdf` | `presupuestos` | `varchar(80)` nullable; mig. `2026_07_23_103654_…`. Vacío → **Anexos PDF** (Resource + estampado FPDI de hojas mergeadas) |
 | `config_mostrar_totales` | `presupuestos` | Si false, oculta subtotal/IVA/total/importe letra en preview y PDF |
+| `config_mostrar_matriz_costos` | `presupuestos` | Si true, el cliente puede ver desglose de componentes (default **false**). Render PDF del desglose: pendiente front/#6 |
 | `ppto_config` | `presupuestos` | JSON nullable; 8 keys mm whitelist (`margen_*`, `gap_*`, `footer_height_mm`, `espacio_tras_titulo_atentamente_mm`). Modal Ajustes + merge en `PresupuestoPdfDocumentConfig` (gap logo default **7**) |
 
 ## Histórico de estados (`presupuesto_estado_logs`)

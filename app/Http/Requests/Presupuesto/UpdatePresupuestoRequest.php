@@ -104,6 +104,7 @@ class UpdatePresupuestoRequest extends FormRequest
             'titulo_anexos_pdf' => 'nullable|string|max:80',
             'con_iva' => 'nullable|boolean',
             'config_mostrar_totales' => 'nullable|boolean',
+            'config_mostrar_matriz_costos' => 'nullable|boolean',
             'ppto_config' => 'nullable|array',
             'ppto_config.margen_hoja_mm' => 'nullable|numeric|min:0|max:80',
             'ppto_config.margen_lateral_mm' => 'nullable|numeric|min:0|max:80',
@@ -143,10 +144,11 @@ class UpdatePresupuestoRequest extends FormRequest
             'pdf_theme' => 'nullable|string|max:64',
             'conceptos' => 'required|array|min:1',
             'conceptos.*.tipo' => 'nullable|string|in:concepto,parrafo',
+            'conceptos.*.tiene_matriz' => 'nullable|boolean',
             'conceptos.*.descripcion' => 'required|string|max:5000',
             'conceptos.*.cantidad' => 'required|numeric|min:0.0001',
             'conceptos.*.unidad' => 'required|string|max:50',
-            'conceptos.*.precio_unitario' => 'required|numeric|min:0',
+            'conceptos.*.precio_unitario' => 'nullable|numeric|min:0',
             'conceptos.*.imagen_path' => 'nullable|string|max:255',
             'conceptos.*.imagen_url' => 'nullable|string|max:500|url',
             'conceptos.*.proveedor_nombre' => 'nullable|string|max:150',
@@ -158,6 +160,16 @@ class UpdatePresupuestoRequest extends FormRequest
                     $this->validateConceptoImagenBase64($attribute, $value, $fail);
                 },
             ],
+            'conceptos.*.componentes' => 'nullable|array',
+            'conceptos.*.componentes.*.orden' => 'nullable|integer|min:0',
+            'conceptos.*.componentes.*.categoria' => 'nullable|string|in:producto,servicio',
+            'conceptos.*.componentes.*.catalogo_concepto_id' => 'nullable|integer|exists:presupuesto_catalogo_conceptos,id',
+            'conceptos.*.componentes.*.descripcion' => 'nullable|string|max:500',
+            'conceptos.*.componentes.*.unidad' => 'nullable|string|max:50',
+            'conceptos.*.componentes.*.cantidad' => 'nullable|numeric|min:0',
+            'conceptos.*.componentes.*.precio_unitario' => 'nullable|numeric|min:0',
+            'conceptos.*.componentes.*.clave' => 'nullable|string|max:40',
+            'conceptos.*.componentes.*.clave_snapshot' => 'nullable|string|max:40',
         ];
     }
 
@@ -258,14 +270,37 @@ class UpdatePresupuestoRequest extends FormRequest
                         continue;
                     }
                     $tipo = $concepto['tipo'] ?? PresupuestoConcepto::TIPO_CONCEPTO;
-                    if ($tipo !== PresupuestoConcepto::TIPO_PARRAFO) {
+                    if ($tipo === PresupuestoConcepto::TIPO_PARRAFO) {
+                        $desc = (string) ($concepto['descripcion'] ?? '');
+                        if (mb_strlen($desc) > $maxParrafo) {
+                            $v->errors()->add(
+                                "conceptos.{$index}.descripcion",
+                                "El párrafo no puede exceder {$maxParrafo} caracteres (aprox. nueve renglones en el PDF)."
+                            );
+                        }
                         continue;
                     }
-                    $desc = (string) ($concepto['descripcion'] ?? '');
-                    if (mb_strlen($desc) > $maxParrafo) {
+
+                    $tieneMatriz = filter_var($concepto['tiene_matriz'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $componentes = $concepto['componentes'] ?? null;
+                    if ($tieneMatriz || (is_array($componentes) && count($componentes) > 0)) {
+                        if (! is_array($componentes) || count($componentes) < 1) {
+                            $v->errors()->add(
+                                "conceptos.{$index}.componentes",
+                                'Una línea con matriz requiere al menos un componente.'
+                            );
+                        }
+
+                        continue;
+                    }
+
+                    if (! array_key_exists('precio_unitario', $concepto)
+                        || $concepto['precio_unitario'] === null
+                        || $concepto['precio_unitario'] === ''
+                    ) {
                         $v->errors()->add(
-                            "conceptos.{$index}.descripcion",
-                            "El párrafo no puede exceder {$maxParrafo} caracteres (aprox. nueve renglones en el PDF)."
+                            "conceptos.{$index}.precio_unitario",
+                            'El precio unitario del concepto es obligatorio.'
                         );
                     }
                 }
