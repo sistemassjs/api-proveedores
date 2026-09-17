@@ -128,6 +128,8 @@ class AuthController extends Controller
             }
 
             if ($proveedorExistente->tipo_alta == 1) {
+                $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
+
                 return $this->error(
                     'Teléfono ya registrado. Recupera tu contraseña si no puedes entrar.',
                     [
@@ -181,6 +183,7 @@ class AuthController extends Controller
                 ], 'Empresa ya registrada. Verifica tus datos y completa el registro.', 200);
             }
 
+            $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
             $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedorExistente);
             $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
 
@@ -190,8 +193,16 @@ class AuthController extends Controller
             ], 'Revisa tu correo para activar la cuenta.', 200);
         }
 
-        $proveedor = Proveedor::create($validatedData);
-        $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
+        // Sin DB::transaction: User (conexión default) y Proveedor (mysql5)
+        // no pueden compartir txn; el pivot bloquea proveedores y el update del token hace lock wait.
+        $plainToken = Str::random(60);
+        $proveedor = Proveedor::create([
+            ...$validatedData,
+            'token_completar_registro' => $plainToken,
+            'token_completar_registro_generado_at' => now(),
+        ]);
+        $this->asegurarUsuarioPrincipalPendiente($proveedor);
+        $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
         $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
 
         return $this->success([
@@ -251,18 +262,7 @@ class AuthController extends Controller
             );
         }
 
-        $tieneUsuarioActivo = DB::table('user_proveedor')
-            ->where('proveedor_id', $proveedor->id)
-            ->where('activo', true)
-            ->exists();
-
-        if ($tieneUsuarioActivo) {
-            return $this->error(
-                'Ya tienes usuario. Inicia sesión o recupera tu contraseña.',
-                ['codigo' => 'usuario_ya_existe'],
-                409
-            );
-        }
+        $this->asegurarUsuarioPrincipalPendiente($proveedor);
 
         if (
             $proveedor->token_completar_registro === null
@@ -342,61 +342,21 @@ class AuthController extends Controller
             );
         }
 
-        if (! $proveedor->user) {
-            $idRoleProveedor = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->first()->id;
-            $user = User::create([
-                'name' => $proveedor->nombre_propietario,
-                'email' => $proveedor->email,
-                'telefono_codigo_pais' => $proveedor->telefono_codigo_pais,
-                'telefono' => $proveedor->telefono,
-                'password' => Hash::make($request->password),
-                'role_id' => $idRoleProveedor,
-                'cambiar_pass_default' => false
-            ]);
-
-            $user->proveedores()->attach($proveedor->id, [
-                'tipo_relacion' => 'PRINCIPAL',
-                'activo' => true,
-                'fecha_asignacion' => now(),
-                'observaciones' => 'Usuario principal de la empresa',
-            ]);
-        } else {
-            $user = $proveedor->user;
-            $user->password = Hash::make($request->password);
-            $user->cambiar_pass_default = false;
-            $user->save();
-        }
-
-        /**
-         * Crear sucursal matriz por defecto si el proveedor aún no tiene ninguna.
-         */
-        if (! $proveedor->sucursales()->exists()) {
-            $proveedor->sucursales()->create([
-                'nombre' => 'Matriz',
-                'direccion' => $proveedor->direccion ?? 'Dirección pendiente',
-                'telefono' => $proveedor->telefono ?? '0000000000',
-                'email' => $proveedor->email,
-                'encargado' => $proveedor->nombre_comercial,
-                'activa' => true,
-                'coordenadas_lat' => null,
-                'coordenadas_lng' => null,
-                'estatus' => 'activo',
-            ]);
-        }
-
-        $proveedor->update([
-            'registro_completado_at' => now(),
-            'token_completar_registro' => null,
-            'estatus' => EstadoUsuario::REGISTRO_COMPLETADO->value,
-        ]);
-
+        $user = $this->asegurarUsuarioPrincipalPendiente($proveedor);
+        $cerradoAhora = $this->establecerPasswordYCerrarAltaSiPendiente(
+            $user,
+            $proveedor,
+            $request->password
+        );
+        $proveedor->refresh();
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // $admin = User::find($this->id_user_admin_a_notificar);
-        $admins = User::administradoresActivos()->get();
+        if ($cerradoAhora) {
+            $admins = User::administradoresActivos()->get();
 
-        foreach ($admins as $admin) {
-            $admin->notify(new NewUserNotification($user, $proveedor));
+            foreach ($admins as $admin) {
+                $admin->notify(new NewUserNotification($user, $proveedor));
+            }
         }
 
         return $this->success([
@@ -1287,24 +1247,32 @@ class AuthController extends Controller
             );
         }
 
-        // Actualizar contraseña
-        $user->password = Hash::make($request->password);
-        $user->save();
+        $proveedor = $user->proveedorPrincipal();
+        $cerradoAhora = $this->establecerPasswordYCerrarAltaSiPendiente(
+            $user,
+            $proveedor,
+            $request->password
+        );
 
-        // Eliminar token del cache
+        if ($proveedor) {
+            $proveedor->refresh();
+        }
+
         Cache::forget("password_reset_{$request->token}");
 
-        // Crear nuevo token de autenticación
+        if ($cerradoAhora && $proveedor) {
+            foreach (User::administradoresActivos()->get() as $admin) {
+                $admin->notify(new NewUserNotification($user, $proveedor));
+            }
+        }
+
         $token = $user->createToken('API Token')->plainTextToken;
         $user->load(User::eagerLodable());
-
-        // Obtener proveedor si existe
-        $proveedor = $user->proveedorPrincipal();
 
         return $this->success([
             'user' => new UserAuthenticateResource($user),
             'token' => $token,
-            'proveedor' => $proveedor ? new ProveedorResource($proveedor) : null,
+            'proveedor' => $proveedor ? new ProveedorResource($proveedor->load(Proveedor::eagerLodable())) : null,
         ], 'Contraseña restablecida exitosamente.', 200);
     }
 
@@ -1578,6 +1546,95 @@ class AuthController extends Controller
     private function proveedorTieneRegistroCompletado(Proveedor $proveedor): bool
     {
         return $proveedor->registro_completado_at !== null;
+    }
+
+    /**
+     * Crea el GERENTE principal sin contraseña si aún no existe (alta formulario).
+     * Así password/forgot funciona antes de /gen-pass.
+     */
+    private function asegurarUsuarioPrincipalPendiente(Proveedor $proveedor): User
+    {
+        $user = $proveedor->usuarioPrincipal();
+        if ($user) {
+            return $user;
+        }
+
+        $idRoleProveedor = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->first()->id;
+
+        $user = User::where('email', $proveedor->email)->first();
+
+        if (! $user) {
+            $user = User::create([
+                'name' => $proveedor->nombre_propietario ?: $proveedor->nombre_comercial,
+                'email' => $proveedor->email,
+                'telefono_codigo_pais' => $proveedor->telefono_codigo_pais,
+                'telefono' => $proveedor->telefono,
+                'password' => null,
+                'role_id' => $idRoleProveedor,
+                'status' => EstadoUsuario::REGISTRADO->value,
+                'cambiar_pass_default' => false,
+            ]);
+        }
+
+        $estaAsociado = $proveedor->userProveedores()->where('user_id', $user->id)->exists();
+        if (! $estaAsociado) {
+            // Pivot por la conexión de Proveedor (mysql5), no por User: evita lock FK cruzado.
+            $proveedor->users()->attach($user->id, [
+                'tipo_relacion' => 'PRINCIPAL',
+                'activo' => true,
+                'fecha_asignacion' => now(),
+                'observaciones' => 'Usuario principal de la empresa',
+            ]);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Actualiza la contraseña y, si el alta formulario sigue pendiente, la cierra.
+     *
+     * @return bool true si cerró el alta en esta llamada
+     */
+    private function establecerPasswordYCerrarAltaSiPendiente(User $user, ?Proveedor $proveedor, string $password): bool
+    {
+        $user->password = Hash::make($password);
+        $user->cambiar_pass_default = false;
+        $user->save();
+
+        if (
+            ! $proveedor
+            || $this->proveedorTieneRegistroCompletado($proveedor)
+            || (int) $proveedor->tipo_alta === 2
+        ) {
+            return false;
+        }
+
+        $this->cerrarAltaProveedorPendiente($proveedor);
+
+        return true;
+    }
+
+    private function cerrarAltaProveedorPendiente(Proveedor $proveedor): void
+    {
+        if (! $proveedor->sucursales()->exists()) {
+            $proveedor->sucursales()->create([
+                'nombre' => 'Matriz',
+                'direccion' => $proveedor->direccion ?? 'Dirección pendiente',
+                'telefono' => $proveedor->telefono ?? '0000000000',
+                'email' => $proveedor->email,
+                'encargado' => $proveedor->nombre_comercial,
+                'activa' => true,
+                'coordenadas_lat' => null,
+                'coordenadas_lng' => null,
+                'estatus' => 'activo',
+            ]);
+        }
+
+        $proveedor->update([
+            'registro_completado_at' => now(),
+            'token_completar_registro' => null,
+            'estatus' => EstadoUsuario::REGISTRO_COMPLETADO->value,
+        ]);
     }
 
     private function enviarCorreoCompletarRegistroConTokenAlmacenado(Proveedor $proveedor): string

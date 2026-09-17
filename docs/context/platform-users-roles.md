@@ -146,7 +146,7 @@ Login y registro aceptan **correo** o **teléfono** (campo `email` del login bus
 
 | Origen | Persistencia típica |
 |--------|---------------------|
-| Registro completo (`registro-proveedor`) | `email` + `telefono` + `telefono_codigo_pais` |
+| Registro completo (`registro-proveedor`) | Al alta: `User` GERENTE + `Proveedor` + pivot `PRINCIPAL`; `email` + `telefono` + `telefono_codigo_pais`; `password` null hasta `/gen-pass` o `password/reset` (ver [platform-shared.md](./platform-shared.md#registro-de-empresa-formulario-gestionplus--nexprov)) |
 | Registro básico SP (enlace) | `users.email` = teléfono 10 dígitos (legacy); login por ese número |
 | Panel admin — usuario (`admin/usuarios`) | Correo **y/o** teléfono con código país (`+52`, etc.) |
 

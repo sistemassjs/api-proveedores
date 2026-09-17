@@ -13,6 +13,7 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 | Pieza | Dónde | Uso |
 |-------|--------|-----|
 | Auth / sesión | `routes/segmented/auth.php`, front `@auth/` | Login, token, `/auth/me` |
+| **Registro empresa (formulario)** | Sección siguiente | Alta GestionPlus / NexProv: empresa + usuario sin contraseña; `/gen-pass` o forgot cierran el alta |
 | **Login social (OAuth)** | [platform-auth-socialite.md](./platform-auth-socialite.md) | Google vía Socialite + Sanctum; multi-provider listo |
 | Proveedor | Model `Proveedor`, prefijo `proveedores/{proveedor}/…` | Contenedor multi-proveedor |
 | **Perfil empresa completado** | `ProveedorPerfilCompletadoService`, `GET …/perfil-completado` | Bandera `perfil_empresa_completo`, banner Mi Empresa, OAuth `pending_registro` |
@@ -23,6 +24,19 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 | Storage / mail / FCM | Traits, Mail, Notifications genéricas | Archivos, correo, push |
 | Shell menús (front) | `app-sidebar-menu` / `app-desktop-sidebar` | Dos menús distintos; ver sección siguiente |
 | **Perfil público** | Sección siguiente | Página de presentación compartible por enlace |
+
+## Registro de empresa (formulario GestionPlus / NexProv)
+
+Alta por formulario (`POST /auth/register_proveedor`). Contratos HTTP iguales en **GestionPlus** (`app-proveedores`) y **NexProv**. No aplica a registro básico SP ni a `tipo_alta = 2` (Construcción).
+
+| Paso | Qué persiste |
+|------|----------------|
+| Formulario de empresa | `Proveedor` + `User` GERENTE (`password` **null**) + pivot `PRINCIPAL`. Correo `/gen-pass`. El login falla mientras no hay contraseña (`blank(password)`). |
+| `/gen-pass` (`register_proveedor_completar`) **o** `password/forgot` → `password/reset` | **Update** de `users.password`. Si el alta sigue pendiente: sucursal Matriz, `registro_completado_at`, limpia token, `estatus` = `registro_completado`. |
+
+`users.password` ya es nullable (mismo patrón que OAuth). Recuperar contraseña funciona **antes** de `/gen-pass` porque el usuario ya existe. Reenviar correo de activación sigue válido mientras `registro_completado_at` sea null.
+
+No envolver el alta en `DB::transaction()`: `User` usa la conexión default y `Proveedor`/`user_proveedor` usan `mysql5`; una txn cruzada provoca `Lock wait timeout exceeded` (igual que OAuth / sucursales). El token de `/gen-pass` se guarda en el `create` del proveedor, no en un `update` posterior.
 
 ## Shell UI (menús)
 
