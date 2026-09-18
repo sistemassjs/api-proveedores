@@ -103,7 +103,7 @@
             <p class="welcome-text">¡Hola!</p>
 
             <p class="message">
-                Estás a un paso de completar tu registro en {{ config('app.name') }}.
+                Estás a un paso de completar tu registro en {{ $clientAppName ?? config('app.name') }}.
             </p>
 
             {{-- Bloque de datos del proveedor --}}

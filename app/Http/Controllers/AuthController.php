@@ -22,6 +22,7 @@ use App\Http\Requests\Auth\CompletarRegistroProveedorRequest;
 use App\Http\Resources\ProveedorResource;
 use App\Http\Resources\Auth\UserAuthenticateResource;
 use App\Support\UserCuentaEstado;
+use App\Support\ClientApp;
 use App\Mail\CompletaRegistroProveedorMail;
 use App\Mail\CompletaRegistroUsuarioMail;
 use App\Mail\VerifyUpdatedEmailMail;
@@ -57,8 +58,8 @@ class AuthController extends Controller
         $validatedData = $request->validated();
         $token = Str::random(60);
         Cache::put("registro_user_construcc{$token}", $validatedData, 60 * 24 * 365);
-        $url = config('services.frontend.url') . "/gen-pass?is_user_construcc=true&token={$token}";
-        Mail::to($validatedData['email'])->send(new CompletaRegistroUsuarioMail($url));
+        $url = ClientApp::frontendUrl() . "/gen-pass?is_user_construcc=true&token={$token}";
+        Mail::to($validatedData['email'])->send(new CompletaRegistroUsuarioMail($url, ClientApp::key()));
 
         return $this->success(
             [
@@ -185,7 +186,7 @@ class AuthController extends Controller
 
             $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
             $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedorExistente);
-            $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+            $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
 
             return $this->success([
                 'url' => $url,
@@ -203,7 +204,7 @@ class AuthController extends Controller
         ]);
         $this->asegurarUsuarioPrincipalPendiente($proveedor);
         $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
-        $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+        $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
 
         return $this->success([
             'url' => $url,
@@ -363,7 +364,7 @@ class AuthController extends Controller
             'user' => new UserAuthenticateResource($user->load(User::eagerLodable())),
             'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
             'token' => $token,
-        ], 'Registro completado exitosamente en GestionPlus', 201);
+        ], 'Registro completado exitosamente en '.ClientApp::name(), 201);
     }
 
     public function update_foto_perfil(AuthUpdateFotoPerfilRequest $request)
@@ -403,7 +404,7 @@ class AuthController extends Controller
             })->first();
 
             if (! $user || blank($user->password) || ! Hash::check($request->password, $user->password)) {
-                throw new UnauthorizedException('Credenciales incorrectas en GestionPlus.');
+                throw new UnauthorizedException('Credenciales incorrectas en '.ClientApp::name().'.');
             }
 
             $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($user);
@@ -422,18 +423,18 @@ class AuthController extends Controller
             return $this->success([
                 'user' => new UserAuthenticateResource($user),
                 'token' => $token,
-            ], 'Login exitoso en GestionPlus.', 201);
+            ], 'Login exitoso en '.ClientApp::name().'.', 201);
         } catch (ValidationException $e) {
             // Error en la validación de los datos de entrada
-            return $this->error('Los datos proporcionados no son válidos en GestionPlus.', $e->errors(), 422);
+            return $this->error('Los datos proporcionados no son válidos en '.ClientApp::name().'.', $e->errors(), 422);
         } catch (UnauthorizedException $e) {
             // Credenciales incorrectas o acceso no autorizado
-            Log::error('Error al iniciar sesión en GestionPlus: ' . $e->getMessage());
+            Log::error('Error al iniciar sesión en '.ClientApp::name().': ' . $e->getMessage());
             return $this->error($e->getMessage(), [], 401);
         } catch (\Exception $e) {
             // Cualquier otro error inesperado
-            Log::error('Error al iniciar sesión en GestionPlus: ' . $e->getMessage());
-            return $this->error('Ocurrió un error al intentar iniciar sesión en GestionPlus.', [], 500);
+            Log::error('Error al iniciar sesión en '.ClientApp::name().': ' . $e->getMessage());
+            return $this->error('Ocurrió un error al intentar iniciar sesión en '.ClientApp::name().'.', [], 500);
         }
     }
 
@@ -462,7 +463,7 @@ class AuthController extends Controller
     public function refresh(Request $request)
     {
         if (! $request->user()) {
-            throw new UnauthorizedException('No autorizado o sesión no válida en GestionPlus');
+            throw new UnauthorizedException('No autorizado o sesión no válida en '.ClientApp::name());
         }
 
         $user = $request->user();
@@ -487,7 +488,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         if (! $request->user()) {
-            throw new UnauthorizedException('No autorizado o sesión no válida en GestionPlus');
+            throw new UnauthorizedException('No autorizado o sesión no válida en '.ClientApp::name());
         }
 
         // Solo eliminar el token del dispositivo actual, no todos los tokens
@@ -497,7 +498,7 @@ class AuthController extends Controller
             [
                 'success' => true,
             ],
-            'Sesión cerrada correctamente en GestionPlus',
+            'Sesión cerrada correctamente en '.ClientApp::name(),
             200
         );
     }
@@ -1107,7 +1108,7 @@ class AuthController extends Controller
         // Verificar que la contraseña actual sea correcta
         if (! Hash::check($request->current_password, $user->password)) {
             throw ValidationException::withMessages([
-                'current_password' => ['La contraseña actual no es correcta en GestionPlus.'],
+                'current_password' => ['La contraseña actual no es correcta en '.ClientApp::name().'.'],
             ]);
         }
 
@@ -1128,7 +1129,7 @@ class AuthController extends Controller
             'user' => new UserAuthenticateResource($user),
             'token' => $newToken,
             'proveedor' => $proveedor ? new ProveedorResource($proveedor) : null,
-        ], 'Contraseña actualizada correctamente en GestionPlus.', 200);
+        ], 'Contraseña actualizada correctamente en '.ClientApp::name().'.', 200);
     }
 
     /**
@@ -1149,7 +1150,7 @@ class AuthController extends Controller
 
         if (! $user) {
             return $this->error(
-                'No encontramos ninguna cuenta con ese correo electrónico o número de teléfono en GestionPlus. Comprueba que escribiste bien los datos o regístrate si aún no tienes cuenta.',
+                'No encontramos ninguna cuenta con ese correo electrónico o número de teléfono en '.ClientApp::name().'. Comprueba que escribiste bien los datos o regístrate si aún no tienes cuenta.',
                 [],
                 404
             );
@@ -1160,7 +1161,7 @@ class AuthController extends Controller
             EstadoUsuario::SUSPENDIDO->value,
         ], true)) {
             return $this->error(
-                'No podemos enviar el enlace de recuperación porque la cuenta asociada está bloqueada o suspendida en GestionPlus. Para resolverlo, contacta a soporte.',
+                'No podemos enviar el enlace de recuperación porque la cuenta asociada está bloqueada o suspendida en '.ClientApp::name().'. Para resolverlo, contacta a soporte.',
                 [],
                 403
             );
@@ -1169,7 +1170,7 @@ class AuthController extends Controller
         $userEmail = $user->email;
         if ($userEmail === null || filter_var($userEmail, FILTER_VALIDATE_EMAIL) === false) {
             return $this->error(
-                'Tu cuenta no tiene un correo electrónico válido donde enviar el enlace de recuperación en GestionPlus. Completa o actualiza tu correo en tu perfil o pide ayuda a soporte.',
+                'Tu cuenta no tiene un correo electrónico válido donde enviar el enlace de recuperación en '.ClientApp::name().'. Completa o actualiza tu correo en tu perfil o pide ayuda a soporte.',
                 [],
                 422
             );
@@ -1183,10 +1184,10 @@ class AuthController extends Controller
             'created_at' => now(),
         ], 60 * 60);
 
-        $url = config('services.frontend.url') . "/auth/reset-password?token={$token}";
+        $url = ClientApp::frontendUrl() . "/auth/reset-password?token={$token}";
 
         try {
-            Mail::to($userEmail)->send(new PasswordResetMail($url, $user->name));
+            Mail::to($userEmail)->send(new PasswordResetMail($url, $user->name, ClientApp::key()));
         } catch (\Throwable $e) {
             Log::error('Fallo al enviar correo de recuperación de contraseña', [
                 'user_id' => $user->id,
@@ -1202,7 +1203,7 @@ class AuthController extends Controller
 
         return $this->success(
             ['email' => $email],
-            'Te enviamos un correo con instrucciones para restablecer tu contraseña en GestionPlus. Revisa tu bandeja de entrada, la carpeta de spam y el apartado de promociones.',
+            'Te enviamos un correo con instrucciones para restablecer tu contraseña en '.ClientApp::name().'. Revisa tu bandeja de entrada, la carpeta de spam y el apartado de promociones.',
             200
         );
     }
@@ -1219,7 +1220,7 @@ class AuthController extends Controller
 
         if (!$data) {
             return $this->error(
-                'El enlace de recuperación ha expirado o es inválido en GestionPlus. Por favor, solicita uno nuevo.',
+                'El enlace de recuperación ha expirado o es inválido en '.ClientApp::name().'. Por favor, solicita uno nuevo.',
                 [],
                 400
             );
@@ -1230,7 +1231,7 @@ class AuthController extends Controller
         if ($createdAt->diffInMinutes(now()) > 60) {
             Cache::forget("password_reset_{$request->token}");
             return $this->error(
-                'El enlace de recuperación ha expirado en GestionPlus. Por favor, solicita uno nuevo.',
+                'El enlace de recuperación ha expirado en '.ClientApp::name().'. Por favor, solicita uno nuevo.',
                 [],
                 400
             );
@@ -1649,14 +1650,16 @@ class AuthController extends Controller
             ]);
         }
 
-        $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+        $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
         $proveedorId = $proveedor->id;
         $correo = $proveedor->email;
+        $appKey = ClientApp::key();
 
-        dispatch(function () use ($url, $proveedorId, $correo) {
+        dispatch(function () use ($url, $proveedorId, $correo, $appKey) {
+            ClientApp::setCurrent($appKey);
             $proveedorMail = Proveedor::withoutGlobalScope('solo_activos')->find($proveedorId);
             if ($proveedorMail && $correo) {
-                Mail::to($correo)->send(new CompletaRegistroProveedorMail($url, $proveedorMail));
+                Mail::to($correo)->send(new CompletaRegistroProveedorMail($url, $proveedorMail, $appKey));
             }
         })->afterResponse();
 

@@ -28,7 +28,7 @@ final class UserCuentaEstado
             return [
                 'ok' => false,
                 'codigo' => 'cuenta_bloqueada',
-                'message' => 'Tu cuenta está bloqueada. Contacta al administrador de GestionPlus.',
+                'message' => 'Tu cuenta está bloqueada. Contacta al administrador de '.ClientApp::name().'.',
             ];
         }
 
@@ -36,7 +36,7 @@ final class UserCuentaEstado
             return [
                 'ok' => false,
                 'codigo' => 'cuenta_suspendida',
-                'message' => 'Tu cuenta está suspendida temporalmente. Contacta al administrador de GestionPlus.',
+                'message' => 'Tu cuenta está suspendida temporalmente. Contacta al administrador de '.ClientApp::name().'.',
             ];
         }
 

@@ -16,7 +16,7 @@
         $logoAppDataUri = \App\Support\EmailLogoHelper::proveedorDataUri($solicitudPago->proveedor);
     }
 
-    $logoAppDataUri = $logoAppDataUri ?? \App\Support\EmailLogoHelper::logoGestionPlusDataUri();
+    $logoAppDataUri = $logoAppDataUri ?? \App\Support\EmailLogoHelper::logoClientAppDataUri();
 @endphp
 
 @if(!empty($logoAppDataUri))

@@ -5,7 +5,7 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 ## Stack
 
 - **API:** Laravel, Sanctum, Eloquent — repo `api-proveedores`
-- **App:** Angular + Ionic PWA — repo `app-proveedores`
+- **App:** Angular + Ionic PWA — repo `app-proveedores` (GestionPlus). NexProv: repo `nexprov`. Misma API; ver [platform-client-apps.md](./platform-client-apps.md).
 - **Contrato JSON:** `status`, `code`, `message`, `data`, `errors` (`ApiResponse`)
 
 ## Alcance mínimo
@@ -21,13 +21,14 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 | Roles | `UserRoleEnumerate` (ADMINISTRADOR, GERENTE, SUPERVISOR, VENTAS, AUXILIAR, …) | Rutas segmentadas + menú |
 | Usuarios / matriz MVP | [platform-users-roles.md](./platform-users-roles.md) | Gestión empresa: principal GERENTE, roles asignables SUP/VEN/AUX |
 | Métricas de plataforma | Sección siguiente + [platform-users-roles.md](./platform-users-roles.md#métricas-y-cuentas-de-pruebas) | Totales / actividad: excluye roles internos y cuentas/empresas de pruebas |
-| Storage / mail / FCM | Traits, Mail, Notifications genéricas | Archivos, correo, push |
+| Storage / mail / FCM | Traits, Mail, Notifications genéricas | Archivos, correo, push; FCM etiquetado por app, ver [platform-client-apps.md](./platform-client-apps.md) |
+| **Dos apps cliente** | [platform-client-apps.md](./platform-client-apps.md) | Header `X-Client-App`, correos/logo, Google, tokens FCM. Default `gestion`. Sin entitlement. |
 | Shell menús (front) | `app-sidebar-menu` / `app-desktop-sidebar` | Dos menús distintos; ver sección siguiente |
 | **Perfil público** | Sección siguiente | Página de presentación compartible por enlace |
 
 ## Registro de empresa (formulario GestionPlus / NexProv)
 
-Alta por formulario (`POST /auth/register_proveedor`). Contratos HTTP iguales en **GestionPlus** (`app-proveedores`) y **NexProv**. No aplica a registro básico SP ni a `tipo_alta = 2` (Construcción).
+Alta por formulario (`POST /auth/register_proveedor`). Contratos HTTP iguales en **GestionPlus** (`app-proveedores`) y **NexProv**. La app se distingue con `X-Client-App` (correos, `/gen-pass`, nombre). No aplica a registro básico SP ni a `tipo_alta = 2` (Construcción). Identidad compartida: [platform-client-apps.md](./platform-client-apps.md).
 
 | Paso | Qué persiste |
 |------|----------------|

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Support\ClientApp;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
@@ -14,16 +15,21 @@ class PasswordResetMail extends Mailable
 
     public $userName;
 
-    public function __construct($url, $userName = null)
+    public string $appKey;
+
+    public function __construct($url, $userName = null, ?string $appKey = null)
     {
         $this->url = $url;
         $this->userName = $userName;
+        $this->appKey = $appKey ?? ClientApp::key();
     }
 
     public function build()
     {
+        ClientApp::setCurrent($this->appKey);
+
         return $this
-            ->subject('Recuperación de contraseña - '.config('app.name'))
+            ->subject('Recuperación de contraseña - '.ClientApp::name())
             ->view('emails.password-reset');
     }
 }
