@@ -38,5 +38,3 @@ Mecanismo: **solo lectura + snapshot** (mismo comportamiento UX que tenía el fe
 ## Futuro (apps independientes)
 
 Si se dividen repos/apps, estas relaciones no deberían crecer. Evitar nuevas FKs o servicios compartidos entre catálogo, SP y presupuestos. El puente lectura+snapshot es el único permitido catálogo↔PPTOs.
-
-**GestionPlus y NexProv** son dos PWAs sobre la misma API e identidad (`User` + `Proveedor`). Eso **no** es un puente de dominio ni una licencia cruzada. Ver [platform-client-apps.md](./platform-client-apps.md). El entitlement Gestion→NexProv está aplazado.

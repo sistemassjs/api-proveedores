@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Notifications;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserDeviceToken;
-use App\Support\ClientApp;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,16 +57,14 @@ class DeviceTokenController extends Controller
 
             $user = Auth::user();
             $validated = $validator->validated();
-            $appKey = ClientApp::key();
 
             // Buscar token existente por token exacto (independiente del usuario)
             // El token es único globalmente, puede que otro usuario lo tenga
             $existingToken = UserDeviceToken::where('token', $validated['token'])->first();
 
-            // Si no existe, buscar por device_id del mismo usuario en la misma app
+            // Si no existe, buscar por device_id del mismo usuario
             if (!$existingToken && isset($validated['device_id'])) {
                 $existingToken = UserDeviceToken::where('user_id', $user->id)
-                    ->where('app_key', $appKey)
                     ->where('device_id', $validated['device_id'])
                     ->first();
             }
@@ -80,7 +77,6 @@ class DeviceTokenController extends Controller
                     'platform' => $validated['platform'],
                     'device_id' => $validated['device_id'] ?? $existingToken->device_id,
                     'device_name' => $validated['device_name'] ?? $existingToken->device_name,
-                    'app_key' => $appKey,
                     'metadata' => array_merge($existingToken->metadata ?? [], $validated['metadata'] ?? []),
                     'last_used_at' => now(),
                     'is_active' => true,
@@ -107,7 +103,6 @@ class DeviceTokenController extends Controller
                     'platform' => $validated['platform'],
                     'device_id' => $validated['device_id'],
                     'device_name' => $validated['device_name'],
-                    'app_key' => $appKey,
                     'metadata' => $validated['metadata'] ?? [],
                     'last_used_at' => now(),
                     'is_active' => true,
@@ -388,7 +383,6 @@ class DeviceTokenController extends Controller
             UserDeviceToken::query()
                 ->where('user_id', $userId)
                 ->where('id', '!=', $current->id)
-                ->where('app_key', $current->app_key ?? 'gestion')
                 ->where('device_id', $current->device_id)
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
@@ -398,7 +392,6 @@ class DeviceTokenController extends Controller
         UserDeviceToken::query()
             ->where('user_id', $userId)
             ->where('id', '!=', $current->id)
-            ->where('app_key', $current->app_key ?? 'gestion')
             ->where('platform', $current->platform)
             ->where('is_active', true)
             ->where(function ($q) use ($staleBefore) {

@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Support\ClientApp;
 
 class UserDeviceToken extends Model
 {
@@ -18,13 +17,8 @@ class UserDeviceToken extends Model
         'device_id',
         'device_name',
         'metadata',
-        'app_key',
         'last_used_at',
         'is_active',
-    ];
-
-    protected $attributes = [
-        'app_key' => 'gestion',
     ];
 
     protected $casts = [
@@ -53,14 +47,6 @@ class UserDeviceToken extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
-    }
-
-    /**
-     * Scope por app cliente (gestion / nexprov)
-     */
-    public function scopeByApp($query, ?string $appKey = null)
-    {
-        return $query->where('app_key', $appKey ?? ClientApp::key());
     }
 
     /**

@@ -27,20 +27,6 @@ final class EmailLogoHelper
         return null;
     }
 
-    public static function logoClientAppDataUri(?string $appKey = null): ?string
-    {
-        $relative = ClientApp::logoRelativePath($appKey);
-        $path = public_path($relative);
-        if (is_readable($path)) {
-            $dataUri = self::fileToDataUri($path);
-            if ($dataUri) {
-                return $dataUri;
-            }
-        }
-
-        return self::logoGestionPlusDataUri();
-    }
-
     public static function logoGestionPlusDataUri(): ?string
     {
         $logoPaths = array_values(array_filter([

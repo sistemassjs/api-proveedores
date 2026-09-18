@@ -37,10 +37,6 @@ return Application::configure(basePath: dirname(__DIR__))
             LogIncomingRequests::class,
         ]);
 
-        $middleware->api(append: [
-            \App\Http\Middleware\IdentifyClientApp::class,
-        ]);
-
         // Alias de middleware (middleware individuales o agrupados)
         $middleware->alias([
             'role' => RoleMiddleware::class,

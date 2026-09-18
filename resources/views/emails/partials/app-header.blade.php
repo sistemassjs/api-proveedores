@@ -11,9 +11,9 @@
             @include('emails.partials.logo-app', ['logoAppDataUri' => $logoAppDataUri ?? null])
             <h1
               style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.2px;font-family:Arial,Helvetica,sans-serif;">
-              {{ $title ?? ($clientAppName ?? config('app.name')) }}</h1>
+              {{ $title ?? config('app.name') }}</h1>
             <p style="margin:6px 0 0;color:#e2e8f0;font-size:13px;font-family:Arial,Helvetica,sans-serif;">
-              {{ $subtitle ?? ($clientAppName ?? config('app.name')) }}</p>
+              {{ $subtitle ?? config('app.name') }}</p>
           </td>
         </tr>
       </table>

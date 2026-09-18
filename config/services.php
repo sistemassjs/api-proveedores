@@ -39,7 +39,7 @@ return [
         'site' => env('RECAPTCHA_SITE_KEY'),
     ],
     'frontend' => [
-        'url' => env('APP_FRONTEND_URL', 'http://localhost:4300'), // Fallback GestionPlus; NexProv usa NEXPROV_FRONTEND_URL vía ClientApp
+        'url' => env('APP_FRONTEND_URL', 'http://localhost:4300'), // Valor por defecto
     ],
 
     /*

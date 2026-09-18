@@ -164,7 +164,7 @@
             @endif
 
             <p class="message">
-                Hemos recibido una solicitud para restablecer la contraseña asociada a su cuenta en {{ $clientAppName ?? config('app.name') }}.
+                Hemos recibido una solicitud para restablecer la contraseña asociada a su cuenta en {{ config('app.name') }}.
             </p>
 
             <p class="message">

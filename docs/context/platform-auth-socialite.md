@@ -13,10 +13,10 @@ Login social vía OAuth para la PWA. **No es un dominio de negocio.** Amplía [p
 
 ## Flujo
 
-1. PWA `/auth` → botón **Continuar con Google** → `GET {API_URL}/auth/google/redirect?app={gestion|nexprov}`
-2. Google consent → `GET {API_URL}/auth/google/callback` (`state=app.{key}` para no perder la app)
+1. PWA `/auth` → botón **Continuar con Google** → `GET {API_URL}/auth/google/redirect`
+2. Google consent → `GET {API_URL}/auth/google/callback`
 3. API resuelve/vincula usuario, emite token Sanctum
-4. Redirect a `{frontend de esa app}/auth/callback#token=…&pending_registro=0|1` (`ClientApp::frontendUrl()`, no solo `APP_FRONTEND_URL`)
+4. Redirect a `{APP_FRONTEND_URL}/auth/callback#token=…&pending_registro=0|1`
 5. Front guarda token, llama `/auth/me`, `SessionService.startSession`
 6. Si `pending_registro=1` → navega a `/pages/proveedor/perfil` (Mi Empresa) para completar datos
 
@@ -29,7 +29,7 @@ sequenceDiagram
   participant PWA
   participant API
   participant Google
-  PWA->>API: GET /auth/google/redirect?app=gestion|nexprov
+  PWA->>API: GET /auth/google/redirect
   API->>Google: OAuth
   Google->>API: /auth/google/callback
   API->>API: oauth_accounts + Sanctum
@@ -53,11 +53,9 @@ sequenceDiagram
 2. Pantalla de consentimiento OAuth (scopes email, profile, openid)
 3. Cliente **Aplicación web**
 4. **Orígenes JS** (PWA, sin path):
-   - `http://localhost:4300` (GestionPlus)
-   - `http://localhost:4400` (NexProv)
+   - `http://localhost:4300`
    - `https://app.gestionplus.com.mx`
    - `https://gestion.heventec.com`
-   - origen de producción NexProv cuando exista
 5. **URIs de redirección** (API + `/api` + callback):
    - Local: `http://localhost:8088/api/auth/google/callback`
    - Prod API: la URL pública real de Laravel, p. ej. `https://gestion.heventec.com/api/auth/google/callback` **o** `https://apicons.ddns.net:8092/api/auth/google/callback` según dónde responda la API
@@ -74,10 +72,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI="${APP_URL}/api/auth/google/callback"
 APP_FRONTEND_URL=http://localhost:4300
-NEXPROV_FRONTEND_URL=http://localhost:4400
 ```
-
-El callback al PWA **no** usa `OAUTH_FRONTEND_CALLBACK` a ciegas: `SocialAuthService::frontendCallbackUrl` arma `{ClientApp::frontendUrl()}/auth/callback` según `?app=` / `state`. El redirect URI de Google sigue siendo **uno** (el de la API). Detalle: [platform-client-apps.md](./platform-client-apps.md).
 
 `config/services.php`: bloques `oauth` y `google`.
 
@@ -87,8 +82,8 @@ El callback al PWA **no** usa `OAUTH_FRONTEND_CALLBACK` a ciegas: `SocialAuthSer
 |-------|-----------|
 | Paquete | `laravel/socialite` |
 | Rutas | `routes/segmented/auth.php` → `GET auth/{provider}/redirect\|callback` |
-| Controller | `App\Http\Controllers\Auth\SocialAuthController` (`state` = `ClientApp::oauthState()`) |
-| Servicio | `App\Services\Auth\SocialAuthService` (`frontendCallbackUrl` por app cliente) |
+| Controller | `App\Http\Controllers\Auth\SocialAuthController` |
+| Servicio | `App\Services\Auth\SocialAuthService` |
 | Modelo | `App\Models\OauthAccount` + `User::oauthAccounts()` |
 | Migraciones | `create_oauth_accounts_table`, `make_users_password_nullable` |
 
@@ -96,13 +91,13 @@ Añadir provider futuro: driver Socialite (+ Socialite Providers si hace falta),
 
 Hueco futuro (nativo): `POST /auth/{provider}/token` con ID token — mismo `SocialAuthService::resolveAuthenticatedUser`.
 
-## Código PWA (`app-proveedores` / `nexprov`)
+## Código PWA (`app-proveedores`)
 
 | Pieza | Ubicación |
 |-------|-----------|
-| Botón | `@auth/login` → `loginWithProvider('google')` (estilo Identity); URL con `?app={environment.clientApp}` |
+| Botón | `@auth/login` → `loginWithProvider('google')` (estilo Identity) |
 | Callback | `/auth/callback` → `@auth/oauth-callback` |
-| Config | `environment.clientApp` + `environment.oauthProviders: ['google']` |
+| Config | `environment.oauthProviders: ['google']` |
 | Routing | En `app-routing`, `auth/callback` **antes** de `auth` `path: ''` (login); si no, NG04002 |
 | Token | Tras OAuth: `UserStore.setToken` (el interceptor usa `token$`; solo `TokenService` deja `/auth/me` en 401) |
 | Mi Perfil | Badge Google junto al rol (campos `oauth_providers` / `auth_google`) |
@@ -112,8 +107,7 @@ Hueco futuro (nativo): `POST /auth/{provider}/token` con ID token — mismo `Soc
 
 - [ ] URI de callback correcta en Google Cloud (con `/api`)
 - [ ] `.env` con Client ID/Secret y `GOOGLE_REDIRECT_URI`
-- [ ] `php artisan migrate` (oauth_accounts + password nullable + `user_device_tokens.app_key`)
-- [ ] `.env` con `APP_FRONTEND_URL` y `NEXPROV_FRONTEND_URL`
+- [ ] `php artisan migrate` (oauth_accounts + password nullable)
 - [ ] Usuarios de prueba en consent screen (modo Testing)
 - [ ] Probar: usuario existente por email; usuario nuevo → `/reg`
 - [ ] **Windows local:** si aparece `cURL error 60` al hablar con Google, configurar CA en `php.ini` del **mismo PHP que sirve la API** (no solo CLI):

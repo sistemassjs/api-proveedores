@@ -11,7 +11,6 @@ use App\Models\Proveedor;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\UserCuentaEstado;
-use App\Support\ClientApp;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 
 class SocialAuthService
@@ -207,7 +206,10 @@ class SocialAuthService
 
     public function frontendCallbackUrl(array $query = [], ?string $fragment = null): string
     {
-        $base = rtrim(ClientApp::frontendUrl(), '/') . '/auth/callback';
+        $base = rtrim((string) config('services.oauth.frontend_callback'), '/');
+        if ($base === '') {
+            $base = rtrim((string) config('services.frontend.url'), '/') . '/auth/callback';
+        }
 
         $url = $base;
         if ($query !== []) {

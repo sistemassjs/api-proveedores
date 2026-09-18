@@ -7,7 +7,6 @@ use App\Services\Auth\SocialAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use App\Support\ClientApp;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -35,7 +34,6 @@ class SocialAuthController extends Controller
 
         return Socialite::driver($provider)
             ->stateless()
-            ->with(['state' => ClientApp::oauthState()])
             ->scopes(['openid', 'profile', 'email'])
             ->redirect();
     }
