@@ -75,6 +75,63 @@ final class ClientApp
     }
 
     /**
+     * URL pública del logo (front / CDN). Prioriza logo_url de config; si no, frontend_url + logo.
+     */
+    public static function logoWebUrl(?string $key = null): string
+    {
+        $normalized = $key !== null ? self::normalize($key) : self::key();
+        $apps = config('client_apps.apps', []);
+        $cfg = $apps[$normalized] ?? self::current();
+
+        if (! empty($cfg['logo_url'])) {
+            return (string) $cfg['logo_url'];
+        }
+
+        $base = rtrim((string) ($cfg['frontend_url'] ?? ''), '/');
+        $relative = ltrim((string) ($cfg['logo'] ?? 'assets/logos/logo-gestionplus.png'), '/');
+
+        if ($base === '') {
+            return asset($relative);
+        }
+
+        return $base.'/'.$relative;
+    }
+
+    /**
+     * Colores de plantillas auth (header / CTA) según la app.
+     *
+     * @return array{
+     *     header: string,
+     *     header_end: string,
+     *     cta: string,
+     *     cta_end: string,
+     *     cta_text: string,
+     *     cta_shadow: string,
+     *     accent: string,
+     *     link: string
+     * }
+     */
+    public static function mailTheme(?string $key = null): array
+    {
+        $normalized = $key !== null ? self::normalize($key) : self::key();
+        $apps = config('client_apps.apps', []);
+        $defaults = $apps[(string) config('client_apps.default', 'gestion')]['mail'] ?? [
+            'header' => '#2b6cb0',
+            'header_end' => '#1d4e89',
+            'cta' => '#FFC107',
+            'cta_end' => '#FFD54F',
+            'cta_text' => '#000000',
+            'cta_shadow' => 'rgba(255, 193, 7, 0.4)',
+            'accent' => '#FFC107',
+            'link' => '#93c5fd',
+        ];
+
+        $mail = $apps[$normalized]['mail'] ?? [];
+
+        return array_merge($defaults, is_array($mail) ? $mail : []);
+    }
+
+    /**
      * @return list<string>
      */
     public static function keys(): array

@@ -5,6 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Completa tu registro</title>
+    @php
+        $theme = $mailTheme ?? \App\Support\ClientApp::mailTheme($appKey ?? null);
+        $cta = $theme['cta'] ?? '#FFC107';
+        $ctaEnd = $theme['cta_end'] ?? '#FFD54F';
+        $ctaText = $theme['cta_text'] ?? '#000000';
+        $ctaShadow = $theme['cta_shadow'] ?? 'rgba(255, 193, 7, 0.4)';
+    @endphp
     <style>
         * {
             margin: 0;
@@ -58,13 +65,13 @@
         .cta-button {
             display: inline-block;
             padding: 16px 40px;
-            background: linear-gradient(135deg, #FFC107 0%, #FFD54F 100%);
-            color: #000000 !important;
+            background: linear-gradient(135deg, {{ $cta }} 0%, {{ $ctaEnd }} 100%);
+            color: {{ $ctaText }} !important;
             text-decoration: none;
             border-radius: 8px;
             font-weight: 600;
             font-size: 16px;
-            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
+            box-shadow: 0 4px 15px {{ $ctaShadow }};
         }
 
         .footer {

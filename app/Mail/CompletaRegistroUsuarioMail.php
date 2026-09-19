@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\BuildsAuthClientAppMail;
 use App\Support\ClientApp;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -9,9 +10,11 @@ use Illuminate\Queue\SerializesModels;
 
 class CompletaRegistroUsuarioMail extends Mailable
 {
+    use BuildsAuthClientAppMail;
     use Queueable, SerializesModels;
 
     public $url;
+
     public string $appKey;
 
     public function __construct($url, ?string $appKey = null)
@@ -24,7 +27,9 @@ class CompletaRegistroUsuarioMail extends Mailable
     {
         ClientApp::setCurrent($this->appKey);
 
-        return $this->subject('Completar tu registro en '.ClientApp::name())
-            ->view('emails.registro-completar');
+        return $this->brandAuthMail(
+            $this->subject('Completar tu registro en '.ClientApp::name())
+                ->view('emails.registro-completar')
+        );
     }
 }

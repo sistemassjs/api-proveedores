@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\BuildsAuthClientAppMail;
 use App\Support\ClientApp;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -9,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 
 class PasswordResetMail extends Mailable
 {
+    use BuildsAuthClientAppMail;
     use Queueable, SerializesModels;
 
     public $url;
@@ -28,8 +30,9 @@ class PasswordResetMail extends Mailable
     {
         ClientApp::setCurrent($this->appKey);
 
-        return $this
-            ->subject('Recuperación de contraseña - '.ClientApp::name())
-            ->view('emails.password-reset');
+        return $this->brandAuthMail(
+            $this->subject('Recuperación de contraseña - '.ClientApp::name())
+                ->view('emails.password-reset')
+        );
     }
 }

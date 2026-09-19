@@ -16,13 +16,28 @@ Amplía [platform-shared.md](./platform-shared.md). **Google OAuth multi-app: pe
 
 No hay entitlement automático GestionPlus → NexProv.
 
+## Fuente de verdad: tabla `users`
+
+El flujo de **Acceso existente** / `puede_activar_app` mira **solo** `users` (email y/o teléfono del formulario).
+
+| Dato | ¿Decide acceso multi-app? |
+|------|---------------------------|
+| `users.email` / `users.telefono` | **Sí** |
+| `proveedores.email` / `proveedores.telefono` | **No** (solo identidad comercial / reutilizar empresa) |
+| Email solo en empresa, sin fila en `users` | Alta nueva de usuario (no modal Acceso existente) |
+
+Reutilizar empresa en registro: solo por **teléfono** o **razón social** (no por email de empresa).
+
+El correo `/gen-pass` se envía al email del **usuario principal** si existe; si no, al email de la empresa.
+
 ## Pregunta única: acceso existente
 
-Cuando la cuenta/empresa **ya existe en el sistema** pero **no tiene acceso a la app actual**, login y registro responden `403` con:
+Cuando el **usuario** ya existe en `users` pero **no tiene acceso a la app actual**, login y registro responden `403` con:
 
 - `codigo: sin_acceso_app`
 - `puede_activar_app: true`
-- `email` / `telefono` (si aplica)
+- `requiere_password: true` si la cuenta **ya tiene contraseña** (hay que confirmarla para otorgar acceso)
+- `email` / `telefono` (solo de `users`; si `users.email` no es un email válido —p. ej. teléfono histórico— no se muestra como correo)
 - Mensaje unificado (ver abajo)
 
 El front muestra **un solo** modal:
@@ -31,16 +46,25 @@ El front muestra **un solo** modal:
 |--|--|
 | Título | Acceso existente |
 | Botones | **Continuar** · **Cancelar** |
-| Continuar | Reenvía la petición con `activar_app: true` → otorga acceso + login (o correo `/gen-pass` si falta contraseña) |
+| Continuar (con contraseña) | Modal **Acceso existente** con campo contraseña → login/`activar_app` validado → otorga acceso + sesión |
+| Continuar (sin contraseña aún) | `activar_app: true` en registro → correo `/gen-pass` |
 | Cancelar | Cierra el modal; no activa |
+
+**Regla de seguridad:** no se otorga `user_client_apps` sin validar la contraseña si el usuario ya la tiene. En registro, `activar_app` sin password correcto → `401` `password_requerida`. En login, la contraseña ya se validó antes del grant.
 
 ### Mensaje (API / UI)
 
-- Solo correo: *Detectamos una cuenta registrada con el correo {email}. ¿Deseas generar el acceso a {app} con esos datos e iniciar sesión?*
-- Solo teléfono: *Detectamos una cuenta registrada con el teléfono {telefono}. ¿Deseas generar el acceso a {app} con esos datos e iniciar sesión?*
-- Ambos: *Detectamos una cuenta registrada con el correo {email} y el teléfono {telefono}. ¿Deseas generar el acceso a {app} con esos datos e iniciar sesión?*
+Con contraseña ya definida:
 
-Tras confirmar no se vuelve a preguntar: entra a la app (o pide revisar correo si aún no hay contraseña).
+- *Detectamos una cuenta registrada con el correo {email}. Para generar el acceso a {app} confirma tu contraseña e inicia sesión.*
+- (análogo con teléfono / ambos)
+
+Sin contraseña aún (alta incompleta):
+
+- Solo correo: *Detectamos una cuenta registrada con el correo {email}. ¿Deseas generar el acceso a {app} con esos datos e iniciar sesión?*
+- Solo teléfono / ambos: mismo patrón.
+
+Tras confirmar con contraseña válida: entra a la app. Si aún no hay contraseña: pide revisar correo `/gen-pass`.
 
 ## Persistencia
 
@@ -72,7 +96,32 @@ APP_FRONTEND_URL=http://localhost:4300
 NEXPROV_FRONTEND_URL=http://localhost:4400
 ```
 
-Opcionales: `CLIENT_APP_GESTION_NAME`, `CLIENT_APP_NEXPROV_NAME`.
+Opcionales: `CLIENT_APP_GESTION_NAME`, `CLIENT_APP_NEXPROV_NAME`, `CLIENT_APP_GESTION_LOGO_URL`, `CLIENT_APP_NEXPROV_LOGO_URL`.
+
+## Correos de auth (branding por app)
+
+Solo estos mails usan la marca de la app del request (`appKey`):
+
+- `CompletaRegistroProveedorMail`
+- `CompletaRegistroUsuarioMail`
+- `PasswordResetMail`
+
+Comportamiento:
+
+- Asunto y cuerpo con nombre de la app (`ClientApp::name()`).
+- Remitente (`From` name) = nombre de la app (no el `APP_NAME` global).
+- Logo: primero archivo en `public/assets/logos/…`, si no → descarga desde URL web del front (`frontend_url` + `logo`, o `logo_url` explícito) y se embebe como data URI.
+- **Colores por app** (mismas plantillas): header + CTA según `config/client_apps.php` → `mail.*` / `ClientApp::mailTheme()`.
+
+| App | Header | CTA |
+|-----|--------|-----|
+| gestion | azul `#2b6cb0` | amarillo `#FFC107` |
+| nexprov | verde `#00a878` | verde `#00a878` (texto blanco) |
+
+| App | Logo local | URL web por defecto |
+|-----|------------|---------------------|
+| gestion | `public/assets/logos/logo-gestionplus.png` | `{APP_FRONTEND_URL}/assets/logos/logo-gestionplus.png` |
+| nexprov | `public/assets/logos/logo-nexprov.png` | `{NEXPROV_FRONTEND_URL}/assets/logos/logo-nexprov.png` |
 
 ## Validadores de registro (`verificar-*`)
 
@@ -84,11 +133,10 @@ Opcionales: `CLIENT_APP_GESTION_NAME`, `CLIENT_APP_NEXPROV_NAME`.
 | Ya tiene acceso a esta app | `true` | `false` |
 | Existe en el sistema / otra app, sin esta app | `false` | `true` (no se marca repetido) |
 
+- **Email / teléfono:** solo `users`. Si el dato está solo en `proveedores`, `existe_en_sistema` = `false` y no hay `puede_activar_app`.
 - **Razón social (empresa):** mira si **algún** usuario de esa empresa tiene la app.
-- **Email / teléfono de un usuario:** mira el acceso de ese usuario.
-- **Email / teléfono solo en proveedor:** misma regla de empresa.
 
-`ProveedorRegisterRequest` acepta `activar_app` (boolean). Sin ese flag, si la empresa/cuenta existe sin esta app → pregunta unificada; con `activar_app: true` → otorga y responde token o correo.
+`ProveedorRegisterRequest` acepta `activar_app` (boolean) y opcional `password`. Sin `activar_app`, si el **usuario** existe sin esta app → pregunta unificada; con `activar_app: true` + password válida (si aplica) → otorga y responde token o correo.
 
 ## Contrato front
 

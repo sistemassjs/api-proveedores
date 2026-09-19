@@ -38,7 +38,65 @@ final class EmailLogoHelper
             }
         }
 
+        // Recursos web del front (APP_FRONTEND_URL / NEXPROV_FRONTEND_URL o logo_url).
+        $fromWeb = self::logoFromWebUrlDataUri(ClientApp::logoWebUrl($appKey));
+        if ($fromWeb) {
+            return $fromWeb;
+        }
+
         return self::logoGestionPlusDataUri();
+    }
+
+    /**
+     * Descarga un logo desde URL pública y lo convierte a data URI para el correo.
+     */
+    public static function logoFromWebUrlDataUri(?string $url): ?string
+    {
+        $url = $url !== null ? trim($url) : '';
+        if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(5)
+                ->withHeaders(['Accept' => 'image/*,*/*'])
+                ->get($url);
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $binary = $response->body();
+            if ($binary === '') {
+                return null;
+            }
+
+            $contentType = strtolower((string) $response->header('Content-Type'));
+            $tmp = tempnam(sys_get_temp_dir(), 'email_logo_');
+            if ($tmp === false) {
+                return null;
+            }
+
+            $ext = match (true) {
+                str_contains($contentType, 'jpeg'), str_contains($contentType, 'jpg') => '.jpg',
+                str_contains($contentType, 'gif') => '.gif',
+                str_contains($contentType, 'webp') => '.webp',
+                default => '.png',
+            };
+            $path = $tmp.$ext;
+            @unlink($tmp);
+            if (@file_put_contents($path, $binary) === false) {
+                return null;
+            }
+
+            try {
+                return self::fileToDataUri($path);
+            } finally {
+                @unlink($path);
+            }
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public static function logoGestionPlusDataUri(): ?string

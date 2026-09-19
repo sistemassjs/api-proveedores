@@ -98,6 +98,8 @@ class ProveedorRegisterRequest extends FormRequest
             'contacto_correo' => ['nullable', 'email', 'max:60'],
             'acepta_terminos' => ['required', 'accepted'],
             'activar_app' => ['sometimes', 'boolean'],
+            // Requerido al activar app solo si el user ya tiene password (lo valida AuthController).
+            'password' => ['sometimes', 'nullable', 'string'],
             // 'recaptcha_token' => ['required', new ReCaptcha],
 
         ];

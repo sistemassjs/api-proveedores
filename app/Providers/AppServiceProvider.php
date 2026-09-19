@@ -100,8 +100,16 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer('emails.*', function ($view) {
-            $view->with('logoAppDataUri', EmailLogoHelper::logoClientAppDataUri());
-            $view->with('clientAppName', ClientApp::name());
+            $data = $view->getData();
+            if (empty($data['logoAppDataUri'])) {
+                $view->with('logoAppDataUri', EmailLogoHelper::logoClientAppDataUri());
+            }
+            if (empty($data['clientAppName'])) {
+                $view->with('clientAppName', ClientApp::name());
+            }
+            if (empty($data['mailTheme'])) {
+                $view->with('mailTheme', ClientApp::mailTheme());
+            }
         });
 
         Gate::define('viewPulse', function ($user = null) {

@@ -103,6 +103,117 @@ class AuthController extends Controller
     {
         $validatedData = $request->validated();
 
+        // Acceso multi-app: solo tabla users (email/teléfono del formulario).
+        // No usar proveedores.email para decidir "Acceso existente".
+        $userPorCredencial = $this->buscarUsuarioPorEmailOTelefono(
+            $validatedData['email'] ?? null,
+            $validatedData['telefono'] ?? null
+        );
+
+        if ($userPorCredencial) {
+            $proveedorDelUser = $userPorCredencial->proveedorPrincipal()
+                ?: Proveedor::withoutGlobalScope('solo_activos')->find(
+                    $userPorCredencial->proveedores()->first()?->id
+                );
+            $yaTeniaApp = $userPorCredencial->hasClientApp(ClientApp::key());
+            $registroCompletado = $proveedorDelUser
+                ? $this->proveedorTieneRegistroCompletado($proveedorDelUser)
+                : filled($userPorCredencial->password);
+
+            if ($yaTeniaApp && $registroCompletado) {
+                return $this->error(
+                    'Tu cuenta ya tiene acceso a '.ClientApp::name().'. Inicia sesión con tu correo y contraseña.',
+                    ['codigo' => 'registro_ya_completado', 'app_key' => ClientApp::key()],
+                    409
+                );
+            }
+
+            if (! $yaTeniaApp && ! $request->boolean('activar_app')) {
+                [$emailRef, $telefonoRef] = $this->credencialesParaMensajeAcceso(
+                    $userPorCredencial->email,
+                    $userPorCredencial->telefono
+                );
+                $requierePassword = filled($userPorCredencial->password);
+
+                return $this->error(
+                    $requierePassword
+                        ? $this->mensajePreguntaAccesoExistenteConPassword($emailRef, $telefonoRef)
+                        : $this->mensajePreguntaAccesoExistente($emailRef, $telefonoRef),
+                    [
+                        'codigo' => 'sin_acceso_app',
+                        'puede_activar_app' => true,
+                        'requiere_password' => $requierePassword,
+                        'app_key' => ClientApp::key(),
+                        'email' => $emailRef,
+                        'telefono' => $telefonoRef,
+                    ],
+                    403
+                );
+            }
+
+            // Activar acceso: si ya tiene contraseña, debe enviarla y validarse.
+            if ($request->boolean('activar_app') && filled($userPorCredencial->password)) {
+                $password = $request->input('password');
+                if (! is_string($password) || $password === '' || ! Hash::check($password, $userPorCredencial->password)) {
+                    return $this->error(
+                        'Contraseña incorrecta. Debes confirmar tu contraseña para generar el acceso a '.ClientApp::name().'.',
+                        [
+                            'codigo' => 'password_requerida',
+                            'requiere_password' => true,
+                            'app_key' => ClientApp::key(),
+                        ],
+                        401
+                    );
+                }
+            }
+
+            $userPorCredencial->grantClientApp(ClientApp::key());
+
+            if ($registroCompletado && filled($userPorCredencial->password)) {
+                $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($userPorCredencial);
+                if (! $cuentaCheck['ok']) {
+                    return $this->error(
+                        $cuentaCheck['message'],
+                        ['codigo' => $cuentaCheck['codigo'], 'app_key' => ClientApp::key()],
+                        403
+                    );
+                }
+
+                $token = $userPorCredencial->createToken('API Token')->plainTextToken;
+                $userPorCredencial->load(User::eagerLodable());
+
+                return $this->success([
+                    'acceso_activado' => true,
+                    'app_key' => ClientApp::key(),
+                    'user' => new UserAuthenticateResource($userPorCredencial),
+                    'proveedor' => $proveedorDelUser
+                        ? new ProveedorResource($proveedorDelUser->load(Proveedor::eagerLodable()))
+                        : null,
+                    'token' => $token,
+                ], 'Acceso a '.ClientApp::name().' generado. Bienvenido.', 200);
+            }
+
+            if ($proveedorDelUser) {
+                $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedorDelUser);
+                $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
+
+                return $this->success([
+                    'url' => $url,
+                    'acceso_activado' => ! $yaTeniaApp,
+                    'app_key' => ClientApp::key(),
+                    'data' => $proveedorDelUser->load(Proveedor::eagerLodable()),
+                ], $yaTeniaApp
+                    ? 'Revisa tu correo para activar la cuenta.'
+                    : 'Acceso a '.ClientApp::name().' generado. Revisa tu correo para definir tu contraseña.', 200);
+            }
+
+            return $this->success([
+                'acceso_activado' => ! $yaTeniaApp,
+                'app_key' => ClientApp::key(),
+            ], 'Acceso a '.ClientApp::name().' generado. Inicia sesión o completa tu registro.', 200);
+        }
+
+        // Reutilizar empresa solo por teléfono / razón social (identidad comercial), no por email.
         $proveedorExistente = Proveedor::withoutGlobalScope('solo_activos')->where(function ($query) use ($validatedData) {
             if (isset($validatedData['telefono_codigo_pais'], $validatedData['telefono'])) {
                 $query->where('telefono_codigo_pais', $validatedData['telefono_codigo_pais'])
@@ -111,11 +222,6 @@ class AuthController extends Controller
 
             if (isset($validatedData['razon_social'])) {
                 $query->orWhere('razon_social', strtoupper($validatedData['razon_social']));
-            }
-
-            $telefonoCompleto = ($validatedData['telefono_codigo_pais'] ?? '') . ($validatedData['telefono'] ?? '');
-            if (isset($validatedData['email']) && $validatedData['email'] !== $telefonoCompleto) {
-                $query->orWhere('email', $validatedData['email']);
             }
         })->first();
 
@@ -163,41 +269,16 @@ class AuthController extends Controller
                 ], 'Empresa ya registrada. Verifica tus datos y completa el registro.', 200);
             }
 
-            $userPrevio = $proveedorExistente->usuarioPrincipal()
-                ?: User::where('email', $proveedorExistente->email)->first();
-            $yaTeniaApp = $userPrevio && $userPrevio->hasClientApp(ClientApp::key());
+            // Empresa conocida sin user por credenciales: crear/asegurar user con datos del formulario.
+            $user = $this->asegurarUsuarioPrincipalPendiente($proveedorExistente, [
+                'email' => $validatedData['email'] ?? null,
+                'telefono' => $validatedData['telefono'] ?? null,
+                'telefono_codigo_pais' => $validatedData['telefono_codigo_pais'] ?? null,
+                'name' => $validatedData['nombre_propietario'] ?? null,
+            ]);
             $registroCompletado = $this->proveedorTieneRegistroCompletado($proveedorExistente);
 
-            if ($yaTeniaApp && $registroCompletado) {
-                return $this->error(
-                    'Tu empresa ya tiene acceso a '.ClientApp::name().'. Inicia sesión con tu correo y contraseña.',
-                    ['codigo' => 'registro_ya_completado', 'app_key' => ClientApp::key()],
-                    409
-                );
-            }
-
-            // Preguntar antes de otorgar acceso a una app nueva.
-            if (! $yaTeniaApp && ! $request->boolean('activar_app')) {
-                $emailRef = $userPrevio?->email ?: ($proveedorExistente->email ?? $validatedData['email'] ?? null);
-                $telefonoRef = $userPrevio?->telefono
-                    ?: ($proveedorExistente->telefono ?? $validatedData['telefono'] ?? null);
-
-                return $this->error(
-                    $this->mensajePreguntaAccesoExistente($emailRef, $telefonoRef),
-                    [
-                        'codigo' => 'sin_acceso_app',
-                        'puede_activar_app' => true,
-                        'app_key' => ClientApp::key(),
-                        'email' => $emailRef,
-                        'telefono' => $telefonoRef,
-                    ],
-                    403
-                );
-            }
-
-            $user = $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
-
-            if ($registroCompletado) {
+            if ($registroCompletado && filled($user->password)) {
                 $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($user);
                 if (! $cuentaCheck['ok']) {
                     return $this->error(
@@ -224,12 +305,10 @@ class AuthController extends Controller
 
             return $this->success([
                 'url' => $url,
-                'acceso_activado' => ! $yaTeniaApp,
+                'acceso_activado' => true,
                 'app_key' => ClientApp::key(),
                 'data' => $proveedorExistente->load(Proveedor::eagerLodable()),
-            ], $yaTeniaApp
-                ? 'Revisa tu correo para activar la cuenta.'
-                : 'Acceso a '.ClientApp::name().' generado. Revisa tu correo para definir tu contraseña.', 200);
+            ], 'Acceso a '.ClientApp::name().' generado. Revisa tu correo para definir tu contraseña.', 200);
         }
 
         // Sin DB::transaction: User (conexión default) y Proveedor (mysql5)
@@ -240,7 +319,12 @@ class AuthController extends Controller
             'token_completar_registro' => $plainToken,
             'token_completar_registro_generado_at' => now(),
         ]);
-        $this->asegurarUsuarioPrincipalPendiente($proveedor);
+        $this->asegurarUsuarioPrincipalPendiente($proveedor, [
+            'email' => $validatedData['email'] ?? null,
+            'telefono' => $validatedData['telefono'] ?? null,
+            'telefono_codigo_pais' => $validatedData['telefono_codigo_pais'] ?? null,
+            'name' => $validatedData['nombre_propietario'] ?? null,
+        ]);
         $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
         $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
 
@@ -458,14 +542,14 @@ class AuthController extends Controller
                 if ($request->boolean('activar_app')) {
                     $user->grantClientApp(ClientApp::key());
                 } else {
-                    $emailRef = $user->email;
-                    $telefonoRef = $user->telefono;
+                    [$emailRef, $telefonoRef] = $this->credencialesParaMensajeAcceso($user->email, $user->telefono);
 
                     return $this->error(
-                        $this->mensajePreguntaAccesoExistente($emailRef, $telefonoRef),
+                        $this->mensajePreguntaAccesoExistenteConPassword($emailRef, $telefonoRef),
                         [
                             'codigo' => 'sin_acceso_app',
                             'puede_activar_app' => true,
+                            'requiere_password' => true,
                             'app_key' => ClientApp::key(),
                             'email' => $emailRef,
                             'telefono' => $telefonoRef,
@@ -1400,24 +1484,15 @@ class AuthController extends Controller
         ]);
 
         $email = $request->email;
+        // Acceso multi-app: solo users. Email solo en proveedores no cuenta como cuenta.
         $user = User::where('email', $email)->first();
-        $proveedor = Proveedor::withoutGlobalScope('solo_activos')->where('email', $email)->first();
-
-        // Email de usuario: se valida por acceso de ese usuario a la app.
-        // Si solo existe en la empresa (sin user), se valida a nivel empresa (varios usuarios).
-        if ($user) {
-            $disponibilidad = $this->disponibilidadRegistroParaAppActual($user);
-        } else {
-            $disponibilidad = $this->disponibilidadProveedorParaAppActual($proveedor);
-        }
-
-        $existeEnSistema = $user !== null || $proveedor !== null;
+        $disponibilidad = $this->disponibilidadRegistroParaAppActual($user);
 
         return $this->success([
             'existe' => $disponibilidad['existe'],
             'puede_activar_app' => $disponibilidad['puede_activar_app'],
             'tiene_acceso_app' => $disponibilidad['tiene_acceso_app'],
-            'existe_en_sistema' => $existeEnSistema,
+            'existe_en_sistema' => $user !== null,
             'app_key' => ClientApp::key(),
             'email' => $email,
         ], $this->mensajeDisponibilidadRegistro($disponibilidad, 'correo electrónico'), 200);
@@ -1458,26 +1533,15 @@ class AuthController extends Controller
         ]);
 
         $telefono = $request->telefono;
-
+        // Acceso multi-app: solo users. Teléfono solo en proveedores no cuenta como cuenta.
         $user = User::where('telefono', $telefono)->first();
-        $proveedor = Proveedor::withoutGlobalScope('solo_activos')
-            ->where('telefono', $telefono)
-            ->where('tipo_alta', '!=', 2)
-            ->first();
-
-        if ($user) {
-            $disponibilidad = $this->disponibilidadRegistroParaAppActual($user);
-        } else {
-            $disponibilidad = $this->disponibilidadProveedorParaAppActual($proveedor);
-        }
-
-        $existeEnSistema = $proveedor !== null || User::where('telefono', $telefono)->exists();
+        $disponibilidad = $this->disponibilidadRegistroParaAppActual($user);
 
         return $this->success([
             'existe' => $disponibilidad['existe'],
             'puede_activar_app' => $disponibilidad['puede_activar_app'],
             'tiene_acceso_app' => $disponibilidad['tiene_acceso_app'],
-            'existe_en_sistema' => $existeEnSistema,
+            'existe_en_sistema' => $user !== null,
             'app_key' => ClientApp::key(),
             'telefono' => $telefono,
         ], $this->mensajeDisponibilidadRegistro($disponibilidad, 'teléfono'), 200);
@@ -1645,8 +1709,10 @@ class AuthController extends Controller
     /**
      * Crea el GERENTE principal sin contraseña si aún no existe (alta formulario).
      * Así password/forgot funciona antes de /gen-pass.
+     *
+     * @param  array{email?: ?string, telefono?: ?string, telefono_codigo_pais?: ?string, name?: ?string}  $atributosUsuario
      */
-    private function asegurarUsuarioPrincipalPendiente(Proveedor $proveedor): User
+    private function asegurarUsuarioPrincipalPendiente(Proveedor $proveedor, array $atributosUsuario = []): User
     {
         $user = $proveedor->usuarioPrincipal();
         if ($user) {
@@ -1657,14 +1723,26 @@ class AuthController extends Controller
 
         $idRoleProveedor = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->first()->id;
 
-        $user = User::where('email', $proveedor->email)->first();
+        $email = $atributosUsuario['email'] ?? $proveedor->email;
+        $telefono = $atributosUsuario['telefono'] ?? $proveedor->telefono;
+        $telefonoCodigoPais = $atributosUsuario['telefono_codigo_pais'] ?? $proveedor->telefono_codigo_pais;
+        $name = $atributosUsuario['name']
+            ?? ($proveedor->nombre_propietario ?: $proveedor->nombre_comercial);
+
+        $user = $email
+            ? User::where('email', $email)->first()
+            : null;
+
+        if (! $user && $telefono) {
+            $user = User::where('telefono', $telefono)->first();
+        }
 
         if (! $user) {
             $user = User::create([
-                'name' => $proveedor->nombre_propietario ?: $proveedor->nombre_comercial,
-                'email' => $proveedor->email,
-                'telefono_codigo_pais' => $proveedor->telefono_codigo_pais,
-                'telefono' => $proveedor->telefono,
+                'name' => $name,
+                'email' => $email,
+                'telefono_codigo_pais' => $telefonoCodigoPais,
+                'telefono' => $telefono,
                 'password' => null,
                 'role_id' => $idRoleProveedor,
                 'status' => EstadoUsuario::REGISTRADO->value,
@@ -1684,6 +1762,47 @@ class AuthController extends Controller
         }
 
         $user->grantClientApp(ClientApp::key());
+
+        return $user;
+    }
+
+    /**
+     * Busca usuario solo en `users` por email o teléfono del formulario.
+     * Prefiere cuentas con contraseña (evita huérfanos de alta incompleta).
+     * Si el email solo está en empresa, usa el usuario principal con password.
+     */
+    private function buscarUsuarioPorEmailOTelefono(?string $email, ?string $telefono): ?User
+    {
+        $email = $email !== null ? trim($email) : '';
+        $telefono = $telefono !== null ? trim($telefono) : '';
+
+        if ($email === '' && $telefono === '') {
+            return null;
+        }
+
+        $user = User::where(function ($q) use ($email, $telefono) {
+            if ($email !== '') {
+                $q->where('email', $email);
+            }
+            if ($telefono !== '') {
+                $email !== ''
+                    ? $q->orWhere('telefono', $telefono)
+                    : $q->where('telefono', $telefono);
+            }
+        })
+            ->orderByRaw("CASE WHEN password IS NOT NULL AND password != '' THEN 0 ELSE 1 END")
+            ->first();
+
+        // Email de empresa sin user con password: usar principal de esa empresa.
+        if ($email !== '' && (! $user || blank($user->password))) {
+            $proveedor = Proveedor::withoutGlobalScope('solo_activos')
+                ->whereRaw('LOWER(email) = ?', [strtolower($email)])
+                ->first();
+            $principal = $proveedor?->usuarioPrincipal();
+            if ($principal && filled($principal->password)) {
+                return $principal;
+            }
+        }
 
         return $user;
     }
@@ -1745,12 +1864,65 @@ class AuthController extends Controller
     }
 
     /**
-     * Pregunta única al detectar cuenta existente sin acceso a la app actual.
+     * Normaliza email/teléfono de `users` para el modal Acceso existente.
+     * Si users.email no es un correo válido (p. ej. teléfono histórico), no se muestra como correo.
+     *
+     * @return array{0: ?string, 1: ?string} [email, telefono]
      */
-    private function mensajePreguntaAccesoExistente(?string $email, ?string $telefono): string
+    private function credencialesParaMensajeAcceso(?string $email, ?string $telefono): array
     {
         $email = $email !== null ? trim($email) : '';
         $telefono = $telefono !== null ? trim((string) $telefono) : '';
+
+        $emailEsValido = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+        if (! $emailEsValido) {
+            if ($telefono === '' && $email !== '') {
+                $telefono = $email;
+            }
+            $email = '';
+        }
+
+        return [
+            $email !== '' ? $email : null,
+            $telefono !== '' ? $telefono : null,
+        ];
+    }
+
+    /**
+     * Pregunta de Acceso existente cuando la cuenta ya tiene contraseña:
+     * hay que confirmarla para generar el acceso.
+     */
+    private function mensajePreguntaAccesoExistenteConPassword(?string $email, ?string $telefono): string
+    {
+        [$email, $telefono] = $this->credencialesParaMensajeAcceso($email, $telefono);
+        $email = $email ?? '';
+        $telefono = $telefono ?? '';
+        $app = ClientApp::name();
+
+        if ($email !== '' && $telefono !== '') {
+            return "Detectamos una cuenta registrada con el correo {$email} y el teléfono {$telefono}. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
+        }
+
+        if ($email !== '') {
+            return "Detectamos una cuenta registrada con el correo {$email}. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
+        }
+
+        if ($telefono !== '') {
+            return "Detectamos una cuenta registrada con el teléfono {$telefono}. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
+        }
+
+        return "Detectamos una cuenta registrada. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
+    }
+
+    /**
+     * Pregunta única al detectar cuenta existente sin acceso a la app actual.
+     * Solo datos de `users` (ya normalizados vía credencialesParaMensajeAcceso).
+     */
+    private function mensajePreguntaAccesoExistente(?string $email, ?string $telefono): string
+    {
+        [$email, $telefono] = $this->credencialesParaMensajeAcceso($email, $telefono);
+        $email = $email ?? '';
+        $telefono = $telefono ?? '';
         $app = ClientApp::name();
 
         if ($email !== '' && $telefono !== '') {
@@ -1864,7 +2036,7 @@ class AuthController extends Controller
 
         $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
         $proveedorId = $proveedor->id;
-        $correo = $proveedor->email;
+        $correo = $proveedor->usuarioPrincipal()?->email ?: $proveedor->email;
         $appKey = ClientApp::key();
 
         dispatch(function () use ($url, $proveedorId, $correo, $appKey) {
