@@ -13,6 +13,7 @@ Empezar por: [`docs/context/README.md`](docs/context/README.md)
 | Presupuestos | `docs/context/presupuestos/` |
 
 - Plataforma (auth, proveedor_id, ApiResponse): `docs/context/platform-shared.md`
+- Apps cliente / acceso por usuario (GestionPlus / NexProv): `docs/context/platform-client-apps.md`
 - Login social OAuth / Socialite: `docs/context/platform-auth-socialite.md`
 - Usuarios / roles / matriz MVP (core): `docs/context/platform-users-roles.md`
 - Relaciones entre dominios: `docs/context/cross-domain.md`

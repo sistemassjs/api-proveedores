@@ -231,6 +231,36 @@ class User extends Authenticatable
     }
 
     /**
+     * Apps cliente a las que el usuario tiene acceso (gestion, nexprov, …).
+     *
+     * @return HasMany<UserClientApp>
+     */
+    public function clientApps(): HasMany
+    {
+        return $this->hasMany(UserClientApp::class);
+    }
+
+    public function hasClientApp(?string $appKey = null): bool
+    {
+        $key = \App\Support\ClientApp::normalize($appKey);
+
+        return $this->clientApps()->where('app_key', $key)->exists();
+    }
+
+    /**
+     * Otorga acceso a una app cliente (idempotente).
+     */
+    public function grantClientApp(?string $appKey = null): UserClientApp
+    {
+        $key = \App\Support\ClientApp::normalize($appKey);
+
+        return $this->clientApps()->firstOrCreate(
+            ['app_key' => $key],
+            []
+        );
+    }
+
+    /**
      * Relación directa con la tabla pivot user_proveedor
      * Útil para consultas complejas y acceso a campos pivot
      *

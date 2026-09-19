@@ -95,7 +95,7 @@ class SendAllBladeMailTemplatesCommand extends Command
         $proveedor = Proveedor::query()->first();
         $empresa = EmpresaConstrucc::query()->first();
 
-        $this->sendMailables($to, $presupuesto, $baseUser);
+        $this->sendMailables($to, $presupuesto, $baseUser, $proveedor);
         $this->sendNotifications($notifiable, $presupuesto, $sp, $cotizacion, $baseUser, $orden, $proveedor, $empresa);
         $this->sendComprobanteSubidoOrphan($to, $notifiable, $sp);
 
@@ -211,7 +211,7 @@ class SendAllBladeMailTemplatesCommand extends Command
         return (string) ($sp->numero_folio_solicitud ?: $sp->folio_sp_consecutivo ?: 'SP-'.$sp->id);
     }
 
-    private function sendMailables(string $to, ?Presupuesto $presupuesto, User $baseUser): void
+    private function sendMailables(string $to, ?Presupuesto $presupuesto, User $baseUser, ?Proveedor $proveedor = null): void
     {
         $demoUrl = rtrim(config('app.frontend_url', config('app.url')), '/').'/auth/login';
 
@@ -229,7 +229,9 @@ class SendAllBladeMailTemplatesCommand extends Command
         $this->tryMailable('PasswordResetMail', fn () => new PasswordResetMail($demoUrl, $baseUser->name ?? 'Usuario'), $to);
 
         $this->tryMailable('CompletaRegistroUsuarioMail', fn () => new CompletaRegistroUsuarioMail($demoUrl), $to);
-        $this->tryMailable('CompletaRegistroProveedorMail', fn () => new CompletaRegistroProveedorMail($demoUrl), $to);
+        if ($proveedor) {
+            $this->tryMailable('CompletaRegistroProveedorMail', fn () => new CompletaRegistroProveedorMail($demoUrl, $proveedor), $to);
+        }
 
         $this->tryMailable('VerifyUpdatedEmailMail', fn () => new VerifyUpdatedEmailMail($demoUrl, $baseUser->name ?? 'Usuario'), $to);
 

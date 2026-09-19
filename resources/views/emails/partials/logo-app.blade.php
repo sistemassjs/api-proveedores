@@ -1,5 +1,5 @@
 @php
-    $appName = (string) config('app.name', 'Aplicacion');
+    $appName = (string) ($clientAppName ?? config('app.name', 'Aplicacion'));
     $logoAlt = trim($appName) !== '' ? $appName : 'Aplicacion';
     $fallbackInitial = strtoupper(mb_substr($logoAlt, 0, 1));
 
@@ -16,7 +16,7 @@
         $logoAppDataUri = \App\Support\EmailLogoHelper::proveedorDataUri($solicitudPago->proveedor);
     }
 
-    $logoAppDataUri = $logoAppDataUri ?? \App\Support\EmailLogoHelper::logoGestionPlusDataUri();
+    $logoAppDataUri = $logoAppDataUri ?? \App\Support\EmailLogoHelper::logoClientAppDataUri();
 @endphp
 
 @if(!empty($logoAppDataUri))

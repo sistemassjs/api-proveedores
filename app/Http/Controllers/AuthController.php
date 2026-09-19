@@ -22,6 +22,7 @@ use App\Http\Requests\Auth\CompletarRegistroProveedorRequest;
 use App\Http\Resources\ProveedorResource;
 use App\Http\Resources\Auth\UserAuthenticateResource;
 use App\Support\UserCuentaEstado;
+use App\Support\ClientApp;
 use App\Mail\CompletaRegistroProveedorMail;
 use App\Mail\CompletaRegistroUsuarioMail;
 use App\Mail\VerifyUpdatedEmailMail;
@@ -57,8 +58,8 @@ class AuthController extends Controller
         $validatedData = $request->validated();
         $token = Str::random(60);
         Cache::put("registro_user_construcc{$token}", $validatedData, 60 * 24 * 365);
-        $url = config('services.frontend.url') . "/gen-pass?is_user_construcc=true&token={$token}";
-        Mail::to($validatedData['email'])->send(new CompletaRegistroUsuarioMail($url));
+        $url = ClientApp::frontendUrl() . "/gen-pass?is_user_construcc=true&token={$token}";
+        Mail::to($validatedData['email'])->send(new CompletaRegistroUsuarioMail($url, ClientApp::key()));
 
         return $this->success(
             [
@@ -119,28 +120,7 @@ class AuthController extends Controller
         })->first();
 
         if ($proveedorExistente) {
-            if ($this->proveedorTieneRegistroCompletado($proveedorExistente)) {
-                return $this->error(
-                    'Tu empresa ya completó el registro en GestiónPlus. Inicia sesión con tu correo y contraseña.',
-                    ['codigo' => 'registro_ya_completado'],
-                    409
-                );
-            }
-
-            if ($proveedorExistente->tipo_alta == 1) {
-                $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
-
-                return $this->error(
-                    'Teléfono ya registrado. Recupera tu contraseña si no puedes entrar.',
-                    [
-                        'campo_duplicado' => 'telefono',
-                        'valor' => $proveedorExistente->telefono,
-                    ],
-                    409
-                );
-            }
-
-            if ($proveedorExistente->tipo_alta == 2) {
+            if ((int) $proveedorExistente->tipo_alta === 2) {
                 $proveedorExistente->load(['cuentasBancarias', 'empresasConstrucc']);
 
                 $tokenData = [
@@ -183,14 +163,73 @@ class AuthController extends Controller
                 ], 'Empresa ya registrada. Verifica tus datos y completa el registro.', 200);
             }
 
-            $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
+            $userPrevio = $proveedorExistente->usuarioPrincipal()
+                ?: User::where('email', $proveedorExistente->email)->first();
+            $yaTeniaApp = $userPrevio && $userPrevio->hasClientApp(ClientApp::key());
+            $registroCompletado = $this->proveedorTieneRegistroCompletado($proveedorExistente);
+
+            if ($yaTeniaApp && $registroCompletado) {
+                return $this->error(
+                    'Tu empresa ya tiene acceso a '.ClientApp::name().'. Inicia sesión con tu correo y contraseña.',
+                    ['codigo' => 'registro_ya_completado', 'app_key' => ClientApp::key()],
+                    409
+                );
+            }
+
+            // Preguntar antes de otorgar acceso a una app nueva.
+            if (! $yaTeniaApp && ! $request->boolean('activar_app')) {
+                $emailRef = $userPrevio?->email ?: ($proveedorExistente->email ?? $validatedData['email'] ?? null);
+                $telefonoRef = $userPrevio?->telefono
+                    ?: ($proveedorExistente->telefono ?? $validatedData['telefono'] ?? null);
+
+                return $this->error(
+                    $this->mensajePreguntaAccesoExistente($emailRef, $telefonoRef),
+                    [
+                        'codigo' => 'sin_acceso_app',
+                        'puede_activar_app' => true,
+                        'app_key' => ClientApp::key(),
+                        'email' => $emailRef,
+                        'telefono' => $telefonoRef,
+                    ],
+                    403
+                );
+            }
+
+            $user = $this->asegurarUsuarioPrincipalPendiente($proveedorExistente);
+
+            if ($registroCompletado) {
+                $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($user);
+                if (! $cuentaCheck['ok']) {
+                    return $this->error(
+                        $cuentaCheck['message'],
+                        ['codigo' => $cuentaCheck['codigo'], 'app_key' => ClientApp::key()],
+                        403
+                    );
+                }
+
+                $token = $user->createToken('API Token')->plainTextToken;
+                $user->load(User::eagerLodable());
+
+                return $this->success([
+                    'acceso_activado' => true,
+                    'app_key' => ClientApp::key(),
+                    'user' => new UserAuthenticateResource($user),
+                    'proveedor' => new ProveedorResource($proveedorExistente->load(Proveedor::eagerLodable())),
+                    'token' => $token,
+                ], 'Acceso a '.ClientApp::name().' generado. Bienvenido.', 200);
+            }
+
             $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedorExistente);
-            $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+            $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
 
             return $this->success([
                 'url' => $url,
+                'acceso_activado' => ! $yaTeniaApp,
+                'app_key' => ClientApp::key(),
                 'data' => $proveedorExistente->load(Proveedor::eagerLodable()),
-            ], 'Revisa tu correo para activar la cuenta.', 200);
+            ], $yaTeniaApp
+                ? 'Revisa tu correo para activar la cuenta.'
+                : 'Acceso a '.ClientApp::name().' generado. Revisa tu correo para definir tu contraseña.', 200);
         }
 
         // Sin DB::transaction: User (conexión default) y Proveedor (mysql5)
@@ -203,7 +242,7 @@ class AuthController extends Controller
         ]);
         $this->asegurarUsuarioPrincipalPendiente($proveedor);
         $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedor);
-        $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+        $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
 
         return $this->success([
             'url' => $url,
@@ -403,7 +442,7 @@ class AuthController extends Controller
             })->first();
 
             if (! $user || blank($user->password) || ! Hash::check($request->password, $user->password)) {
-                throw new UnauthorizedException('Credenciales incorrectas en GestionPlus.');
+                throw new UnauthorizedException('Credenciales incorrectas en '.ClientApp::name().'.');
             }
 
             $cuentaCheck = UserCuentaEstado::assertCanAuthenticate($user);
@@ -415,31 +454,63 @@ class AuthController extends Controller
                 );
             }
 
+            if (! $user->hasClientApp(ClientApp::key())) {
+                if ($request->boolean('activar_app')) {
+                    $user->grantClientApp(ClientApp::key());
+                } else {
+                    $emailRef = $user->email;
+                    $telefonoRef = $user->telefono;
+
+                    return $this->error(
+                        $this->mensajePreguntaAccesoExistente($emailRef, $telefonoRef),
+                        [
+                            'codigo' => 'sin_acceso_app',
+                            'puede_activar_app' => true,
+                            'app_key' => ClientApp::key(),
+                            'email' => $emailRef,
+                            'telefono' => $telefonoRef,
+                        ],
+                        403
+                    );
+                }
+            }
+
             $token = $user->createToken('API Token')->plainTextToken;
 
             $user->load(User::eagerLodable());
+            $proveedor = $user->proveedorPrincipal();
 
             return $this->success([
                 'user' => new UserAuthenticateResource($user),
                 'token' => $token,
-            ], 'Login exitoso en GestionPlus.', 201);
+                'proveedor' => $proveedor ? new ProveedorResource($proveedor->load(Proveedor::eagerLodable())) : null,
+                'acceso_activado' => $request->boolean('activar_app'),
+            ], $request->boolean('activar_app')
+                ? 'Acceso a '.ClientApp::name().' generado. Bienvenido.'
+                : 'Login exitoso en '.ClientApp::name().'.', 201);
         } catch (ValidationException $e) {
             // Error en la validación de los datos de entrada
-            return $this->error('Los datos proporcionados no son válidos en GestionPlus.', $e->errors(), 422);
+            return $this->error('Los datos proporcionados no son válidos en '.ClientApp::name().'.', $e->errors(), 422);
         } catch (UnauthorizedException $e) {
             // Credenciales incorrectas o acceso no autorizado
-            Log::error('Error al iniciar sesión en GestionPlus: ' . $e->getMessage());
+            Log::error('Error al iniciar sesión en '.ClientApp::name().': ' . $e->getMessage());
             return $this->error($e->getMessage(), [], 401);
         } catch (\Exception $e) {
             // Cualquier otro error inesperado
-            Log::error('Error al iniciar sesión en GestionPlus: ' . $e->getMessage());
-            return $this->error('Ocurrió un error al intentar iniciar sesión en GestionPlus.', [], 500);
+            Log::error('Error al iniciar sesión en '.ClientApp::name().': ' . $e->getMessage());
+            return $this->error('Ocurrió un error al intentar iniciar sesión en '.ClientApp::name().'.', [], 500);
         }
     }
 
     public function me(Request $request)
     {
         $user = $request->user();
+
+        $appAccess = $this->assertUserHasCurrentClientApp($user);
+        if ($appAccess !== null) {
+            return $appAccess;
+        }
+
         $user->load(User::eagerLodable());
 
         if ($user->proveedores()->count() == 0) {
@@ -462,11 +533,15 @@ class AuthController extends Controller
     public function refresh(Request $request)
     {
         if (! $request->user()) {
-            throw new UnauthorizedException('No autorizado o sesión no válida en GestionPlus');
+            throw new UnauthorizedException('No autorizado o sesión no válida en '.ClientApp::name());
         }
 
         $user = $request->user();
 
+        $appAccess = $this->assertUserHasCurrentClientApp($user);
+        if ($appAccess !== null) {
+            return $appAccess;
+        }
         // Revocar el token actual
         $request->user()->currentAccessToken()->delete();
 
@@ -1149,7 +1224,7 @@ class AuthController extends Controller
 
         if (! $user) {
             return $this->error(
-                'No encontramos ninguna cuenta con ese correo electrónico o número de teléfono en GestionPlus. Comprueba que escribiste bien los datos o regístrate si aún no tienes cuenta.',
+                'No encontramos ninguna cuenta con ese correo electrónico o número de teléfono en '.ClientApp::name().'. Comprueba que escribiste bien los datos o regístrate si aún no tienes cuenta.',
                 [],
                 404
             );
@@ -1160,16 +1235,21 @@ class AuthController extends Controller
             EstadoUsuario::SUSPENDIDO->value,
         ], true)) {
             return $this->error(
-                'No podemos enviar el enlace de recuperación porque la cuenta asociada está bloqueada o suspendida en GestionPlus. Para resolverlo, contacta a soporte.',
+                'No podemos enviar el enlace de recuperación porque la cuenta asociada está bloqueada o suspendida en '.ClientApp::name().'. Para resolverlo, contacta a soporte.',
                 [],
                 403
             );
         }
 
+        $appAccess = $this->assertUserHasCurrentClientApp($user);
+        if ($appAccess !== null) {
+            return $appAccess;
+        }
+
         $userEmail = $user->email;
         if ($userEmail === null || filter_var($userEmail, FILTER_VALIDATE_EMAIL) === false) {
             return $this->error(
-                'Tu cuenta no tiene un correo electrónico válido donde enviar el enlace de recuperación en GestionPlus. Completa o actualiza tu correo en tu perfil o pide ayuda a soporte.',
+                'Tu cuenta no tiene un correo electrónico válido donde enviar el enlace de recuperación en '.ClientApp::name().'. Completa o actualiza tu correo en tu perfil o pide ayuda a soporte.',
                 [],
                 422
             );
@@ -1183,10 +1263,10 @@ class AuthController extends Controller
             'created_at' => now(),
         ], 60 * 60);
 
-        $url = config('services.frontend.url') . "/auth/reset-password?token={$token}";
+        $url = ClientApp::frontendUrl() . "/auth/reset-password?token={$token}";
 
         try {
-            Mail::to($userEmail)->send(new PasswordResetMail($url, $user->name));
+            Mail::to($userEmail)->send(new PasswordResetMail($url, $user->name, ClientApp::key()));
         } catch (\Throwable $e) {
             Log::error('Fallo al enviar correo de recuperación de contraseña', [
                 'user_id' => $user->id,
@@ -1202,7 +1282,7 @@ class AuthController extends Controller
 
         return $this->success(
             ['email' => $email],
-            'Te enviamos un correo con instrucciones para restablecer tu contraseña en GestionPlus. Revisa tu bandeja de entrada, la carpeta de spam y el apartado de promociones.',
+            'Te enviamos un correo con instrucciones para restablecer tu contraseña en '.ClientApp::name().'. Revisa tu bandeja de entrada, la carpeta de spam y el apartado de promociones.',
             200
         );
     }
@@ -1219,7 +1299,7 @@ class AuthController extends Controller
 
         if (!$data) {
             return $this->error(
-                'El enlace de recuperación ha expirado o es inválido en GestionPlus. Por favor, solicita uno nuevo.',
+                'El enlace de recuperación ha expirado o es inválido en '.ClientApp::name().'. Por favor, solicita uno nuevo.',
                 [],
                 400
             );
@@ -1230,7 +1310,7 @@ class AuthController extends Controller
         if ($createdAt->diffInMinutes(now()) > 60) {
             Cache::forget("password_reset_{$request->token}");
             return $this->error(
-                'El enlace de recuperación ha expirado en GestionPlus. Por favor, solicita uno nuevo.',
+                'El enlace de recuperación ha expirado en '.ClientApp::name().'. Por favor, solicita uno nuevo.',
                 [],
                 400
             );
@@ -1319,51 +1399,58 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
         ]);
 
-        // Verificar si el correo existe en la tabla users
-        $existe = User::where('email', $request->email)->exists();
-        // También verificar en proveedores.email para evitar conflictos aunque el email no se use como username
-        $existeEnProveedores = Proveedor::where('email', $request->email)->exists();
+        $email = $request->email;
+        $user = User::where('email', $email)->first();
+        $proveedor = Proveedor::withoutGlobalScope('solo_activos')->where('email', $email)->first();
+
+        // Email de usuario: se valida por acceso de ese usuario a la app.
+        // Si solo existe en la empresa (sin user), se valida a nivel empresa (varios usuarios).
+        if ($user) {
+            $disponibilidad = $this->disponibilidadRegistroParaAppActual($user);
+        } else {
+            $disponibilidad = $this->disponibilidadProveedorParaAppActual($proveedor);
+        }
+
+        $existeEnSistema = $user !== null || $proveedor !== null;
 
         return $this->success([
-            'existe' => $existe || $existeEnProveedores,
-            'email' => $request->email,
-        ], ($existe || $existeEnProveedores) ? 'El correo ya está registrado.' : 'El correo está disponible.', 200);
+            'existe' => $disponibilidad['existe'],
+            'puede_activar_app' => $disponibilidad['puede_activar_app'],
+            'tiene_acceso_app' => $disponibilidad['tiene_acceso_app'],
+            'existe_en_sistema' => $existeEnSistema,
+            'app_key' => ClientApp::key(),
+            'email' => $email,
+        ], $this->mensajeDisponibilidadRegistro($disponibilidad, 'correo electrónico'), 200);
     }
 
-    /**
-     * Verificar si una razón social/nombre comercial ya está registrado
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function verificarRazonSocialExistente(Request $request)
     {
         $request->validate([
             'razon_social' => ['required', 'string'],
         ]);
 
-        // Verificar si la razón social existe en la tabla proveedores
-        // normalizar para mismo formato de comparación (trim y mayúsculas)\
-        $existe = Proveedor::whereRaw('UPPER(TRIM(razon_social)) = ?', [trim(strtoupper($request->razon_social))])
+        $razon = trim($request->razon_social);
+        $proveedor = Proveedor::withoutGlobalScope('solo_activos')
+            ->whereRaw('UPPER(TRIM(razon_social)) = ?', [strtoupper($razon)])
             ->where(function ($q) {
                 $q->where('tipo_alta', 1)
                     ->orWhereNull('tipo_alta');
             })
-            ->exists();
+            ->first();
+
+        // Razón social = empresa: bloquea solo si algún usuario de la empresa ya tiene esta app.
+        $disponibilidad = $this->disponibilidadProveedorParaAppActual($proveedor);
 
         return $this->success([
-            'existe' => $existe,
+            'existe' => $disponibilidad['existe'],
+            'puede_activar_app' => $disponibilidad['puede_activar_app'],
+            'tiene_acceso_app' => $disponibilidad['tiene_acceso_app'],
+            'existe_en_sistema' => $proveedor !== null,
+            'app_key' => ClientApp::key(),
             'razon_social' => $request->razon_social,
-        ], $existe ? 'La razón social ya está registrada.' : 'La razón social está disponible.', 200);
+        ], $this->mensajeDisponibilidadRegistro($disponibilidad, 'razón social'), 200);
     }
 
-    /**
-     * Verificar si un teléfono ya está registrado
-     * Busca en proveedores.telefono y users.email
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function verificarTelefonoExistente(Request $request)
     {
         $request->validate([
@@ -1372,21 +1459,28 @@ class AuthController extends Controller
 
         $telefono = $request->telefono;
 
-        // Verificar si el teléfono existe en la tabla proveedores
-        // FIXME: Realizar revision de la validacion para el telefono del proveedor, ¿1aqui no se debe validar el proveedor???
-        $existeEnProveedores = Proveedor::where('telefono', $telefono)
+        $user = User::where('telefono', $telefono)->first();
+        $proveedor = Proveedor::withoutGlobalScope('solo_activos')
+            ->where('telefono', $telefono)
             ->where('tipo_alta', '!=', 2)
-            ->exists();
+            ->first();
 
-        // Verificar si el teléfono existe como email en users (se usa como username)
-        $existeEnUsers = User::where('telefono', $telefono)->exists();
+        if ($user) {
+            $disponibilidad = $this->disponibilidadRegistroParaAppActual($user);
+        } else {
+            $disponibilidad = $this->disponibilidadProveedorParaAppActual($proveedor);
+        }
 
-        $existe = $existeEnProveedores || $existeEnUsers;
+        $existeEnSistema = $proveedor !== null || User::where('telefono', $telefono)->exists();
 
         return $this->success([
-            'existe' => $existe,
+            'existe' => $disponibilidad['existe'],
+            'puede_activar_app' => $disponibilidad['puede_activar_app'],
+            'tiene_acceso_app' => $disponibilidad['tiene_acceso_app'],
+            'existe_en_sistema' => $existeEnSistema,
+            'app_key' => ClientApp::key(),
             'telefono' => $telefono,
-        ], $existe ? 'El teléfono ya está registrado.' : 'El teléfono está disponible.', 200);
+        ], $this->mensajeDisponibilidadRegistro($disponibilidad, 'teléfono'), 200);
     }
 
     /**
@@ -1556,6 +1650,8 @@ class AuthController extends Controller
     {
         $user = $proveedor->usuarioPrincipal();
         if ($user) {
+            $user->grantClientApp(ClientApp::key());
+
             return $user;
         }
 
@@ -1587,7 +1683,124 @@ class AuthController extends Controller
             ]);
         }
 
+        $user->grantClientApp(ClientApp::key());
+
         return $user;
+    }
+
+    /**
+     * Disponibilidad de registro respecto a la app del header X-Client-App.
+     * `existe` = bloqueante solo si el user ya tiene acceso a ESTA app.
+     *
+     * @return array{existe: bool, puede_activar_app: bool, tiene_acceso_app: bool}
+     */
+    private function disponibilidadRegistroParaAppActual(?User $user): array
+    {
+        if (! $user) {
+            return [
+                'existe' => false,
+                'puede_activar_app' => false,
+                'tiene_acceso_app' => false,
+            ];
+        }
+
+        $tiene = $user->hasClientApp(ClientApp::key());
+
+        return [
+            'existe' => $tiene,
+            'puede_activar_app' => ! $tiene,
+            'tiene_acceso_app' => $tiene,
+        ];
+    }
+
+    /**
+     * Disponibilidad a nivel empresa: una empresa puede tener varios usuarios.
+     * `existe` solo si algún usuario vinculado ya tiene acceso a ESTA app.
+     * Si la empresa existe en el sistema pero nadie tiene esta app → no se marca repetida.
+     *
+     * @return array{existe: bool, puede_activar_app: bool, tiene_acceso_app: bool}
+     */
+    private function disponibilidadProveedorParaAppActual(?Proveedor $proveedor): array
+    {
+        if (! $proveedor) {
+            return [
+                'existe' => false,
+                'puede_activar_app' => false,
+                'tiene_acceso_app' => false,
+            ];
+        }
+
+        $appKey = ClientApp::key();
+        $tiene = $proveedor->users()
+            ->whereHas('clientApps', function ($q) use ($appKey) {
+                $q->where('app_key', $appKey);
+            })
+            ->exists();
+
+        return [
+            'existe' => $tiene,
+            'puede_activar_app' => ! $tiene,
+            'tiene_acceso_app' => $tiene,
+        ];
+    }
+
+    /**
+     * Pregunta única al detectar cuenta existente sin acceso a la app actual.
+     */
+    private function mensajePreguntaAccesoExistente(?string $email, ?string $telefono): string
+    {
+        $email = $email !== null ? trim($email) : '';
+        $telefono = $telefono !== null ? trim((string) $telefono) : '';
+        $app = ClientApp::name();
+
+        if ($email !== '' && $telefono !== '') {
+            return "Detectamos una cuenta registrada con el correo {$email} y el teléfono {$telefono}. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
+        }
+
+        if ($email !== '') {
+            return "Detectamos una cuenta registrada con el correo {$email}. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
+        }
+
+        if ($telefono !== '') {
+            return "Detectamos una cuenta registrada con el teléfono {$telefono}. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
+        }
+
+        return "Detectamos una cuenta registrada. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
+    }
+
+    /**
+     * @param  array{existe: bool, puede_activar_app: bool, tiene_acceso_app: bool}  $disponibilidad
+     */
+    private function mensajeDisponibilidadRegistro(array $disponibilidad, string $campo): string
+    {
+        if ($disponibilidad['existe']) {
+            return 'Este '.$campo.' ya está registrado en '.ClientApp::name().'.';
+        }
+
+        if ($disponibilidad['puede_activar_app']) {
+            return 'Detectamos una cuenta registrada. Al continuar podrás generar el acceso a '.ClientApp::name().' con esos datos.';
+        }
+
+        return 'El '.$campo.' está disponible.';
+    }
+
+    /**
+     * @return \Illuminate\Http\JsonResponse|null null si tiene acceso
+     */
+    private function assertUserHasCurrentClientApp(User $user): mixed
+    {
+        if ($user->hasClientApp(ClientApp::key())) {
+            return null;
+        }
+
+        return $this->error(
+            'Tu cuenta no tiene acceso a '.ClientApp::name().'. Regístrate en esta aplicación o inicia sesión desde la app donde creaste tu cuenta.',
+            [
+                'codigo' => 'sin_acceso_app',
+                'app_key' => ClientApp::key(),
+            ],
+            403
+        );
     }
 
     /**
@@ -1649,14 +1862,16 @@ class AuthController extends Controller
             ]);
         }
 
-        $url = config('services.frontend.url') . "/gen-pass?token={$plainToken}";
+        $url = ClientApp::frontendUrl() . "/gen-pass?token={$plainToken}";
         $proveedorId = $proveedor->id;
         $correo = $proveedor->email;
+        $appKey = ClientApp::key();
 
-        dispatch(function () use ($url, $proveedorId, $correo) {
+        dispatch(function () use ($url, $proveedorId, $correo, $appKey) {
+            ClientApp::setCurrent($appKey);
             $proveedorMail = Proveedor::withoutGlobalScope('solo_activos')->find($proveedorId);
             if ($proveedorMail && $correo) {
-                Mail::to($correo)->send(new CompletaRegistroProveedorMail($url, $proveedorMail));
+                Mail::to($correo)->send(new CompletaRegistroProveedorMail($url, $proveedorMail, $appKey));
             }
         })->afterResponse();
 

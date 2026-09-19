@@ -17,6 +17,7 @@ use App\Services\ReporteService;
 use App\Services\SucursalService;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use App\Support\EmailLogoHelper;
+use App\Support\ClientApp;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
@@ -99,7 +100,8 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer('emails.*', function ($view) {
-            $view->with('logoAppDataUri', EmailLogoHelper::logoGestionPlusDataUri());
+            $view->with('logoAppDataUri', EmailLogoHelper::logoClientAppDataUri());
+            $view->with('clientAppName', ClientApp::name());
         });
 
         Gate::define('viewPulse', function ($user = null) {
