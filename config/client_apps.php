@@ -8,7 +8,7 @@ return [
     |--------------------------------------------------------------------------
     | Misma API. El origen se identifica con el header X-Client-App.
     | Si no viene (o es inválido) → gestion (compatibilidad GestionPlus).
-    | Google OAuth multi-app: pendiente.
+    | Google OAuth: query/state `app` → grant + redirect a frontend_url de esa app.
     |
     | mail.* = colores de plantillas auth (header / CTA). Mismas vistas, tema por app.
     */

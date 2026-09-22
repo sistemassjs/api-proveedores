@@ -10,6 +10,7 @@ use App\Models\OauthAccount;
 use App\Models\Proveedor;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\ClientApp;
 use App\Support\UserCuentaEstado;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 
@@ -31,8 +32,126 @@ class SocialAuthService
     }
 
     /**
+     * State OAuth firmado (app de origen para volver a la PWA correcta).
+     *
+     * @param  array{app?: string}  $payload
+     */
+    public function encodeOAuthState(array $payload): string
+    {
+        $json = json_encode($payload, JSON_THROW_ON_ERROR);
+        $body = rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
+        $sig = hash_hmac('sha256', $body, $this->oauthStateKey());
+
+        return $body.'.'.$sig;
+    }
+
+    /**
+     * @return array{app: ?string, n?: string}
+     */
+    public function decodeOAuthState(?string $state, bool $allowDefault = true): array
+    {
+        $default = [
+            'app' => $allowDefault ? ClientApp::normalize(null) : null,
+        ];
+
+        if ($state === null || $state === '') {
+            return $default;
+        }
+
+        $state = str_replace(' ', '+', $state);
+
+        $parts = explode('.', $state, 2);
+        if (count($parts) !== 2) {
+            return $default;
+        }
+
+        [$body, $sig] = $parts;
+        $expected = hash_hmac('sha256', $body, $this->oauthStateKey());
+        if (! hash_equals($expected, $sig)) {
+            return $default;
+        }
+
+        $pad = 4 - (strlen($body) % 4);
+        if ($pad < 4) {
+            $body .= str_repeat('=', $pad);
+        }
+
+        $json = base64_decode(strtr($body, '-_', '+/'), true);
+        if ($json === false) {
+            return $default;
+        }
+
+        try {
+            $data = json_decode($json, true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $default;
+        }
+
+        if (! is_array($data) || ! isset($data['app'])) {
+            return $default;
+        }
+
+        $out = [
+            'app' => ClientApp::normalize($data['app']),
+        ];
+        if (! empty($data['n']) && is_string($data['n'])) {
+            $out['n'] = $data['n'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  bool  $allowDefault  Si false y el state es inválido → null (para fallback).
+     */
+    public function appKeyFromOAuthState(?string $state, bool $allowDefault = true): ?string
+    {
+        return $this->decodeOAuthState($state, $allowDefault)['app'] ?? null;
+    }
+
+    private function oauthStateKey(): string
+    {
+        return (string) config('app.key', 'oauth-state');
+    }
+
+    /**
+     * Arma URL de callback front (base ya resuelta por app).
+     *
+     * @param  array<string, scalar>  $query
+     */
+    public function buildFrontendCallback(
+        string $callbackBase,
+        array $query = [],
+        ?string $fragment = null
+    ): string {
+        $url = rtrim($callbackBase, '/');
+        if ($query !== []) {
+            $url .= '?'.http_build_query($query);
+        }
+        if ($fragment) {
+            $url .= '#'.ltrim($fragment, '#');
+        }
+
+        return $url;
+    }
+
+    /**
+     * URL de callback en la PWA indicada (gestion|nexprov).
+     */
+    public function frontendCallbackUrl(
+        array $query = [],
+        ?string $fragment = null,
+        ?string $appKey = null
+    ): string {
+        $base = ClientApp::frontendPathFor($appKey, 'auth/callback');
+
+        return $this->buildFrontendCallback($base, $query, $fragment);
+    }
+
+    /**
      * Resuelve el usuario local desde el perfil OAuth: cuenta vinculada,
      * email existente (auto-vínculo) o alta GERENTE + proveedor stub.
+     * Otorga acceso a la app cliente indicada (gestion|nexprov).
      *
      * @return array{
      *     user: User,
@@ -41,11 +160,15 @@ class SocialAuthService
      *     pending_registro: bool
      * }
      */
-    public function resolveAuthenticatedUser(string $provider, SocialiteUser $socialUser): array
-    {
+    public function resolveAuthenticatedUser(
+        string $provider,
+        SocialiteUser $socialUser,
+        ?string $appKey = null
+    ): array {
         $provider = strtolower($provider);
         $providerId = (string) $socialUser->getId();
         $email = strtolower(trim((string) $socialUser->getEmail()));
+        $appKey = ClientApp::normalize($appKey);
 
         if ($email === '') {
             throw new \RuntimeException('El proveedor no devolvió un correo electrónico.');
@@ -95,6 +218,9 @@ class SocialAuthService
             $user->email_verified_at = now();
             $user->save();
         }
+
+        // Google valida posesión del email → otorga la app que inició el OAuth.
+        $user->grantClientApp($appKey);
 
         $user->load(User::eagerLodable());
         $token = $user->createToken('OAuth Token')->plainTextToken;
@@ -204,32 +330,14 @@ class SocialAuthService
         }
     }
 
-    public function frontendCallbackUrl(array $query = [], ?string $fragment = null): string
-    {
-        $base = rtrim((string) config('services.oauth.frontend_callback'), '/');
-        if ($base === '') {
-            $base = rtrim((string) config('services.frontend.url'), '/') . '/auth/callback';
-        }
-
-        $url = $base;
-        if ($query !== []) {
-            $url .= '?' . http_build_query($query);
-        }
-        if ($fragment) {
-            $url .= '#' . ltrim($fragment, '#');
-        }
-
-        return $url;
-    }
-
     /**
      * Fragmento seguro para el PWA (token no viaja en Referer de query).
      */
     public function successFragment(string $token, bool $pendingRegistro): string
     {
         $parts = [
-            'token=' . rawurlencode($token),
-            'pending_registro=' . ($pendingRegistro ? '1' : '0'),
+            'token='.rawurlencode($token),
+            'pending_registro='.($pendingRegistro ? '1' : '0'),
         ];
 
         return implode('&', $parts);

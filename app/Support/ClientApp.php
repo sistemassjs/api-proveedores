@@ -52,14 +52,36 @@ final class ClientApp
         return (string) (self::current()['name'] ?? config('app.name', 'GestionPlus'));
     }
 
+    public static function nameFor(?string $key): string
+    {
+        $normalized = self::normalize($key);
+        $apps = config('client_apps.apps', []);
+
+        return (string) ($apps[$normalized]['name'] ?? self::name());
+    }
+
     public static function frontendUrl(): string
     {
         return rtrim((string) (self::current()['frontend_url'] ?? config('services.frontend.url')), '/');
     }
 
+    public static function frontendUrlFor(?string $key): string
+    {
+        $normalized = self::normalize($key);
+        $apps = config('client_apps.apps', []);
+        $cfg = $apps[$normalized] ?? self::current();
+
+        return rtrim((string) ($cfg['frontend_url'] ?? self::frontendUrl()), '/');
+    }
+
     public static function frontendPath(string $path): string
     {
         return self::frontendUrl() . '/' . ltrim($path, '/');
+    }
+
+    public static function frontendPathFor(?string $key, string $path): string
+    {
+        return self::frontendUrlFor($key) . '/' . ltrim($path, '/');
     }
 
     public static function logoRelativePath(?string $key = null): string

@@ -129,24 +129,11 @@ class AuthController extends Controller
             }
 
             if (! $yaTeniaApp && ! $request->boolean('activar_app')) {
-                [$emailRef, $telefonoRef] = $this->credencialesParaMensajeAcceso(
-                    $userPorCredencial->email,
-                    $userPorCredencial->telefono
-                );
-                $requierePassword = filled($userPorCredencial->password);
+                $payload = $this->payloadConfirmarAccesoApp($userPorCredencial);
 
                 return $this->error(
-                    $requierePassword
-                        ? $this->mensajePreguntaAccesoExistenteConPassword($emailRef, $telefonoRef)
-                        : $this->mensajePreguntaAccesoExistente($emailRef, $telefonoRef),
-                    [
-                        'codigo' => 'sin_acceso_app',
-                        'puede_activar_app' => true,
-                        'requiere_password' => $requierePassword,
-                        'app_key' => ClientApp::key(),
-                        'email' => $emailRef,
-                        'telefono' => $telefonoRef,
-                    ],
+                    (string) ($payload['ui']['subtitle'] ?? 'Confirma tu identidad para generar el acceso.'),
+                    $payload,
                     403
                 );
             }
@@ -542,18 +529,11 @@ class AuthController extends Controller
                 if ($request->boolean('activar_app')) {
                     $user->grantClientApp(ClientApp::key());
                 } else {
-                    [$emailRef, $telefonoRef] = $this->credencialesParaMensajeAcceso($user->email, $user->telefono);
+                    $payload = $this->payloadConfirmarAccesoApp($user);
 
                     return $this->error(
-                        $this->mensajePreguntaAccesoExistenteConPassword($emailRef, $telefonoRef),
-                        [
-                            'codigo' => 'sin_acceso_app',
-                            'puede_activar_app' => true,
-                            'requiere_password' => true,
-                            'app_key' => ClientApp::key(),
-                            'email' => $emailRef,
-                            'telefono' => $telefonoRef,
-                        ],
+                        (string) ($payload['ui']['subtitle'] ?? 'Confirma tu identidad para generar el acceso.'),
+                        $payload,
                         403
                     );
                 }
@@ -1768,8 +1748,7 @@ class AuthController extends Controller
 
     /**
      * Busca usuario solo en `users` por email o teléfono del formulario.
-     * Prefiere cuentas con contraseña (evita huérfanos de alta incompleta).
-     * Si el email solo está en empresa, usa el usuario principal con password.
+     * Prefiere cuentas con contraseña. No usa datos de empresa.
      */
     private function buscarUsuarioPorEmailOTelefono(?string $email, ?string $telefono): ?User
     {
@@ -1780,7 +1759,7 @@ class AuthController extends Controller
             return null;
         }
 
-        $user = User::where(function ($q) use ($email, $telefono) {
+        return User::where(function ($q) use ($email, $telefono) {
             if ($email !== '') {
                 $q->where('email', $email);
             }
@@ -1792,19 +1771,64 @@ class AuthController extends Controller
         })
             ->orderByRaw("CASE WHEN password IS NOT NULL AND password != '' THEN 0 ELSE 1 END")
             ->first();
+    }
 
-        // Email de empresa sin user con password: usar principal de esa empresa.
-        if ($email !== '' && (! $user || blank($user->password))) {
-            $proveedor = Proveedor::withoutGlobalScope('solo_activos')
-                ->whereRaw('LOWER(email) = ?', [strtolower($email)])
-                ->first();
-            $principal = $proveedor?->usuarioPrincipal();
-            if ($principal && filled($principal->password)) {
-                return $principal;
-            }
-        }
+    /**
+     * App de origen = la más antigua en user_client_apps distinta a la app actual.
+     */
+    private function resolverAppOrigen(User $user): string
+    {
+        $current = ClientApp::key();
+        $origen = $user->clientApps()
+            ->where('app_key', '!=', $current)
+            ->orderBy('created_at')
+            ->value('app_key');
 
-        return $user;
+        return ClientApp::normalize($origen ?: (string) config('client_apps.default', 'gestion'));
+    }
+
+    /**
+     * Payload del modal "Confirmar acceso": marca/copy de la app origen; CTA hacia app destino.
+     *
+     * @return array<string, mixed>
+     */
+    private function payloadConfirmarAccesoApp(User $user): array
+    {
+        [$email, $telefono] = $this->credencialesParaMensajeAcceso($user->email, $user->telefono);
+        $requierePassword = filled($user->password);
+        $appOrigen = $this->resolverAppOrigen($user);
+        $appDestino = ClientApp::key();
+        $origenName = ClientApp::nameFor($appOrigen);
+        $destinoName = ClientApp::name();
+        $theme = ClientApp::mailTheme($appOrigen);
+
+        return [
+            'codigo' => 'sin_acceso_app',
+            'puede_activar_app' => true,
+            'requiere_password' => $requierePassword,
+            'app_key' => $appDestino,
+            'app_origen' => $appOrigen,
+            'app_destino' => $appDestino,
+            'email' => $email,
+            'telefono' => $telefono,
+            'forgot_password_url' => ClientApp::frontendPathFor($appOrigen, 'auth/recuperar-password'),
+            'ui' => [
+                'title' => 'Cuenta en '.$origenName,
+                'subtitle' => $requierePassword
+                    ? 'Confirma tu identidad para generar acceso a '.$destinoName.'.'
+                    : 'Detectamos tu cuenta en '.$origenName.'. Te enviaremos un correo para definir tu contraseña y generar acceso a '.$destinoName.'.',
+                'cta' => $requierePassword ? 'Generar acceso' : 'Enviar correo',
+                'cancel' => 'Cancelar',
+                'forgot_password_label' => '¿Olvidaste tu contraseña?',
+            ],
+            'brand' => [
+                'name' => $origenName,
+                'logo_url' => ClientApp::logoWebUrl($appOrigen),
+                'header' => $theme['header'] ?? '#2b6cb0',
+                'cta' => $theme['cta'] ?? '#FFC107',
+                'cta_text' => $theme['cta_text'] ?? '#000000',
+            ],
+        ];
     }
 
     /**
@@ -1886,58 +1910,6 @@ class AuthController extends Controller
             $email !== '' ? $email : null,
             $telefono !== '' ? $telefono : null,
         ];
-    }
-
-    /**
-     * Pregunta de Acceso existente cuando la cuenta ya tiene contraseña:
-     * hay que confirmarla para generar el acceso.
-     */
-    private function mensajePreguntaAccesoExistenteConPassword(?string $email, ?string $telefono): string
-    {
-        [$email, $telefono] = $this->credencialesParaMensajeAcceso($email, $telefono);
-        $email = $email ?? '';
-        $telefono = $telefono ?? '';
-        $app = ClientApp::name();
-
-        if ($email !== '' && $telefono !== '') {
-            return "Detectamos una cuenta registrada con el correo {$email} y el teléfono {$telefono}. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
-        }
-
-        if ($email !== '') {
-            return "Detectamos una cuenta registrada con el correo {$email}. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
-        }
-
-        if ($telefono !== '') {
-            return "Detectamos una cuenta registrada con el teléfono {$telefono}. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
-        }
-
-        return "Detectamos una cuenta registrada. Para generar el acceso a {$app} confirma tu contraseña e inicia sesión.";
-    }
-
-    /**
-     * Pregunta única al detectar cuenta existente sin acceso a la app actual.
-     * Solo datos de `users` (ya normalizados vía credencialesParaMensajeAcceso).
-     */
-    private function mensajePreguntaAccesoExistente(?string $email, ?string $telefono): string
-    {
-        [$email, $telefono] = $this->credencialesParaMensajeAcceso($email, $telefono);
-        $email = $email ?? '';
-        $telefono = $telefono ?? '';
-        $app = ClientApp::name();
-
-        if ($email !== '' && $telefono !== '') {
-            return "Detectamos una cuenta registrada con el correo {$email} y el teléfono {$telefono}. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
-        }
-
-        if ($email !== '') {
-            return "Detectamos una cuenta registrada con el correo {$email}. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
-        }
-
-        if ($telefono !== '') {
-            return "Detectamos una cuenta registrada con el teléfono {$telefono}. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
-        }
-
-        return "Detectamos una cuenta registrada. ¿Deseas generar el acceso a {$app} con esos datos e iniciar sesión?";
     }
 
     /**

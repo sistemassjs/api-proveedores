@@ -22,7 +22,7 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 | Usuarios / matriz MVP | [platform-users-roles.md](./platform-users-roles.md) | Gestión empresa: principal GERENTE, roles asignables SUP/VEN/AUX |
 | Métricas de plataforma | Sección siguiente + [platform-users-roles.md](./platform-users-roles.md#métricas-y-cuentas-de-pruebas) | Totales / actividad: excluye roles internos y cuentas/empresas de pruebas |
 | Storage / mail / FCM | Traits, Mail, Notifications genéricas | Archivos, correo, push |
-| **Apps cliente** | [platform-client-apps.md](./platform-client-apps.md) | Header `X-Client-App`, tabla `user_client_apps`, login/registro por app. Google multi-app pendiente. |
+| **Apps cliente** | [platform-client-apps.md](./platform-client-apps.md) | Header `X-Client-App`, tabla `user_client_apps`, login/registro por app. Google OAuth multi-app vía state (`platform-auth-socialite.md`). |
 | Shell menús (front) | `app-sidebar-menu` / `app-desktop-sidebar` | Dos menús distintos; ver sección siguiente |
 | **Perfil público** | Sección siguiente | Página de presentación compartible por enlace |
 
