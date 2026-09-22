@@ -80,12 +80,23 @@ Tabla `user_client_apps`:
 
 - `user_id` (FK users)
 - `app_key` (`gestion` \| `nexprov` | futuras)
+- `created_at` / `updated_at` (alta del acceso; sirve para “nuevos” en dash)
 - unique `(user_id, app_key)`
 
 Modelo: `App\Models\UserClientApp`.  
 User: `clientApps()`, `hasClientApp()`, `grantClientApp()`.
 
 Migración: backfill de `gestion` a todos los users existentes.
+
+## Panel admin (métricas y listado)
+
+| Pieza | Comportamiento |
+|-------|----------------|
+| Dashboard `totales.por_app` | Por `gestion` / `nexprov`: `total`, `nuevos` (accesos con `user_client_apps.created_at` ≥ lunes de la semana calendario), `label`, `logo_url`. Mismo universo `paraMetricasPlataforma()`. |
+| Listado usuarios filtro `client_app` | `gestion` \| `nexprov` \| `ambas` (tiene las dos). Vacío = sin filtro. |
+| Listado empresas | Mismo filtro `client_app` sobre el usuario **PRINCIPAL** activo. `ProveedorResource.client_apps` + chips en UI. |
+| Resource | `UserResource` / `ProveedorResource.client_apps` = lista de `app_key`. Front: chips GestionPlus / NexProv junto al chip Google. |
+| Deep-link | Cards del dash → `/pages/panel-admin/usuarios?client_app=gestion\|nexprov`. |
 
 ## Código API
 
@@ -95,6 +106,8 @@ Migración: backfill de `gestion` a todos los users existentes.
 | Resolver | `App\Support\ClientApp` (`nameFor`, `frontendPathFor`, `logoWebUrl`, `mailTheme`) |
 | Middleware | `IdentifyClientApp` (grupo `api` en `bootstrap/app.php`) |
 | Auth | `AuthController` → `payloadConfirmarAccesoApp()` |
+| Dashboard | `AdminHomeControler::getTotalesGenerales()` → `por_app` |
+| Filtro listado | `User::filterByClientApp` / `Proveedor::filterByClientApp` |
 | Mails | `CompletaRegistro*Mail`, `PasswordResetMail` (guardan `appKey`) |
 
 ## Variables `.env`

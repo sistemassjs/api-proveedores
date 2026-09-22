@@ -126,6 +126,7 @@ class ProveedorResource extends JsonResource
             'tipo_alta' => $this->tipo_alta !== null ? (int) $this->tipo_alta : 1,
             'oauth_providers' => $this->resolveOwnerOauthProviders(),
             'auth_google' => in_array('google', $this->resolveOwnerOauthProviders(), true),
+            'client_apps' => $this->resolveOwnerClientApps(),
 
             'alta_construcc' => $this->when((int) ($this->tipo_alta ?? 1) === 2, function () {
                 $empresaAlta = $this->relationLoaded('empresaConstruccAlta') ? $this->empresaConstruccAlta : null;
@@ -206,5 +207,45 @@ class ProveedorResource extends JsonResource
         }
 
         return $owner->oauthAccounts->pluck('provider')->unique()->values()->all();
+    }
+
+    /**
+     * Apps cliente del usuario PRINCIPAL activo de la empresa.
+     *
+     * @return list<string>
+     */
+    private function resolveOwnerClientApps(): array
+    {
+        if ($this->relationLoaded('users')) {
+            $owner = $this->users->first(function ($user) {
+                $pivot = $user->pivot;
+
+                return $pivot
+                    && (bool) $pivot->activo
+                    && ($pivot->tipo_relacion ?? null) === 'PRINCIPAL';
+            }) ?? $this->users->first();
+
+            if (! $owner) {
+                return [];
+            }
+
+            if ($owner->relationLoaded('clientApps')) {
+                return $owner->clientApps->pluck('app_key')->unique()->values()->all();
+            }
+
+            return $owner->clientApps()->pluck('app_key')->unique()->values()->all();
+        }
+
+        $owner = $this->users()
+            ->wherePivot('tipo_relacion', 'PRINCIPAL')
+            ->wherePivot('activo', true)
+            ->with('clientApps')
+            ->first();
+
+        if (! $owner) {
+            return [];
+        }
+
+        return $owner->clientApps->pluck('app_key')->unique()->values()->all();
     }
 }

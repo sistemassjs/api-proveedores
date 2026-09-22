@@ -111,6 +111,8 @@ En el panel administrativo, el listado de usuarios **solo incluye** roles de pro
 
 No aparecen ahí `ADMINISTRADOR`, `CONSTRUCC_APP`, `ventas_purificadora_colibri` ni otros roles de plataforma/integración. Los conteos del listado (todos / activos / …) usan el mismo universo.
 
+**Filtro por app cliente:** query `client_app=gestion|nexprov|ambas` (vía `user_client_apps`). Vacío = todos. En UI, chips de app junto al distintivo Google. Ver [platform-client-apps.md](./platform-client-apps.md#panel-admin-métricas-y-listado).
+
 **Orden en listados admin:** helper `App\Support\AdminListOrdering`. Usuarios con cuenta bloqueada/suspendida/inactiva van al final. En el listado de usuarios **vinculados a una empresa** (`ProveedorUsuarioController@index`) el orden usa la relación `$proveedor->users()` (pivot `user_proveedor.activo` + `users.status`); vínculos inactivos y cuentas restringidas al final.
 
 ### Listado admin de empresas
@@ -118,6 +120,7 @@ No aparecen ahí `ADMINISTRADOR`, `CONSTRUCC_APP`, `ventas_purificadora_colibri`
 Por defecto el listado admin de empresas muestra **solo productivas** (`es_cuenta_de_pruebas = false`). Desde filtros avanzados se puede ver «solo pruebas» o «todas».
 La marca de pruebas se gestiona en la **edición de la empresa** (panel admin).
 En UI admin, las empresas de pruebas llevan el distintivo **DEV** (badge ámbar, mismo patrón visual que Plus; tooltip «Empresa de pruebas») en listado, ficha, usuarios vinculados y reasignación.
+También se muestran chips de app (**GestionPlus** / **NexProv**) según el acceso del usuario PRINCIPAL activo (`client_apps`), y filtro `client_app` en el drawer.
 
 ### Criterio operativo (métricas)
 

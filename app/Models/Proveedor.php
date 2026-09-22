@@ -128,6 +128,7 @@ class Proveedor extends BaseModel
         'empresas_construcc' => 'EmpresasConstrucc',
         'search' => 'Search',
         'oauth_provider' => 'OauthProvider',
+        'client_app' => 'ClientApp',
     ];
 
 
@@ -287,6 +288,40 @@ class Proveedor extends BaseModel
                     $oq->where('provider', $provider);
                 });
         });
+    }
+
+    /**
+     * Empresas cuyo usuario PRINCIPAL activo tiene acceso a la app cliente.
+     * gestion|nexprov = tiene esa app; ambas|todas = tiene las dos.
+     */
+    public function filterByClientApp($query, $value)
+    {
+        $v = strtolower(trim((string) $value));
+        if ($v === '' || $v === 'todos') {
+            return $query;
+        }
+
+        $ownerScope = function ($q) {
+            $q->where('user_proveedor.tipo_relacion', 'PRINCIPAL')
+                ->where('user_proveedor.activo', true);
+        };
+
+        if ($v === 'ambas' || $v === 'todas') {
+            return $query->whereHas('users', function ($q) use ($ownerScope) {
+                $ownerScope($q);
+                $q->whereHas('clientApps', fn ($cq) => $cq->where('app_key', 'gestion'))
+                    ->whereHas('clientApps', fn ($cq) => $cq->where('app_key', 'nexprov'));
+            });
+        }
+
+        if (in_array($v, ['gestion', 'nexprov'], true)) {
+            return $query->whereHas('users', function ($q) use ($ownerScope, $v) {
+                $ownerScope($q);
+                $q->whereHas('clientApps', fn ($cq) => $cq->where('app_key', $v));
+            });
+        }
+
+        return $query;
     }
 
     public function scopeFilterByNotas($query, $value)

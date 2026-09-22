@@ -51,6 +51,7 @@ class UserResource extends JsonResource
             'role' => $this->whenLoaded('role', fn () => new RoleResource($this->role)),
             'oauth_providers' => $this->resolveOauthProviders(),
             'auth_google' => in_array('google', $this->resolveOauthProviders(), true),
+            'client_apps' => $this->resolveClientApps(),
             'proveedor' => $proveedor === null ? null : [
                 'id' => $proveedor->id,
                 'nombre_comercial' => $proveedor->nombre_comercial,
@@ -131,5 +132,17 @@ class UserResource extends JsonResource
         }
 
         return $this->oauthAccounts()->pluck('provider')->unique()->values()->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function resolveClientApps(): array
+    {
+        if ($this->relationLoaded('clientApps')) {
+            return $this->clientApps->pluck('app_key')->unique()->values()->all();
+        }
+
+        return $this->clientApps()->pluck('app_key')->unique()->values()->all();
     }
 }

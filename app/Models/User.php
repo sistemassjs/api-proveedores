@@ -47,6 +47,7 @@ class User extends Authenticatable
         'grupo_pendientes' => 'GrupoPendientes',
         'grupo_registro_completados' => 'GrupoRegistroCompletados',
         'oauth_provider' => 'OauthProvider',
+        'client_app' => 'ClientApp',
     ];
 
     protected function casts(): array
@@ -108,6 +109,30 @@ class User extends Authenticatable
         return $query->whereHas('oauthAccounts', function ($q) use ($provider) {
             $q->where('provider', $provider);
         });
+    }
+
+    /**
+     * Listado admin: acceso a app cliente.
+     * gestion|nexprov = tiene esa app; ambas|todas = tiene las dos.
+     */
+    public function filterByClientApp($query, $value)
+    {
+        $v = strtolower(trim((string) $value));
+        if ($v === '' || $v === 'todos') {
+            return $query;
+        }
+
+        if ($v === 'ambas' || $v === 'todas') {
+            return $query
+                ->whereHas('clientApps', fn ($q) => $q->where('app_key', 'gestion'))
+                ->whereHas('clientApps', fn ($q) => $q->where('app_key', 'nexprov'));
+        }
+
+        if (in_array($v, ['gestion', 'nexprov'], true)) {
+            return $query->whereHas('clientApps', fn ($q) => $q->where('app_key', $v));
+        }
+
+        return $query;
     }
 
     public function filterByProveedorId($query, $value)
@@ -209,6 +234,7 @@ class User extends Authenticatable
             'role',
             'proveedores',
             'oauthAccounts',
+            'clientApps',
         ];
     }
 

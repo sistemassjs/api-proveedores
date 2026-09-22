@@ -82,7 +82,10 @@ class AdminProveedorController extends Controller
                 'users' => function ($q) {
                     $q->wherePivot('tipo_relacion', 'PRINCIPAL')
                         ->wherePivot('activo', true)
-                        ->with('oauthAccounts:id,user_id,provider');
+                        ->with([
+                            'oauthAccounts:id,user_id,provider',
+                            'clientApps:id,user_id,app_key',
+                        ]);
                 },
             ]))
 

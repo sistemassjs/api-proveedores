@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Proveedor;
 use App\Models\User;
+use App\Support\ClientApp;
 use App\Support\MetricasPlataforma;
 use App\Traits\ApiResponse;
 use Carbon\Carbon;
@@ -101,12 +102,41 @@ class AdminHomeControler extends Controller
 
     /**
      * Totales generales (sin filtro de fecha).
+     * por_app: usuarios con acceso a cada app + altas de acceso en la semana calendario (lun→ahora).
      */
     private function getTotalesGenerales(): array
     {
+        $inicioSemana = Carbon::now()->startOfWeek(Carbon::MONDAY);
+
         return [
             'total_usuarios'  => User::paraMetricasPlataforma()->count(),
             'total_empresas'  => Proveedor::withoutGlobalScope('solo_activos')->paraMetricasPlataforma()->count(),
+            'semana_desde'    => $inicioSemana->toDateString(),
+            'por_app'         => [
+                'gestion' => $this->metricasUsuariosPorApp('gestion', $inicioSemana),
+                'nexprov' => $this->metricasUsuariosPorApp('nexprov', $inicioSemana),
+            ],
+        ];
+    }
+
+    /**
+     * @return array{total: int, nuevos: int, label: string, logo_url: string}
+     */
+    private function metricasUsuariosPorApp(string $appKey, Carbon $inicioSemana): array
+    {
+        $base = fn () => User::paraMetricasPlataforma()
+            ->whereHas('clientApps', fn ($q) => $q->where('app_key', $appKey));
+
+        return [
+            'total'    => $base()->count(),
+            'nuevos'   => User::paraMetricasPlataforma()
+                ->whereHas('clientApps', function ($q) use ($appKey, $inicioSemana) {
+                    $q->where('app_key', $appKey)
+                        ->where('created_at', '>=', $inicioSemana);
+                })
+                ->count(),
+            'label'    => ClientApp::nameFor($appKey),
+            'logo_url' => ClientApp::logoWebUrl($appKey),
         ];
     }
 

@@ -77,6 +77,8 @@ Al leer `route.data` en cadena de padres: **priorizar la ruta hoja**; no dejar q
 
 KPIs de producto (totales de usuarios/empresas, usuarios activos, series diarias, Looker, Pulse) **no** miden operación interna ni datos de QA.
 
+El dashboard admin también expone **accesos por app** (`totales.por_app.gestion|nexprov`: total + nuevos de la semana calendario lun→ahora sobre `user_client_apps`). Ver [platform-client-apps.md](./platform-client-apps.md#panel-admin-métricas-y-listado).
+
 **Quedan fuera** si aplica cualquiera de:
 
 1. **Rol interno / integración:** `ADMINISTRADOR`, `CONSTRUCC_APP`, `ventas_purificadora_colibri`
