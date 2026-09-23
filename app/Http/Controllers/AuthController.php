@@ -1559,9 +1559,12 @@ class AuthController extends Controller
                 Cache::forget("email_verification_user_update_{$oldToken}");
             }
 
+            // app_key de la petición (X-Client-App): el link del mail no lo lleva;
+            // se reutiliza al verificar para FCM + redirect al front correcto.
             Cache::put($cacheKey, [
                 'user_id' => $user->id,
                 'email' => $user->email,
+                'app_key' => ClientApp::key(),
                 'created_at' => now()->toIso8601String(),
             ], 60 * 60 * 24 * 360); // 360 horas = 15 días
 
@@ -1628,15 +1631,18 @@ class AuthController extends Controller
         Cache::forget($cacheKey);
         Cache::forget("email_verification_user_update_latest_token_{$user->id}");
 
-        $user->notify(new CuentaVerificadaNotification(
-            email: $user->email,
-            userId: $user->id,
-            verifiedAtIso: optional($user->email_verified_at)->toIso8601String()
-        ));
+        // Tokens legacy sin app_key → gestion (default ClientApp::normalize).
+        $appKey = ClientApp::normalize($data['app_key'] ?? null);
 
-        $frontendHomeUrl = rtrim((string) config('services.frontend.url', 'http://localhost:8100'), '/') . '/';
+        $user->notify(
+            (new CuentaVerificadaNotification(
+                email: $user->email,
+                userId: $user->id,
+                verifiedAtIso: optional($user->email_verified_at)->toIso8601String()
+            ))->forClientApps($appKey)
+        );
 
-        return redirect()->away($frontendHomeUrl);
+        return redirect()->away(ClientApp::frontendUrlFor($appKey) . '/');
     }
 
     /**

@@ -49,6 +49,16 @@ $user->notify((new SomeNotification(...))->forClientApps('gestion', 'nexprov'));
 
 Webhooks/cron sin header → default `gestion` (dominio GestionPlus).
 
+### Auth / ProveedorEmpresa / Usuario
+
+Suenan en la **app que disparó** (`X-Client-App`). Dominio catálogo (NexProv) y dominio GestionPlus (SP, OC, presupuesto, etc.) se fijan con `forClientApps` en el disparo.
+
+**Verificación de email** (`updateUserData` → mail → `verifyUpdatedEmail`): el link `GET /api/auth/verificar-email-token` no envía `X-Client-App`. Por eso:
+
+1. Al emitir el token se guarda `app_key` en cache junto a `user_id` / `email`.
+2. Al verificar: `CuentaVerificadaNotification` → `forClientApps($appKey)` y redirect a `ClientApp::frontendUrlFor($appKey)`.
+3. Tokens de cache antiguos sin `app_key` → fallback `gestion`.
+
 ### Deploy API
 
 ```bash
@@ -76,6 +86,7 @@ Igual con `environment.clientApp = 'nexprov'`.
 3. Usuario con ambas → evento de Gestion no suena en NexProv (y al revés).
 4. Logout en una app no desactiva el token de la otra.
 5. Tokens previos siguen vivos como `gestion` hasta re-registro.
+6. Cambio de email desde NexProv → push `CuentaVerificada` y redirect a NexProv (y lo mismo para GestionPlus).
 
 ---
 
