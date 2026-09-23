@@ -97,7 +97,8 @@ final class ClientApp
     }
 
     /**
-     * URL pública del logo (front / CDN). Prioriza logo_url de config; si no, frontend_url + logo.
+     * URL pública del logo.
+     * Prioriza logo_url de config; si no, endpoint API (Apache en prod no sirve /gestion/assets).
      */
     public static function logoWebUrl(?string $key = null): string
     {
@@ -109,14 +110,10 @@ final class ClientApp
             return (string) $cfg['logo_url'];
         }
 
-        $base = rtrim((string) ($cfg['frontend_url'] ?? ''), '/');
         $relative = ltrim((string) ($cfg['logo'] ?? 'assets/logos/logo-gestionplus.png'), '/');
+        $file = basename($relative);
 
-        if ($base === '') {
-            return asset($relative);
-        }
-
-        return $base.'/'.$relative;
+        return url('/api/public/brand-logos/'.$file);
     }
 
     /**
