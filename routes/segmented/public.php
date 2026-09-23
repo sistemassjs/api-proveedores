@@ -26,15 +26,6 @@ use App\Http\Controllers\ApiStatusController;
 Route::get('status', ApiStatusController::class);
 
 /**
- * Logos de marca (GestionPlus / NexProv) — públicos.
- * Usar en lugar de /assets/logos/... cuando el vhost no sirve estáticos bajo /gestion.
- */
-Route::get('public/brand-logos/{file}', \App\Http\Controllers\BrandLogoController::class)
-    ->where('file', 'logo-[A-Za-z0-9_-]+\.(png|webp|jpe?g|svg)')
-    ->middleware(['throttle:120,1']);
-
-
-/**
  * CATÁLOGOS PÚBLICOS
  */
 Route::get('roles-index', [RoleController::class, 'index']);
