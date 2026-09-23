@@ -40,11 +40,18 @@ class ProveedorSolicitudPagoController extends Controller
         $order = $request->input('order', 'desc');
         $perPage = $request->input('per_page', 10);
 
-        // Los contadores por pestaña deben reflejar totales sin el límite «últimas N» ni el filtro de estado activo
-        $countFilters = array_diff_key($filters, array_flip(['estado_solicitud', 'ultimas_spp']));
-        $segmentCounts = SolicitudPago::query()
-            ->where('proveedor_id', $proveedor->id)
-            ->when(! empty($countFilters), fn($q) => $q->filter($countFilters))
+        $ultimasN = isset($filters['ultimas_spp']) ? (int) $filters['ultimas_spp'] : 0;
+        $hasUltimas = $ultimasN > 0;
+
+        // Pool: últimas N por fecha, sin filtrar por estado (ni por tiene_factura: el segmento se aplica después)
+        $poolFilters = array_diff_key($filters, array_flip(['estado_solicitud', 'tiene_factura']));
+
+        $baseQuery = SolicitudPago::query()->where('proveedor_id', $proveedor->id);
+        if (! empty($poolFilters)) {
+            $baseQuery->filter($poolFilters);
+        }
+
+        $segmentCounts = (clone $baseQuery)
             ->selectRaw('estado_solicitud, COUNT(*) as total')
             ->groupBy('estado_solicitud')
             ->pluck('total', 'estado_solicitud')
