@@ -7,6 +7,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -48,6 +49,8 @@ class Handler extends ExceptionHandler
         // Respuestas personalizadas para API
         if ($request->expectsJson()) {
             if ($e instanceof AuthenticationException) {
+                $this->logApiException($e, 'UNAUTHENTICATED', 401);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'No autenticado',
@@ -56,6 +59,8 @@ class Handler extends ExceptionHandler
             }
 
             if ($e instanceof ModelNotFoundException) {
+                $this->logApiException($e, 'RESOURCE_NOT_FOUND', 404);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Recurso no encontrado',
@@ -64,6 +69,10 @@ class Handler extends ExceptionHandler
             }
 
             if ($e instanceof ValidationException) {
+                Log::warning('API Validation Error', $this->apiExceptionContext($e, 'VALIDATION_ERROR', 422) + [
+                    'errors' => $e->validator->errors()->toArray(),
+                ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Datos de entrada inválidos',
@@ -73,6 +82,8 @@ class Handler extends ExceptionHandler
             }
 
             if ($e instanceof NotFoundHttpException) {
+                $this->logApiException($e, 'ENDPOINT_NOT_FOUND', 404);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Endpoint no encontrado',
@@ -81,6 +92,10 @@ class Handler extends ExceptionHandler
             }
 
             if ($e instanceof MethodNotAllowedHttpException) {
+                $this->logApiException($e, 'METHOD_NOT_ALLOWED', 405, [
+                    'allowed_methods' => $e->getHeaders()['Allow'] ?? null,
+                ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Método HTTP no permitido para este endpoint',
@@ -88,7 +103,9 @@ class Handler extends ExceptionHandler
                 ], 405);
             }
 
-            // Error genérico del servidor
+            // Error genérico del servidor (también HttpException no tipados arriba)
+            $this->logApiException($e, 'INTERNAL_SERVER_ERROR', 500);
+
             return response()->json([
                 'success' => false,
                 'message' => app()->environment('production')
@@ -99,5 +116,37 @@ class Handler extends ExceptionHandler
         }
 
         return parent::render($request, $e);
+    }
+
+    /**
+     * Fuerza log en laravel.log aunque la excepción esté en dontReport (ej. 405).
+     */
+    private function logApiException(Throwable $e, string $errorCode, int $status, array $extra = []): void
+    {
+        $level = $status >= 500 ? 'error' : 'warning';
+
+        Log::{$level}('API Exception', $this->apiExceptionContext($e, $errorCode, $status) + $extra);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function apiExceptionContext(Throwable $e, string $errorCode, int $status): array
+    {
+        return [
+            'error_code' => $errorCode,
+            'http_status' => $status,
+            'exception' => get_class($e),
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+            'route' => request()->route()?->getName() ?? request()->path(),
+            'user_id' => Auth::check() ? Auth::id() : null,
+            'ip' => request()->ip(),
+            'x_client_app' => request()->header('X-Client-App'),
+            'trace' => collect(explode("\n", $e->getTraceAsString()))->take(15)->implode("\n"),
+        ];
     }
 }

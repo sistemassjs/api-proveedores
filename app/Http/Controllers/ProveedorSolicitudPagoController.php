@@ -162,89 +162,147 @@ class ProveedorSolicitudPagoController extends Controller
      */
     public function store(CrearSolicitudPagoRequest $request, Proveedor $proveedor): JsonResponse
     {
-        $validated = $request->validated();
-
-        $facturaPdf = $request->file('factura_pdf');
-        $facturaXml = $request->file('factura_xml');
-        $cotizacionFile = $request->file('cotizacion');
-
-        if (! $facturaPdf || ! $facturaXml) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Los archivos PDF y XML son obligatorios.',
-            ], 422);
-        }
-
-        $rutaPdf = $facturaPdf->store('facturas/pdf', 'private');
-        $rutaXml = $facturaXml->store('facturas/xml', 'private');
-
-        // Extraer datos del XML
-        $datosXml = $this->extraerDatosXML($facturaXml);
-
-        // Combinar serie y folio para formar el folio_factura
-        $serie = $datosXml['serie'] ?? '';
-        $folio = $datosXml['folio'] ?? '';
-        $folioFactura = trim($serie . ($serie && $folio ? '-' : '') . $folio) ?: null;
-
-        // Procesar archivo de cotización si existe
-        $rutaCotizacion = null;
-        if ($cotizacionFile) {
-            $rutaCotizacion = $cotizacionFile->store('cotizaciones', 'private');
-        }
-
-        $numeroFolio = SolicitudPago::generarNumeroFolio($proveedor);
-        $empresaConstructId = $validated['empresa_construcc_id'] ?? null;
-
-        // Datos del usuario de Construcc que genera la SP
-        $usuarioId = $validated['usuario_id'] ?? $validated['usuario_construcc_id'] ?? null;
-        $empresaConstrucc = $proveedor->empresasConstrucc()->where('empresa_construcc.id', $empresaConstructId)->firstOrFail();
-        $folio_consecutivo_construcc = $empresaConstrucc->obtenerFolioSiguienteSP();
-
-        $usuarioNombre = $validated['usuario_nombre'] ?? $validated['residente'] ?? null;
-        $cotizacion_id = $validated['cotizacion_id'] ?? null;
-        $montoTotal = $validated['monto_total'];
-
-        $solicitud = SolicitudPago::create([
+        Log::info('SPP store: inicio', [
             'proveedor_id' => $proveedor->id,
-            'usuario_creador_id' => $request->user()->id ?? null,
-            'numero_folio_solicitud' => $numeroFolio,
-            'folio_factura' => $folioFactura,
-            'datos_factura_xml' => $datosXml,
-            'descripcion_concepto' => $validated['descripcion_concepto'] ?? '',
-            'observaciones' => $validated['observaciones'] ?? null,
-            'ruta_archivo_factura_pdf' => $rutaPdf,
-            'ruta_archivo_factura_xml' => $rutaXml,
-            'ruta_archivo_cotizacion' => $rutaCotizacion,
-            // 
-            'folio_sp_consecutivo' => $folio_consecutivo_construcc,
-            'empresa_construcc_id' => $empresaConstructId,
-            'usuario_id' => $usuarioId,
-            'usuario_nombre' => $usuarioNombre,
-            'cotizacion_id' => $cotizacion_id,
-            'estado_solicitud' => 'pendiente',
-            'fecha_registro_pendiente' => now(),
-            'monto_total' => $montoTotal,
-            'saldo_pendiente' => $montoTotal,
-            'monto_abonado' => 0,
-            'pago_completo' => false,
-            'tiene_factura' => true,
+            'user_id' => $request->user()?->id,
+            'keys' => array_keys($request->all()),
+            'has_factura_pdf' => $request->hasFile('factura_pdf'),
+            'has_factura_xml' => $request->hasFile('factura_xml'),
+            'empresa_construcc_id' => $request->input('empresa_construcc_id'),
+            'monto_total' => $request->input('monto_total'),
         ]);
 
-        $solicitud->addNotification();
+        try {
+            $validated = $request->validated();
 
-        $this->interApiService->notifyNewSolicitudCompra($solicitud);
+            $facturaPdf = $request->file('factura_pdf');
+            $facturaXml = $request->file('factura_xml');
+            $cotizacionFile = $request->file('cotizacion');
 
-        // Sincronizar cuentas bancarias si se enviaron
-        if (array_key_exists('cuentas_bancarias', $validated) && is_array($validated['cuentas_bancarias'])) {
-            $solicitud->sincronizarCuentasBancarias($validated['cuentas_bancarias']);
+            if (! $facturaPdf || ! $facturaXml) {
+                Log::warning('SPP store: faltan archivos de factura', [
+                    'proveedor_id' => $proveedor->id,
+                    'has_pdf' => (bool) $facturaPdf,
+                    'has_xml' => (bool) $facturaXml,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Los archivos PDF y XML son obligatorios.',
+                ], 422);
+            }
+
+            Log::info('SPP store: guardando archivos', [
+                'proveedor_id' => $proveedor->id,
+                'pdf_size' => $facturaPdf->getSize(),
+                'xml_size' => $facturaXml->getSize(),
+                'pdf_mime' => $facturaPdf->getMimeType(),
+                'xml_mime' => $facturaXml->getMimeType(),
+            ]);
+
+            $rutaPdf = $facturaPdf->store('facturas/pdf', 'private');
+            $rutaXml = $facturaXml->store('facturas/xml', 'private');
+
+            // Extraer datos del XML
+            $datosXml = $this->extraerDatosXML($facturaXml);
+
+            // Combinar serie y folio para formar el folio_factura
+            $serie = $datosXml['serie'] ?? '';
+            $folio = $datosXml['folio'] ?? '';
+            $folioFactura = trim($serie . ($serie && $folio ? '-' : '') . $folio) ?: null;
+
+            // Procesar archivo de cotización si existe
+            $rutaCotizacion = null;
+            if ($cotizacionFile) {
+                $rutaCotizacion = $cotizacionFile->store('cotizaciones', 'private');
+            }
+
+            $numeroFolio = SolicitudPago::generarNumeroFolio($proveedor);
+            $empresaConstructId = $validated['empresa_construcc_id'] ?? null;
+
+            // Datos del usuario de Construcc que genera la SP
+            $usuarioId = $validated['usuario_id'] ?? $validated['usuario_construcc_id'] ?? null;
+
+            Log::info('SPP store: resolviendo empresa construcc', [
+                'proveedor_id' => $proveedor->id,
+                'empresa_construcc_id' => $empresaConstructId,
+                'usuario_id' => $usuarioId,
+                'numero_folio' => $numeroFolio,
+                'folio_factura' => $folioFactura,
+            ]);
+
+            $empresaConstrucc = $proveedor->empresasConstrucc()->where('empresa_construcc.id', $empresaConstructId)->firstOrFail();
+            $folio_consecutivo_construcc = $empresaConstrucc->obtenerFolioSiguienteSP();
+
+            $usuarioNombre = $validated['usuario_nombre'] ?? $validated['residente'] ?? null;
+            $cotizacion_id = $validated['cotizacion_id'] ?? null;
+            $montoTotal = $validated['monto_total'];
+
+            $solicitud = SolicitudPago::create([
+                'proveedor_id' => $proveedor->id,
+                'usuario_creador_id' => $request->user()->id ?? null,
+                'numero_folio_solicitud' => $numeroFolio,
+                'folio_factura' => $folioFactura,
+                'datos_factura_xml' => $datosXml,
+                'descripcion_concepto' => $validated['descripcion_concepto'] ?? '',
+                'observaciones' => $validated['observaciones'] ?? null,
+                'ruta_archivo_factura_pdf' => $rutaPdf,
+                'ruta_archivo_factura_xml' => $rutaXml,
+                'ruta_archivo_cotizacion' => $rutaCotizacion,
+                // 
+                'folio_sp_consecutivo' => $folio_consecutivo_construcc,
+                'empresa_construcc_id' => $empresaConstructId,
+                'usuario_id' => $usuarioId,
+                'usuario_nombre' => $usuarioNombre,
+                'cotizacion_id' => $cotizacion_id,
+                'estado_solicitud' => 'pendiente',
+                'fecha_registro_pendiente' => now(),
+                'monto_total' => $montoTotal,
+                'saldo_pendiente' => $montoTotal,
+                'monto_abonado' => 0,
+                'pago_completo' => false,
+                'tiene_factura' => true,
+            ]);
+
+            Log::info('SPP store: solicitud creada', [
+                'sp_id' => $solicitud->id,
+                'proveedor_id' => $proveedor->id,
+                'folio_sp_consecutivo' => $folio_consecutivo_construcc,
+                'numero_folio_solicitud' => $numeroFolio,
+            ]);
+
+            $solicitud->addNotification();
+
+            $notifyResult = $this->interApiService->notifyNewSolicitudCompra($solicitud);
+            Log::info('SPP store: notify InterAPI', [
+                'sp_id' => $solicitud->id,
+                'notify_success' => $notifyResult['success'] ?? null,
+                'notify_error' => $notifyResult['error'] ?? null,
+            ]);
+
+            // Sincronizar cuentas bancarias si se enviaron
+            if (array_key_exists('cuentas_bancarias', $validated) && is_array($validated['cuentas_bancarias'])) {
+                $solicitud->sincronizarCuentasBancarias($validated['cuentas_bancarias']);
+            }
+
+            return $this->success(
+                new SolicitudPagoResource($solicitud->load(['proveedor', 'empresaConstrucc', 'cuentasBancarias'])),
+                'Solicitud de pago creada correctamente.',
+                201
+            );
+        } catch (\Throwable $e) {
+            Log::error('SPP store: fallo', [
+                'proveedor_id' => $proveedor->id,
+                'user_id' => $request->user()?->id,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
         }
-
-
-        return $this->success(
-            new SolicitudPagoResource($solicitud->load(['proveedor', 'empresaConstrucc', 'cuentasBancarias'])),
-            'Solicitud de pago creada correctamente.',
-            201
-        );
     }
 
     /**
