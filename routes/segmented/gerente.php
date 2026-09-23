@@ -389,6 +389,10 @@ Route::prefix('proveedores')
             // Empresas de construcción para búsqueda
             Route::get('/empresas-constructoras', [ProveedorSolicitudPagoController::class, 'empresasConstructoras'])->middleware(['audit']);
 
+            // Crear solicitud
+            Route::post('/', [ProveedorSolicitudPagoController::class, 'store'])->middleware(['audit']);
+            Route::post('/sin-factura', [ProveedorSolicitudPagoController::class, 'storeSinFactura'])->middleware(['audit']);
+
                 Route::post('/{solicitudPago}/subir-comprobante', [ProveedorSolicitudPagoController::class, 'subirComprobantePago']);
                 Route::post('/{solicitudPago}/subir-factura', [ProveedorSolicitudPagoController::class, 'uploadFacturaPdfXml']);
                 Route::post('/{solicitudPago}/subir-factura-pdf', [ProveedorSolicitudPagoController::class, 'uploadFacturaPdf']);

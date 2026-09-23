@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
@@ -77,6 +78,14 @@ class Handler extends ExceptionHandler
                     'message' => 'Endpoint no encontrado',
                     'error_code' => 'ENDPOINT_NOT_FOUND',
                 ], 404);
+            }
+
+            if ($e instanceof MethodNotAllowedHttpException) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Método HTTP no permitido para este endpoint',
+                    'error_code' => 'METHOD_NOT_ALLOWED',
+                ], 405);
             }
 
             // Error genérico del servidor
