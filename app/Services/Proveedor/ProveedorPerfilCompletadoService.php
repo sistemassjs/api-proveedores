@@ -109,7 +109,7 @@ class ProveedorPerfilCompletadoService
         return [
             'puede_generar_sp' => $puedeGenerarSp,
             'detalle' => [
-                'perfil_empresa_completado' => $evaluacion['perfil_empresa_completado'],
+                'perfil_empresa_completo' => $evaluacion['perfil_empresa_completado'],
                 'tiene_cuenta_bancaria' => $tieneCuentaBancaria,
                 'tiene_constancia_fiscal' => $tieneConstanciaFiscal,
                 'tiene_logo' => true,

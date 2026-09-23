@@ -17,11 +17,11 @@ class ProveedorPuedeGenerarSPResource extends JsonResource
         return [
             'puede_generar_sp' => $this->resource['puede_generar_sp'],
             'detalle' => [
-                'perfil_empresa_completo' => $this->resource['detalle']['perfil_empresa_completo'],
-                'tiene_cuenta_bancaria' => $this->resource['detalle']['tiene_cuenta_bancaria'],
-                'tiene_constancia_fiscal' => $this->resource['detalle']['tiene_constancia_fiscal'],
-                'tiene_logo' => $this->resource['detalle']['tiene_logo'],
-                'tiene_informacion_general_y_datos_fiscales' => $this->resource['detalle']['tiene_informacion_general_y_datos_fiscales'],
+                'perfil_empresa_completo' => (bool) ($this->resource['detalle']['perfil_empresa_completo'] ?? false),
+                'tiene_cuenta_bancaria' => (bool) ($this->resource['detalle']['tiene_cuenta_bancaria'] ?? false),
+                'tiene_constancia_fiscal' => (bool) ($this->resource['detalle']['tiene_constancia_fiscal'] ?? false),
+                'tiene_logo' => (bool) ($this->resource['detalle']['tiene_logo'] ?? false),
+                'tiene_informacion_general_y_datos_fiscales' => (bool) ($this->resource['detalle']['tiene_informacion_general_y_datos_fiscales'] ?? false),
             ],
         ];
     }
