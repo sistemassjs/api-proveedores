@@ -12,6 +12,7 @@ class UserDeviceToken extends Model
 
     protected $fillable = [
         'user_id',
+        'app_key',
         'token',
         'platform',
         'device_id',
@@ -55,6 +56,27 @@ class UserDeviceToken extends Model
     public function scopeByPlatform($query, string $platform)
     {
         return $query->where('platform', $platform);
+    }
+
+    /**
+     * Scope por app cliente (gestion | nexprov)
+     */
+    public function scopeByAppKey($query, string $appKey)
+    {
+        return $query->where('app_key', \App\Support\ClientApp::normalize($appKey));
+    }
+
+    /**
+     * @param  list<string>  $appKeys
+     */
+    public function scopeByAppKeys($query, array $appKeys)
+    {
+        $normalized = array_values(array_unique(array_map(
+            fn (string $key) => \App\Support\ClientApp::normalize($key),
+            $appKeys
+        )));
+
+        return $query->whereIn('app_key', $normalized);
     }
 
     /**
@@ -102,6 +124,7 @@ class UserDeviceToken extends Model
     public function getDeviceInfoAttribute(): array
     {
         return [
+            'app_key' => $this->app_key,
             'platform' => $this->platform,
             'device_id' => $this->device_id,
             'device_name' => $this->device_name,

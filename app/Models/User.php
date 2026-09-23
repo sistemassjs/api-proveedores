@@ -412,16 +412,64 @@ class User extends Authenticatable
     }
 
     /**
-     * Obtiene todos los tokens activos para envío de push notifications
+     * Tokens FCM activos recientes de la app actual (X-Client-App / default gestion).
      *
-     * @return array Array de strings con los tokens FCM
+     * @return list<string>
      */
     public function getFcmTokensAttribute(): array
     {
+        return $this->fcmTokensForApps([\App\Support\ClientApp::key()]);
+    }
+
+    /**
+     * Tokens FCM activos recientes filtrados por app(s) cliente.
+     *
+     * @param  list<string>|string|null  $appKeys  null = app actual
+     * @return list<string>
+     */
+    public function fcmTokensForApps(array|string|null $appKeys = null): array
+    {
+        $keys = $this->normalizeFcmAppKeys($appKeys);
+
         return $this->activeDeviceTokens()
-            ->recentlyUsed(30) // Solo tokens usados en los últimos 30 días
+            ->recentlyUsed(30)
+            ->byAppKeys($keys)
             ->pluck('token')
             ->toArray();
+    }
+
+    /**
+     * ¿Hay tokens activos (sin filtro de “recién usados”) para esas apps?
+     *
+     * @param  list<string>|string|null  $appKeys
+     */
+    public function hasActiveDeviceTokensForApps(array|string|null $appKeys = null): bool
+    {
+        $keys = $this->normalizeFcmAppKeys($appKeys);
+
+        return $this->activeDeviceTokens()
+            ->byAppKeys($keys)
+            ->exists();
+    }
+
+    /**
+     * @param  list<string>|string|null  $appKeys
+     * @return list<string>
+     */
+    private function normalizeFcmAppKeys(array|string|null $appKeys): array
+    {
+        if ($appKeys === null) {
+            return [\App\Support\ClientApp::key()];
+        }
+
+        if (is_string($appKeys)) {
+            return [\App\Support\ClientApp::normalize($appKeys)];
+        }
+
+        return array_values(array_unique(array_map(
+            fn (string $key) => \App\Support\ClientApp::normalize($key),
+            $appKeys
+        )));
     }
 
 

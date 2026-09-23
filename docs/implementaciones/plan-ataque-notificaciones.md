@@ -6,6 +6,8 @@ Fuera de alcance: orden de compra (nunca implementado).
 
 Documento de contexto: [notificaciones-reverb-firebase.md](./notificaciones-reverb-firebase.md)
 
+**Hecho (multi-app):** segmentación FCM por `app_key` — ver [notificaciones-segmentacion-apps.md](./notificaciones-segmentacion-apps.md).
+
 ---
 
 ## Estado actual (recordatorio)

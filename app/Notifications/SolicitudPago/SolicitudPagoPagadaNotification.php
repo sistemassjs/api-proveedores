@@ -44,7 +44,7 @@ class SolicitudPagoPagadaNotification extends Notification implements ShouldBroa
             $via[] = 'mail';
         }
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -140,12 +140,7 @@ class SolicitudPagoPagadaNotification extends Notification implements ShouldBroa
      */
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -165,7 +160,7 @@ class SolicitudPagoPagadaNotification extends Notification implements ShouldBroa
         ];
 
         $data = $this->addStylesToData($data);
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     /**

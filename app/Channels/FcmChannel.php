@@ -3,12 +3,14 @@
 namespace App\Channels;
 
 use App\Services\FcmService;
+use App\Support\ClientApp;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
 /**
- * Canal personalizado para enviar notificaciones push mediante Firebase Cloud Messaging
+ * Canal personalizado para enviar notificaciones push mediante Firebase Cloud Messaging.
+ * Filtra tokens por app_key (gestion | nexprov).
  */
 class FcmChannel
 {
@@ -28,38 +30,38 @@ class FcmChannel
      */
     public function send($notifiable, Notification $notification): void
     {
-        // Verificar que la notificación tenga el método toFcm
-        if (!method_exists($notification, 'toFcm')) {
+        if (! method_exists($notification, 'toFcm')) {
             Log::warning('FCM Channel: La notificación no tiene método toFcm()', [
                 'notification' => get_class($notification),
             ]);
+
             return;
         }
 
         try {
-            // Obtener tokens activos del usuario
-            $tokens = $notifiable->fcm_tokens;
+            $appKeys = method_exists($notification, 'fcmTargetAppKeys')
+                ? $notification->fcmTargetAppKeys()
+                : [ClientApp::key()];
 
-            if (empty($tokens)) {
-                Log::info('FCM Channel: Usuario sin tokens activos', [
-                    'user_id' => $notifiable->id,
-                ]);
-                return;
-            }
-
-            // Obtener el payload de la notificación
             $payload = $notification->toFcm($notifiable);
 
-            if (!isset($payload['notification']) || !isset($payload['data'])) {
-                Log::error('FCM Channel: Payload inválido', [
-                    'payload' => $payload,
-                ]);
+            // toFcm() void: la Notification ya envió (sendFcmToNotifiable). No reenviar.
+            if ($payload === null || ! is_array($payload)) {
                 return;
             }
 
-            // Enviar la notificación
-            $success = $this->fcmService->sendToTokens(
-                $tokens,
+            if (! isset($payload['notification']) || ! isset($payload['data'])) {
+                Log::error('FCM Channel: Payload inválido', [
+                    'payload' => $payload,
+                    'notification' => get_class($notification),
+                ]);
+
+                return;
+            }
+
+            $success = $this->fcmService->sendToNotifiableApps(
+                $notifiable,
+                $appKeys,
                 $payload['notification'],
                 $payload['data']
             );
@@ -67,19 +69,18 @@ class FcmChannel
             if ($success) {
                 Log::info('FCM Channel: Notificación enviada exitosamente', [
                     'user_id' => $notifiable->id,
-                    'tokens_count' => count($tokens),
+                    'app_keys' => $appKeys,
                     'notification' => get_class($notification),
                 ]);
             } else {
                 Log::warning('FCM Channel: Fallo al enviar notificación', [
                     'user_id' => $notifiable->id,
-                    'tokens_count' => count($tokens),
+                    'app_keys' => $appKeys,
                 ]);
             }
-
         } catch (Exception $e) {
             Log::error('FCM Channel: Error enviando notificación', [
-                'user_id' => $notifiable->id,
+                'user_id' => $notifiable->id ?? null,
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

@@ -50,8 +50,7 @@ class SolicitudPagoFacturaSubidaNotification extends Notification implements Sho
     }
 
     if (
-      method_exists($notifiable, 'deviceTokens') &&
-      $notifiable->deviceTokens()->where('is_active', true)->exists()
+      $this->notifiableHasFcmTokens($notifiable)
     ) {
       $via[] = 'fcm';
     }
@@ -126,17 +125,11 @@ class SolicitudPagoFacturaSubidaNotification extends Notification implements Sho
    */
   public function toFcm(object $notifiable): void
   {
-    $tokens = $notifiable->deviceTokens()
-      ->where('is_active', true)
-      ->pluck('token')
-      ->toArray();
+    if (! $this->notifiableHasFcmTokens($notifiable)) {
+            return;
+        }
 
-    if (empty($tokens)) {
-      return;
-    }
-
-    app(FcmService::class)->sendToTokens(
-      $tokens,
+    $this->sendFcmToNotifiable($notifiable,
       [
         'title' => 'Factura subida',
         'body' => "La solicitud #{$this->solicitudPagoFolio} ya cuenta con factura.",

@@ -50,8 +50,7 @@ class SolicitudPagoComprobanteActualizadoNotification extends Notification imple
     }
 
     if (
-      method_exists($notifiable, 'deviceTokens') &&
-      $notifiable->deviceTokens()->where('is_active', true)->exists()
+      $this->notifiableHasFcmTokens($notifiable)
     ) {
       $via[] = 'fcm';
     }
@@ -152,14 +151,9 @@ class SolicitudPagoComprobanteActualizadoNotification extends Notification imple
    */
   public function toFcm(object $notifiable): void
   {
-    $tokens = $notifiable->deviceTokens()
-      ->where('is_active', true)
-      ->pluck('token')
-      ->toArray();
-
-    if (empty($tokens)) {
-      return;
-    }
+    if (! $this->notifiableHasFcmTokens($notifiable)) {
+            return;
+        }
 
     $notification = [
       'title' => 'Comprobante actualizado #' . $this->solicitudPagoFolio,
@@ -178,7 +172,7 @@ class SolicitudPagoComprobanteActualizadoNotification extends Notification imple
 
     $data = $this->addStylesToData($data);
 
-    app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+    $this->sendFcmToNotifiable($notifiable, $notification, $data);
   }
 
   /**

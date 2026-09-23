@@ -26,8 +26,7 @@ class PresupuestoRecibidoClienteProveedorNotification extends Notification imple
     {
         $via = ['broadcast', 'database'];
         if (
-            method_exists($notifiable, 'deviceTokens')
-            && $notifiable->deviceTokens()->where('is_active', true)->exists()
+            $this->notifiableHasFcmTokens($notifiable)
         ) {
             $via[] = 'fcm';
         }
@@ -52,12 +51,7 @@ class PresupuestoRecibidoClienteProveedorNotification extends Notification imple
 
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -90,7 +84,7 @@ class PresupuestoRecibidoClienteProveedorNotification extends Notification imple
 
         $data = $this->addStylesToData($data);
 
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     private function baseData(): array

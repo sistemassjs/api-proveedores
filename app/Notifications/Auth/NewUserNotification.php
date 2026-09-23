@@ -31,7 +31,7 @@ class NewUserNotification extends Notification implements ShouldBroadcastNow
     {
         $via = ['broadcast', 'database'];
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -72,12 +72,7 @@ class NewUserNotification extends Notification implements ShouldBroadcastNow
 
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -96,7 +91,7 @@ class NewUserNotification extends Notification implements ShouldBroadcastNow
         ];
 
         $data = $this->addStylesToData($data);
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     protected function getNotificationTipo(): string

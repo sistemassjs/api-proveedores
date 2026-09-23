@@ -2,10 +2,9 @@
 
 namespace App\Notifications\ProveedorEmpresa;
 
-use App\Services\FcmService;
 use App\Traits\NotificationCorrelationId;
+use App\Traits\TargetsClientApp;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -15,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 class ProveedorAsociadoAEmpresaNotification extends Notification implements ShouldBroadcastNow
 {
     use NotificationCorrelationId;
+    use TargetsClientApp;
     use Queueable;
 
     private int $proveedorId;
@@ -61,7 +61,7 @@ class ProveedorAsociadoAEmpresaNotification extends Notification implements Shou
         }
 
         // Agregar canal FCM si el proveedor tiene tokens activos
-        if ($notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $channels[] = 'fcm';
         }
 
@@ -158,40 +158,33 @@ class ProveedorAsociadoAEmpresaNotification extends Notification implements Shou
     public function toFcm(object $notifiable): void
     {
         try {
-            $tokens = $notifiable->deviceTokens()
-                ->where('is_active', true)
-                ->pluck('token')
-                ->toArray();
-
-            if (empty($tokens)) {
+            if (! $this->notifiableHasFcmTokens($notifiable)) {
                 return;
             }
-
-            $fcmService = app(FcmService::class);
 
             $notification = [
                 'title' => "🏢 Nueva Asociación con Empresa",
                 'body' => "Has sido vinculado con {$this->empresaNombre}. Ahora puedes gestionar solicitudes de pago con esta empresa.",
             ];
 
-            $data = $this->withNotificationCorrelationId([
+            $data = $this->withClientAppMeta($this->withNotificationCorrelationId([
                 'tipo' => 'asociacion_empresa',
                 'subtipo' => 'nueva_asociacion',
-                'proveedor_id' => (string)$this->proveedorId,
-                'empresa_id' => (string)$this->empresaId,
+                'proveedor_id' => (string) $this->proveedorId,
+                'empresa_id' => (string) $this->empresaId,
                 'empresa_nombre' => $this->empresaNombre,
                 'empresa_rfc' => $this->empresaRfc,
                 'usuario_construcc_nombre' => $this->usuarioConstruccNombre,
                 'estatus' => 'asociado',
                 'timestamp' => now()->toIso8601String(),
-            ]);
+            ]));
 
-            $fcmService->sendToTokens($tokens, $notification, $data);
+            $this->sendFcmToNotifiable($notifiable, $notification, $data);
 
             Log::info('Notificación FCM de asociación empresa enviada', [
                 'proveedor_id' => $this->proveedorId,
                 'empresa_id' => $this->empresaId,
-                'tokens_count' => count($tokens),
+                'app_keys' => $this->fcmTargetAppKeys(),
             ]);
         } catch (\Exception $e) {
             Log::error('Error al enviar notificación FCM de asociación empresa', [

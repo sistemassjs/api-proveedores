@@ -44,7 +44,7 @@ class SolicitudPagoRechazadaSinAutorizacionNotification extends Notification imp
             $via[] = 'mail';
         }
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -137,12 +137,7 @@ class SolicitudPagoRechazadaSinAutorizacionNotification extends Notification imp
      */
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -165,7 +160,7 @@ class SolicitudPagoRechazadaSinAutorizacionNotification extends Notification imp
             'timestamp' => now()->toIso8601String(),
         ];
 
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
 

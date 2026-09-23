@@ -4,47 +4,36 @@ namespace App\Http\Controllers\Notifications;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserDeviceToken;
+use App\Support\ClientApp;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 /**
  * Controller para manejar tokens de dispositivos FCM
  * Permite registrar, actualizar y gestionar tokens de push notifications
+ * Segmentados por app_key (gestion | nexprov).
  */
 class DeviceTokenController extends Controller
 {
     /**
-     * @OA\Post(
-     *     path="/api/device-tokens",
-     *     summary="Registrar token de dispositivo para notificaciones push",
-     *     tags={"Notificaciones"},
-     *     security={{"bearerAuth":{}}},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             required={"token", "platform"},
-     *             @OA\Property(property="token", type="string", example="FCM_TOKEN_HERE"),
-     *             @OA\Property(property="platform", type="string", enum={"ios", "android", "web"}),
-     *             @OA\Property(property="device_id", type="string", nullable=true),
-     *             @OA\Property(property="device_name", type="string", nullable=true)
-     *         )
-     *     ),
-     *     @OA\Response(response=201, description="Token registrado correctamente")
-     * )
      * Registrar o actualizar un token de dispositivo
      */
     public function store(Request $request): JsonResponse
     {
         try {
+            $allowedApps = ClientApp::keys();
+
             $validator = Validator::make($request->all(), [
                 'token' => 'required|string|max:255',
                 'platform' => 'required|in:ios,android,web',
                 'device_id' => 'nullable|string|max:255',
                 'device_name' => 'nullable|string|max:255',
                 'metadata' => 'nullable|array',
+                'app_key' => ['nullable', 'string', Rule::in($allowedApps)],
             ]);
 
             if ($validator->fails()) {
@@ -57,27 +46,32 @@ class DeviceTokenController extends Controller
 
             $user = Auth::user();
             $validated = $validator->validated();
+            $appKey = ClientApp::normalize($validated['app_key'] ?? ClientApp::key());
+
+            $metadata = array_merge($validated['metadata'] ?? [], [
+                'app_key' => $appKey,
+            ]);
 
             // Buscar token existente por token exacto (independiente del usuario)
-            // El token es único globalmente, puede que otro usuario lo tenga
             $existingToken = UserDeviceToken::where('token', $validated['token'])->first();
 
-            // Si no existe, buscar por device_id del mismo usuario
-            if (!$existingToken && isset($validated['device_id'])) {
+            // Si no existe, buscar por device_id + app_key del mismo usuario
+            if (! $existingToken && isset($validated['device_id'])) {
                 $existingToken = UserDeviceToken::where('user_id', $user->id)
                     ->where('device_id', $validated['device_id'])
+                    ->where('app_key', $appKey)
                     ->first();
             }
 
             if ($existingToken) {
-                // Actualizar token existente (puede cambiar de usuario)
                 $existingToken->update([
-                    'user_id' => $user->id, // Actualizar el usuario si cambió
+                    'user_id' => $user->id,
+                    'app_key' => $appKey,
                     'token' => $validated['token'],
                     'platform' => $validated['platform'],
                     'device_id' => $validated['device_id'] ?? $existingToken->device_id,
                     'device_name' => $validated['device_name'] ?? $existingToken->device_name,
-                    'metadata' => array_merge($existingToken->metadata ?? [], $validated['metadata'] ?? []),
+                    'metadata' => array_merge($existingToken->metadata ?? [], $metadata),
                     'last_used_at' => now(),
                     'is_active' => true,
                 ]);
@@ -91,37 +85,39 @@ class DeviceTokenController extends Controller
                         'id' => $existingToken->id,
                         'token' => $existingToken->token,
                         'platform' => $existingToken->platform,
+                        'app_key' => $existingToken->app_key,
                         'device_info' => $existingToken->device_info,
                         'updated' => true,
                     ],
                 ]);
-            } else {
-                // Crear nuevo token
-                $deviceToken = UserDeviceToken::create([
-                    'user_id' => $user->id,
-                    'token' => $validated['token'],
-                    'platform' => $validated['platform'],
-                    'device_id' => $validated['device_id'],
-                    'device_name' => $validated['device_name'],
-                    'metadata' => $validated['metadata'] ?? [],
-                    'last_used_at' => now(),
-                    'is_active' => true,
-                ]);
-
-                $this->deactivateStaleSiblingTokens((int) $user->id, $deviceToken);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Token registrado correctamente',
-                    'data' => [
-                        'id' => $deviceToken->id,
-                        'token' => $deviceToken->token,
-                        'platform' => $deviceToken->platform,
-                        'device_info' => $deviceToken->device_info,
-                        'created' => true,
-                    ],
-                ], 201);
             }
+
+            $deviceToken = UserDeviceToken::create([
+                'user_id' => $user->id,
+                'app_key' => $appKey,
+                'token' => $validated['token'],
+                'platform' => $validated['platform'],
+                'device_id' => $validated['device_id'] ?? null,
+                'device_name' => $validated['device_name'] ?? null,
+                'metadata' => $metadata,
+                'last_used_at' => now(),
+                'is_active' => true,
+            ]);
+
+            $this->deactivateStaleSiblingTokens((int) $user->id, $deviceToken);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Token registrado correctamente',
+                'data' => [
+                    'id' => $deviceToken->id,
+                    'token' => $deviceToken->token,
+                    'platform' => $deviceToken->platform,
+                    'app_key' => $deviceToken->app_key,
+                    'device_info' => $deviceToken->device_info,
+                    'created' => true,
+                ],
+            ], 201);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
@@ -132,15 +128,6 @@ class DeviceTokenController extends Controller
     }
 
     /**
-     * @OA\Get(
-     *     path="/api/device-tokens",
-     *     summary="Listar tokens de dispositivos del usuario",
-     *     tags={"Notificaciones"},
-     *     security={{"bearerAuth":{}}},
-     *     @OA\Parameter(name="platform", in="query", required=false, @OA\Schema(type="string")),
-     *     @OA\Parameter(name="active", in="query", required=false, @OA\Schema(type="boolean")),
-     *     @OA\Response(response=200, description="Lista de tokens")
-     * )
      * Obtener todos los tokens del usuario autenticado
      */
     public function index(Request $request): JsonResponse
@@ -150,12 +137,14 @@ class DeviceTokenController extends Controller
 
             $query = $user->deviceTokens();
 
-            // Filtrar por plataforma si se especifica
             if ($request->has('platform')) {
                 $query->byPlatform($request->platform);
             }
 
-            // Filtrar por estado activo si se especifica
+            if ($request->filled('app_key')) {
+                $query->byAppKey($request->string('app_key')->toString());
+            }
+
             if ($request->has('active')) {
                 if ($request->boolean('active')) {
                     $query->active();
@@ -173,18 +162,19 @@ class DeviceTokenController extends Controller
                 'data' => $tokens->map(function ($token) {
                     return [
                         'id' => $token->id,
+                        'app_key' => $token->app_key,
                         'platform' => $token->platform,
                         'device_info' => $token->device_info,
                         'is_active' => $token->is_active,
                         'created_at' => $token->created_at->toISOString(),
                         'last_used_at' => $token->last_used_at?->toISOString(),
-                        // No incluir el token por seguridad
                     ];
                 }),
                 'meta' => [
                     'total' => $tokens->count(),
                     'active' => $tokens->where('is_active', true)->count(),
                     'platforms' => $tokens->groupBy('platform')->keys()->toArray(),
+                    'apps' => $tokens->groupBy('app_key')->keys()->toArray(),
                 ],
             ]);
         } catch (Exception $e) {
@@ -219,9 +209,12 @@ class DeviceTokenController extends Controller
                 ], 422);
             }
 
+            $appKey = ClientApp::normalize($request->input('app_key', ClientApp::key()));
+
             $updated = UserDeviceToken::query()
                 ->where('user_id', $user->id)
                 ->where('token', $token)
+                ->where('app_key', $appKey)
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
 
@@ -230,6 +223,7 @@ class DeviceTokenController extends Controller
                 'message' => 'Token de dispositivo desactivado',
                 'data' => [
                     'deactivated' => $updated > 0,
+                    'app_key' => $appKey,
                 ],
             ]);
         } catch (Exception $e) {
@@ -286,14 +280,20 @@ class DeviceTokenController extends Controller
     {
         try {
             $user = Auth::user();
-            $days = $request->get('days', 60); // Por defecto 60 días
+            $days = $request->get('days', 60);
 
             $expiredTokens = $user->deviceTokens()
-                ->where('last_used_at', '<', now()->subDays($days))
-                ->orWhere(function ($query) use ($days) {
-                    $query->whereNull('last_used_at')
-                        ->where('created_at', '<', now()->subDays($days));
+                ->where(function ($query) use ($days) {
+                    $query->where('last_used_at', '<', now()->subDays($days))
+                        ->orWhere(function ($q) use ($days) {
+                            $q->whereNull('last_used_at')
+                                ->where('created_at', '<', now()->subDays($days));
+                        });
                 });
+
+            if ($request->filled('app_key')) {
+                $expiredTokens->byAppKey($request->string('app_key')->toString());
+            }
 
             $count = $expiredTokens->count();
             $expiredTokens->delete();
@@ -329,21 +329,22 @@ class DeviceTokenController extends Controller
 
         try {
             $user = Auth::user();
-            $tokens = $user->fcm_tokens;
+            $appKey = ClientApp::normalize($request->input('app_key', ClientApp::key()));
+            $tokens = $user->fcmTokensForApps([$appKey]);
 
             if (empty($tokens)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No hay tokens activos para este usuario',
+                    'message' => 'No hay tokens activos para este usuario/app',
+                    'data' => ['app_key' => $appKey],
                 ]);
             }
-
-            // Aquí iría la lógica de envío de FCM cuando esté implementada
 
             return response()->json([
                 'success' => true,
                 'message' => 'Notificación de prueba programada',
                 'data' => [
+                    'app_key' => $appKey,
                     'tokens_count' => count($tokens),
                     'test_payload' => [
                         'title' => 'Notificación de prueba',
@@ -351,6 +352,7 @@ class DeviceTokenController extends Controller
                         'data' => [
                             'type' => 'general',
                             'action' => 'view',
+                            'app_key' => $appKey,
                             'timestamp' => now()->toISOString(),
                         ],
                     ],
@@ -366,31 +368,27 @@ class DeviceTokenController extends Controller
     }
 
     /**
-     * Desactiva hermanos obsoletos del mismo usuario/plataforma sin adivinar dispositivos activos.
-     *
-     * Criterios (evidencia temporal + identidad de dispositivo):
-     * 1) Mismo device_id distinto al token actual → token rotado en ese dispositivo.
-     * 2) Misma plataforma, distinto device_id y sin uso reciente (≥ 30 días) → sesión abandonada.
-     *
-     * No toca tokens recientes de otros device_id (permite multi-dispositivo real).
+     * Desactiva hermanos obsoletos del mismo usuario/app/plataforma.
+     * No toca tokens de otra app_key (GestionPlus vs NexProv).
      */
     private function deactivateStaleSiblingTokens(int $userId, UserDeviceToken $current): void
     {
         $staleBefore = now()->subDays(30);
+        $appKey = $current->app_key ?: ClientApp::key();
 
-        // 1) Rotación en el mismo device_id
         if (! empty($current->device_id)) {
             UserDeviceToken::query()
                 ->where('user_id', $userId)
+                ->where('app_key', $appKey)
                 ->where('id', '!=', $current->id)
                 ->where('device_id', $current->device_id)
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
         }
 
-        // 2) Otras sesiones de la misma plataforma sin uso reciente
         UserDeviceToken::query()
             ->where('user_id', $userId)
+            ->where('app_key', $appKey)
             ->where('id', '!=', $current->id)
             ->where('platform', $current->platform)
             ->where('is_active', true)

@@ -2,6 +2,8 @@
 
 Documento de análisis extraído de **api-proveedores** (backend Laravel) y **app-proveedores** (frontend Angular/Ionic). Sirve para replicar el mismo esquema en otra aplicación.
 
+**Multi-app:** GestionPlus (`gestion`) y NexProv (`nexprov`) comparten API; el push se segmenta por `app_key`. Detalle: [notificaciones-segmentacion-apps.md](./notificaciones-segmentacion-apps.md).
+
 No hay paquete `kreait/laravel-firebase`. FCM se envía con HTTP v1 y un service account. Reverb usa el protocolo compatible con Pusher.
 
 ---

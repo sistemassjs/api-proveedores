@@ -43,8 +43,7 @@ class SolicitudPagoSinFacturaNotification extends Notification implements Should
     }
 
     if (
-      method_exists($notifiable, 'deviceTokens') &&
-      $notifiable->deviceTokens()->where('is_active', true)->exists()
+      $this->notifiableHasFcmTokens($notifiable)
     ) {
       $via[] = 'fcm';
     }
@@ -97,17 +96,11 @@ class SolicitudPagoSinFacturaNotification extends Notification implements Should
    */
   public function toFcm(object $notifiable): void
   {
-    $tokens = $notifiable->deviceTokens()
-      ->where('is_active', true)
-      ->pluck('token')
-      ->toArray();
+    if (! $this->notifiableHasFcmTokens($notifiable)) {
+            return;
+        }
 
-    if (empty($tokens)) {
-      return;
-    }
-
-    app(FcmService::class)->sendToTokens(
-      $tokens,
+    $this->sendFcmToNotifiable($notifiable,
       [
         'title' => 'Solicitud de pago sin factura',
         'body' => "La solicitud #{$this->solicitudPagoFolio} no tiene factura.",

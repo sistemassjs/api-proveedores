@@ -49,7 +49,7 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
             $via[] = 'mail';
         }
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -110,12 +110,7 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
      */
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -140,7 +135,7 @@ class UsuarioReasignadoNotification extends Notification implements ShouldBroadc
             'timestamp' => $this->fechaAsignacion,
         ]);
 
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     protected function getNotificationTipo(): string

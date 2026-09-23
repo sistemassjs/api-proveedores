@@ -118,6 +118,62 @@ class FcmService
     }
 
     /**
+     * Envía push solo a tokens de las apps indicadas (gestion | nexprov).
+     * Inyecta app_key en data por lote para que el front ignore cruces.
+     *
+     * @param  object  $notifiable  User (o notifiable con fcmTokensForApps)
+     * @param  list<string>  $appKeys
+     * @param  array{title?: string, body?: string}  $notification
+     * @param  array<string, mixed>  $data
+     */
+    public function sendToNotifiableApps(
+        object $notifiable,
+        array $appKeys,
+        array $notification,
+        array $data = []
+    ): bool {
+        if (! method_exists($notifiable, 'fcmTokensForApps')) {
+            Log::warning('FCM: notifiable sin fcmTokensForApps');
+
+            return false;
+        }
+
+        if ($appKeys === []) {
+            Log::warning('FCM: sin app_keys destino');
+
+            return false;
+        }
+
+        $anySent = false;
+        $success = true;
+
+        foreach ($appKeys as $appKey) {
+            $tokens = $notifiable->fcmTokensForApps([$appKey]);
+            if ($tokens === []) {
+                continue;
+            }
+
+            $anySent = true;
+            $payloadData = array_merge($data, ['app_key' => $appKey]);
+
+            if (! $this->sendToTokens($tokens, $notification, $payloadData)) {
+                $success = false;
+            }
+        }
+
+        if (! $anySent) {
+            Log::info('FCM: sin tokens para apps destino', [
+                'user_id' => $notifiable->id ?? null,
+                'app_keys' => $appKeys,
+            ]);
+
+            return false;
+        }
+
+        return $success;
+    }
+
+    /**
      * Enviar solicitud HTTP a FCM v1
      */
     private function sendRequest(array $payload): bool

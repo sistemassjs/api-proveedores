@@ -2,17 +2,19 @@
 
 namespace App\Notifications;
 
+use App\Traits\NotificationCorrelationId;
+use App\Traits\TargetsClientApp;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Notifications\Notification;
-use App\Traits\NotificationCorrelationId;
 
 class PushNotification extends Notification implements ShouldBroadcastNow
 {
     use NotificationCorrelationId;
+    use TargetsClientApp;
     use Queueable;
 
     public $title;
@@ -45,7 +47,7 @@ class PushNotification extends Notification implements ShouldBroadcastNow
     {
         $via = ['broadcast', 'database'];
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -57,14 +59,14 @@ class PushNotification extends Notification implements ShouldBroadcastNow
      */
     public function toBroadcast(object $notifiable): BroadcastMessage
     {
-        return new BroadcastMessage($this->withNotificationCorrelationId([
+        return new BroadcastMessage($this->withClientAppMeta($this->withNotificationCorrelationId([
             'tipo' => $this->type,
             'titulo' => $this->title,
             'mensaje' => $this->message,
             'action_url' => $this->actionUrl,
             'data' => $this->data,
             'timestamp' => now()->toIso8601String(),
-        ]));
+        ])));
     }
 
     public function broadcastType(): string
@@ -93,14 +95,14 @@ class PushNotification extends Notification implements ShouldBroadcastNow
      */
     public function toArray(object $notifiable): array
     {
-        return $this->withNotificationCorrelationId([
+        return $this->withClientAppMeta($this->withNotificationCorrelationId([
             'tipo' => $this->type,
             'titulo' => $this->title,
             'mensaje' => $this->message,
             'action_url' => $this->actionUrl,
             'data' => $this->data,
             'timestamp' => now()->toIso8601String(),
-        ]);
+        ]));
     }
 
     /**
@@ -122,14 +124,14 @@ class PushNotification extends Notification implements ShouldBroadcastNow
                 'title' => $icon . ' ' . $this->title,
                 'body' => $this->message,
             ],
-            'data' => $this->withNotificationCorrelationId(array_merge(
+            'data' => $this->withClientAppMeta($this->withNotificationCorrelationId(array_merge(
                 $this->data,
                 [
                     'tipo' => $this->type,
                     'action_url' => $this->actionUrl,
                     'timestamp' => now()->toIso8601String(),
                 ]
-            )),
+            ))),
         ];
     }
 }

@@ -39,7 +39,7 @@ class NuevaOrdenCompraNotification extends Notification implements ShouldBroadca
             $via[] = 'mail';
         }
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -131,12 +131,7 @@ class NuevaOrdenCompraNotification extends Notification implements ShouldBroadca
      */
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -157,7 +152,7 @@ class NuevaOrdenCompraNotification extends Notification implements ShouldBroadca
         ];
 
         $data = $this->addStylesToData($data);
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     /**

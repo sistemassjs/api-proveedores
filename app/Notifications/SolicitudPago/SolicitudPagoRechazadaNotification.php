@@ -44,7 +44,7 @@ class SolicitudPagoRechazadaNotification extends Notification implements ShouldB
             $via[] = 'mail';
         }
 
-        if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+        if ($this->notifiableHasFcmTokens($notifiable)) {
             $via[] = 'fcm';
         }
 
@@ -138,14 +138,10 @@ class SolicitudPagoRechazadaNotification extends Notification implements ShouldB
      */
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
+
         $notification = [
             'title' => 'Solicitud de pago rechazada #' . $this->solicitudPagoFolio,
             'body' => $this->motivo
@@ -164,7 +160,7 @@ class SolicitudPagoRechazadaNotification extends Notification implements ShouldB
         ];
 
         $data = $this->addStylesToData($data);
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     /**

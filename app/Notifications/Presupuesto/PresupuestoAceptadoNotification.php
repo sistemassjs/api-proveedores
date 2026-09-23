@@ -26,8 +26,7 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
         $via = ['broadcast', 'database'];
 
         if (
-            method_exists($notifiable, 'deviceTokens') &&
-            $notifiable->deviceTokens()->where('is_active', true)->exists()
+            $this->notifiableHasFcmTokens($notifiable)
         ) {
             $via[] = 'fcm';
         }
@@ -94,12 +93,7 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
      */
     public function toFcm(object $notifiable): void
     {
-        $tokens = $notifiable->deviceTokens()
-            ->where('is_active', true)
-            ->pluck('token')
-            ->toArray();
-
-        if (empty($tokens)) {
+        if (! $this->notifiableHasFcmTokens($notifiable)) {
             return;
         }
 
@@ -130,7 +124,7 @@ class PresupuestoAceptadoNotification extends Notification implements ShouldBroa
 
         $data = $this->addStylesToData($data);
 
-        app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+        $this->sendFcmToNotifiable($notifiable, $notification, $data);
     }
 
     /**

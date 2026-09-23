@@ -5,6 +5,7 @@ namespace App\Traits;
 trait NotificationStyleTrait
 {
     use NotificationCorrelationId;
+    use TargetsClientApp;
 
     /**
      * Obtiene los estilos de la notificación (color, icono, clase CSS)
@@ -308,12 +309,12 @@ trait NotificationStyleTrait
     {
         $styles = $this->getNotificationStyles();
 
-        return array_merge($data, [
+        return $this->withClientAppMeta(array_merge($data, [
             'notification_correlation_id' => $this->notificationCorrelationId(),
             'color' => $styles['color'],
             'icon' => $styles['icon'],
             'style_class' => $styles['style_class'],
             'is_payment' => $styles['is_payment'] ?? false,
-        ]);
+        ]));
     }
 }

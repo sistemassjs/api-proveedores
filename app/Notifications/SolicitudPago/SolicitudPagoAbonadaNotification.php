@@ -56,7 +56,7 @@ class SolicitudPagoAbonadaNotification extends Notification implements ShouldBro
       $via[] = 'mail';
     }
 
-    if (method_exists($notifiable, 'deviceTokens') && $notifiable->deviceTokens()->where('is_active', true)->exists()) {
+    if ($this->notifiableHasFcmTokens($notifiable)) {
       $via[] = 'fcm';
     }
 
@@ -148,14 +148,9 @@ class SolicitudPagoAbonadaNotification extends Notification implements ShouldBro
    */
   public function toFcm(object $notifiable): void
   {
-    $tokens = $notifiable->deviceTokens()
-      ->where('is_active', true)
-      ->pluck('token')
-      ->toArray();
-
-    if (empty($tokens)) {
-      return;
-    }
+    if (! $this->notifiableHasFcmTokens($notifiable)) {
+            return;
+        }
 
     $notification = [
       'title' => 'Abono registrado - SPP #' . $this->solicitudPagoFolio,
@@ -177,7 +172,7 @@ class SolicitudPagoAbonadaNotification extends Notification implements ShouldBro
     ];
 
     $data = $this->addStylesToData($data);
-    app(FcmService::class)->sendToTokens($tokens, $notification, $data);
+    $this->sendFcmToNotifiable($notifiable, $notification, $data);
   }
 
   /**
