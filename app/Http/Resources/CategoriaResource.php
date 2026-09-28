@@ -11,6 +11,7 @@ class CategoriaResource extends JsonResource
         return [
             'id' => $this->id,
             'nombre' => $this->nombre,
+            'descripcion' => $this->descripcion,
             'estatus' => $this->estatus,
             'subcategorias' => $this->whenLoaded('children'),  // Aquí cargamos las subcategorías si están disponibles
         ];
