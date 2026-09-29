@@ -600,28 +600,123 @@
                     margin-top: 1mm;
                 }
 
-                .concepto-matriz-desglose {
-                    margin-top: 1.2mm;
-                    padding-left: 1.5mm;
-                    border-left: 0.4mm solid #cbd5e1;
+                .presupuesto-table tbody tr.linea-con-matriz > td {
+                    border-bottom: 0;
+                    padding-bottom: 0.6mm;
                 }
 
-                .concepto-matriz-desglose__row {
-                    padding: 0.4mm 0 0.4mm 1.5mm;
-                    font-size: 7.5pt;
-                    line-height: 1.25;
+                .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td {
+                    border-top: 0;
+                    padding-top: 0;
+                    vertical-align: top;
+                    background: transparent;
+                }
+
+                .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num {
+                    border-right: 1px solid #e9ecef;
+                }
+
+                .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__cell {
+                    padding: 0.4mm 1.5mm 2mm 1.5mm;
+                    border-left: 1px solid #e9ecef;
+                }
+
+                .concepto-matriz-desglose {
+                    width: 98%;
+                    margin: 0 0.5mm 0 1.5mm;
+                    padding: 1mm 1.5mm;
+                    box-sizing: border-box;
+                    border: 0;
+                    border-radius: 2mm;
+                    background: #e8edf2;
+                    font-size: 7pt;
+                    line-height: 1.35;
                     color: #64748b;
                 }
 
-                .concepto-matriz-desglose__desc {
-                    display: block;
-                    font-weight: 600;
-                    color: #475569;
+                .concepto-matriz-desglose-inner {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
                 }
 
-                .concepto-matriz-desglose__meta {
-                    display: block;
+                .concepto-matriz-desglose-inner td {
+                    border: 0 !important;
+                    padding: 1.4mm 0.8mm !important;
+                    font-size: 7pt !important;
+                    line-height: 1.3 !important;
+                    vertical-align: middle !important;
+                    background: transparent !important;
+                    font-weight: 400 !important;
+                    color: #64748b !important;
+                    text-transform: none !important;
+                }
+
+                .concepto-matriz-desglose__desc {
+                    width: 36%;
+                    text-align: left !important;
+                    font-weight: 500 !important;
+                    color: #475569 !important;
+                    padding-left: 0.5mm !important;
+                }
+
+                .concepto-matriz-desglose__cant {
+                    width: 12%;
+                    text-align: center !important;
+                    white-space: nowrap;
+                }
+
+                .concepto-matriz-desglose__unidad {
+                    width: 12%;
+                    text-align: center !important;
+                    text-transform: uppercase !important;
+                    white-space: nowrap;
+                }
+
+                .concepto-matriz-desglose__money {
+                    width: 20%;
+                    text-align: right !important;
+                    padding-right: 0 !important;
+                }
+
+                .concepto-matriz-desglose__imp {
+                    font-weight: 600 !important;
+                    color: #475569 !important;
+                }
+
+                .concepto-matriz-desglose__money-inner {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                }
+
+                .concepto-matriz-desglose__money-inner td {
+                    padding: 0 !important;
+                    border: 0 !important;
+                    background: transparent !important;
+                }
+
+                .concepto-matriz-desglose__sym {
+                    width: 18%;
+                    text-align: left !important;
+                    color: #94a3b8 !important;
+                    font-weight: 400 !important;
+                }
+
+                .concepto-matriz-desglose__amt {
+                    width: 82%;
+                    text-align: right !important;
                     font-variant-numeric: tabular-nums;
+                    white-space: nowrap;
+                }
+
+                .concepto-matriz-desglose__imp .concepto-matriz-desglose__sym {
+                    color: #64748b !important;
+                }
+
+                .concepto-matriz-desglose__imp .concepto-matriz-desglose__amt {
+                    font-weight: 600 !important;
+                    color: #475569 !important;
                 }
 
                 .concepto-imagen {
@@ -1188,6 +1283,11 @@
                                             $subtotal += $cant * $precio;
                                         }
                                     }
+                                    $monedaCodigoFila = strtoupper((string) ($presupuesto['term_cond_moneda'] ?? 'MXN'));
+                                    if (! in_array($monedaCodigoFila, ['MXN', 'USD', 'EUR'], true)) {
+                                        $monedaCodigoFila = 'MXN';
+                                    }
+                                    $monedaPrefijoFila = $monedaCodigoFila === 'EUR' ? '€' : '$';
                                 @endphp
                                 @if (count($conceptos) > 0)
                                     @foreach ($conceptos as $index => $concepto)
@@ -1196,6 +1296,7 @@
                                             'numeroFila' => $index + 1,
                                             'variant' => 'default',
                                             'mostrarMatrizCostos' => (bool) ($presupuesto['config_mostrar_matriz_costos'] ?? false),
+                                            'monedaPrefijo' => $monedaPrefijoFila,
                                         ])
                                     @endforeach
                                 @else
