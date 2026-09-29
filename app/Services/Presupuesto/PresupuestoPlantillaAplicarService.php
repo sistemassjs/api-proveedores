@@ -21,6 +21,10 @@ use Illuminate\Support\Str;
  */
 class PresupuestoPlantillaAplicarService
 {
+    public function __construct(
+        private readonly PresupuestoMatrizCalculoService $matrizCalculo
+    ) {}
+
     /**
      * Campos de layout / contenido de plantilla que se copian al PPTO.
      * No incluye receptor, fecha, concepto_general ni nombre_presupuesto.
@@ -64,7 +68,7 @@ class PresupuestoPlantillaAplicarService
 
     public function aplicar(PresupuestoPlantilla $plantilla, User $user): Presupuesto
     {
-        $plantilla->loadMissing(['conceptos', 'anexos', 'anexosPdf']);
+        $plantilla->loadMissing(['conceptos.componentes', 'anexos', 'anexosPdf']);
 
         return DB::transaction(function () use ($plantilla, $user) {
             $payload = array_merge($this->payloadDesdePlantilla($plantilla), [
@@ -108,7 +112,7 @@ class PresupuestoPlantillaAplicarService
      */
     public function aplicarSobre(PresupuestoPlantilla $plantilla, Presupuesto $presupuesto): Presupuesto
     {
-        $plantilla->loadMissing(['conceptos', 'anexos', 'anexosPdf']);
+        $plantilla->loadMissing(['conceptos.componentes', 'anexos', 'anexosPdf']);
 
         return DB::transaction(function () use ($plantilla, $presupuesto) {
             $payload = $this->payloadDesdePlantilla($plantilla);
@@ -160,19 +164,27 @@ class PresupuestoPlantillaAplicarService
         Presupuesto $presupuesto
     ): void {
         $numero = 1;
+        $proveedorId = (int) $presupuesto->proveedor_id;
+
         foreach ($plantilla->conceptos as $linea) {
             /** @var PresupuestoPlantillaConcepto $linea */
             $tipo = $linea->tipo ?: PresupuestoConcepto::TIPO_CONCEPTO;
+            $esParrafo = $tipo === PresupuestoConcepto::TIPO_PARRAFO;
+            $linea->loadMissing('componentes');
+            $tieneMatriz = ! $esParrafo && (bool) ($linea->tiene_matriz ?? false)
+                && $linea->componentes->isNotEmpty();
+
             $concepto = new PresupuestoConcepto([
                 'presupuesto_id' => $presupuesto->id,
                 'numero' => $numero++,
                 'tipo' => $tipo,
+                'tiene_matriz' => $tieneMatriz,
                 'descripcion' => $linea->descripcion,
-                'cantidad' => $tipo === PresupuestoConcepto::TIPO_PARRAFO ? 0 : (float) $linea->cantidad,
-                'unidad' => $tipo === PresupuestoConcepto::TIPO_PARRAFO
+                'cantidad' => $esParrafo ? 0 : (float) $linea->cantidad,
+                'unidad' => $esParrafo
                     ? 'párrafo'
                     : (trim((string) ($linea->unidad ?? '')) !== '' ? (string) $linea->unidad : 'pieza'),
-                'precio_unitario' => $tipo === PresupuestoConcepto::TIPO_PARRAFO ? 0 : (float) $linea->precio_unitario,
+                'precio_unitario' => $esParrafo || $tieneMatriz ? 0 : (float) $linea->precio_unitario,
             ]);
 
             if ($linea->imagen_path) {
@@ -185,6 +197,27 @@ class PresupuestoPlantillaAplicarService
 
             $concepto->calcularImporte();
             $concepto->save();
+
+            if ($tieneMatriz) {
+                $componentes = $linea->componentes->map(static function ($comp) {
+                    return [
+                        'orden' => (int) $comp->orden,
+                        'categoria' => $comp->categoria,
+                        'catalogo_concepto_id' => $comp->catalogo_concepto_id,
+                        'clave_snapshot' => $comp->clave_snapshot,
+                        'descripcion' => $comp->descripcion,
+                        'unidad' => $comp->unidad,
+                        'cantidad' => (float) $comp->cantidad,
+                        'precio_unitario' => (float) $comp->precio_unitario,
+                    ];
+                })->values()->all();
+
+                $this->matrizCalculo->sincronizarComponentesLinea(
+                    $concepto,
+                    $componentes,
+                    $proveedorId
+                );
+            }
         }
     }
 

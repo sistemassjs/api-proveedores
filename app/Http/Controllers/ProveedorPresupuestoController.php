@@ -2227,6 +2227,7 @@ class ProveedorPresupuestoController extends Controller
             'iva_total' => $presupuesto->iva_total,
             'total' => $presupuesto->total,
             'config_mostrar_totales' => (bool) ($presupuesto->config_mostrar_totales ?? true),
+            'config_mostrar_matriz_costos' => (bool) ($presupuesto->config_mostrar_matriz_costos ?? false),
             'receptor_lineas' => PresupuestoPdf::lineasReceptorPdfDesdeColumnasPresupuesto($presupuesto),
             'config_emisor_presupuesto_id' => $presupuesto->config_emisor_presupuesto_id,
             'empresa_emisora_nombre' => $presupuesto->empresa_emisora_nombre,
@@ -2236,8 +2237,9 @@ class ProveedorPresupuestoController extends Controller
             'incluir_leyenda_atentamente' => (bool) ($presupuesto->incluir_leyenda_atentamente ?? true),
             'empresa_emisora_nombre_comercial' => $presupuesto->empresa_emisora_nombre_comercial,
             'conceptos' => $presupuesto->conceptos->map(static function ($concepto) {
-                return [
+                $fila = [
                     'tipo' => $concepto->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                    'tiene_matriz' => (bool) ($concepto->tiene_matriz ?? false),
                     'descripcion' => $concepto->descripcion,
                     'cantidad' => $concepto->cantidad,
                     'unidad' => $concepto->unidad,
@@ -2245,7 +2247,21 @@ class ProveedorPresupuestoController extends Controller
                     'precio_total' => $concepto->precio_total,
                     'proveedor_nombre' => $concepto->proveedor_nombre,
                     'proveedor_logo_url' => $concepto->proveedor_logo_url,
+                    'componentes' => [],
                 ];
+                if ($concepto->tiene_matriz && $concepto->relationLoaded('componentes') && $concepto->componentes->isNotEmpty()) {
+                    $fila['componentes'] = $concepto->componentes->map(static function ($comp) {
+                        return [
+                            'descripcion' => $comp->descripcion,
+                            'unidad' => $comp->unidad,
+                            'cantidad' => (float) $comp->cantidad,
+                            'precio_unitario' => (float) $comp->precio_unitario,
+                            'importe' => (float) ($comp->importe ?? ((float) $comp->cantidad * (float) $comp->precio_unitario)),
+                        ];
+                    })->values()->all();
+                }
+
+                return $fila;
             })->values()->all(),
             'anexos' => PresupuestoPdf::anexosParaPlantillaPdf($presupuesto),
             'documentacion_adjuntos' => [],

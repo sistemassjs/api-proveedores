@@ -98,6 +98,7 @@ final class PresupuestoPdf
             'iva_total' => $presupuesto->iva_total,
             'total' => $presupuesto->total,
             'config_mostrar_totales' => (bool) ($presupuesto->config_mostrar_totales ?? true),
+            'config_mostrar_matriz_costos' => (bool) ($presupuesto->config_mostrar_matriz_costos ?? false),
             'ppto_config' => is_array($presupuesto->ppto_config) ? $presupuesto->ppto_config : [],
             'config_emisor_presupuesto_id' => $presupuesto->config_emisor_presupuesto_id,
             'empresa_emisora_nombre' => $presupuesto->empresa_emisora_nombre,
@@ -118,6 +119,7 @@ final class PresupuestoPdf
             'conceptos' => $presupuesto->conceptos->map(function ($c) {
                 $fila = [
                     'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                    'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
                     'descripcion' => $c->descripcion,
                     'cantidad' => $c->cantidad,
                     'unidad' => $c->unidad,
@@ -126,9 +128,20 @@ final class PresupuestoPdf
                     'imagen_base64' => self::convertirArchivoAnexoABase64($c->imagen_path),
                     'proveedor_nombre' => $c->proveedor_nombre,
                     'proveedor_logo_url' => $c->proveedor_logo_url,
+                    'componentes' => [],
                 ];
                 if ($c->esParrafo()) {
                     $fila['descripcion'] = PresupuestoParrafoPdf::sanitizarTexto((string) $c->descripcion);
+                } elseif ($c->tiene_matriz && $c->relationLoaded('componentes') && $c->componentes->isNotEmpty()) {
+                    $fila['componentes'] = $c->componentes->map(static function ($comp) {
+                        return [
+                            'descripcion' => $comp->descripcion,
+                            'unidad' => $comp->unidad,
+                            'cantidad' => (float) $comp->cantidad,
+                            'precio_unitario' => (float) $comp->precio_unitario,
+                            'importe' => (float) ($comp->importe ?? ((float) $comp->cantidad * (float) $comp->precio_unitario)),
+                        ];
+                    })->values()->all();
                 }
 
                 return $fila;

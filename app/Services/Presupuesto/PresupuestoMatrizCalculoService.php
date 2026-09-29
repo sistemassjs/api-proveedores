@@ -6,6 +6,7 @@ use App\Models\PresupuestoCatalogoConcepto;
 use App\Models\PresupuestoCatalogoConceptoComponente;
 use App\Models\PresupuestoConcepto;
 use App\Models\PresupuestoConceptoComponente;
+use App\Models\PresupuestoPlantillaConcepto;
 use InvalidArgumentException;
 
 /**
@@ -238,6 +239,47 @@ class PresupuestoMatrizCalculoService
         $concepto->precio_unitario = round($this->sumarImportes($normalizados), 2);
         $concepto->tiene_matriz = true;
         $concepto->calcularImporte();
+        $concepto->save();
+
+        return $concepto->fresh(['componentes']) ?? $concepto;
+    }
+
+    /**
+     * Persiste matriz de una línea de plantilla y asigna precio_unitario calculado.
+     *
+     * @param  list<array<string, mixed>>  $componentes
+     */
+    public function sincronizarComponentesPlantillaLinea(
+        PresupuestoPlantillaConcepto $concepto,
+        array $componentes,
+        int $proveedorId
+    ): PresupuestoPlantillaConcepto {
+        $normalizados = $this->normalizarComponentes($componentes, $proveedorId, null);
+
+        if ($normalizados === []) {
+            throw new InvalidArgumentException(
+                'Una línea con matriz requiere al menos un componente.'
+            );
+        }
+
+        $concepto->componentes()->delete();
+
+        foreach ($normalizados as $row) {
+            $concepto->componentes()->create([
+                'orden' => $row['orden'],
+                'categoria' => $row['categoria'],
+                'catalogo_concepto_id' => $row['catalogo_concepto_id'],
+                'clave_snapshot' => $row['clave_snapshot'],
+                'descripcion' => $row['descripcion'],
+                'unidad' => $row['unidad'],
+                'cantidad' => $row['cantidad'],
+                'precio_unitario' => $row['precio_unitario'],
+                'importe' => $row['importe'],
+            ]);
+        }
+
+        $concepto->precio_unitario = round($this->sumarImportes($normalizados), 2);
+        $concepto->tiene_matriz = true;
         $concepto->save();
 
         return $concepto->fresh(['componentes']) ?? $concepto;

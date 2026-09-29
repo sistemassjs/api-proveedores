@@ -273,8 +273,9 @@ Regenerar el PDF tras cambios de contenido en el HTML o imágenes bajo `src/asse
 - API: `{proveedor}/presupuestos/presupuesto-catalogo-conceptos` (CRUD).
 - Modal de concepto (hoy):
   - Tab Catálogo: listar / buscar / filtrar; click = snapshot a la línea; editar / eliminar; **Nuevo en catálogo**. Compuestos del catálogo interno cargan matriz (`tiene_matriz` + snapshot de componentes).
-  - Tab Manual: checkbox «Guardar también en el catálogo» (+ categoría producto/servicio). Opcional **Desglosar con matriz de costos** (Plus). En **móvil**, pie fijo fuera del scroll.
+  - Tab Manual: checkbox «Guardar también en el catálogo» (+ categoría producto/servicio). **Precio fijo / Matriz** (Plus): mismo switch pill que Producto/Servicio + `app-presupuesto-matriz-costos-editor`; P.U. calculado. En **móvil**, pie fijo fuera del scroll.
 - Badge Plus en tab y acciones de catálogo. El tab Catálogo lista **empresas tipo catálogo** (`GET /catalogo/empresas`) con productos `mostrar_en_catalogo_publico`; cards muestran **nombre comercial** + **razón social** (si difieren); al elegir se hace **snapshot** (sin FK). Filtros avanzados solo dentro de una empresa: barra de chips OPUS (familia + subfamilias anidadas; sin marca). Editar/eliminar solo aplica a conceptos internos.
 - Sección **Catálogo de conceptos** en rutas propias (`…/catalogo-conceptos` + crear/editar/detalle); ActionSheet básico vs compuesto; filtro Compuestos; badge en card/detalle.
 - Captura PPTO: switch **Mostrar desglose de costos en PDF** (`config_mostrar_matriz_costos`, default off). Preview, PDF y enlace público muestran el desglose bajo la descripción.
+- Matriz / Opus (roadmap): [matriz-costos-opus.md](./matriz-costos-opus.md).
 - El feed admin `catalogo-publico` quedó fuera del picker (deprecado / plan de apagado). Ver [../cross-domain.md](../cross-domain.md) y [../catalogo/api.md](../catalogo/api.md).

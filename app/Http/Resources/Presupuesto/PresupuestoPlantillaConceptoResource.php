@@ -20,12 +20,16 @@ class PresupuestoPlantillaConceptoResource extends JsonResource
             'id' => $this->id,
             'numero' => (int) $this->numero,
             'tipo' => $this->tipo ?? 'concepto',
+            'tiene_matriz' => (bool) ($this->tiene_matriz ?? false),
             'descripcion' => $this->descripcion,
             'cantidad' => (float) $this->cantidad,
             'unidad' => $this->unidad,
             'precio_unitario' => (float) $this->precio_unitario,
             'imagen_path' => PresupuestoAnexoArchivoResponse::archivoPathPublico($this->imagen_path),
             'imagen_url' => PresupuestoAnexoArchivoResponse::archivoUrl($this->imagen_path),
+            'componentes' => PresupuestoPlantillaConceptoComponenteResource::collection(
+                $this->whenLoaded('componentes')
+            ),
         ];
     }
 }

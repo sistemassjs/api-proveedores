@@ -568,6 +568,30 @@
         margin-top: 1mm;
     }
 
+    .concepto-matriz-desglose {
+        margin-top: 1.2mm;
+        padding-left: 1.5mm;
+        border-left: 0.4mm solid #cbd5e1;
+    }
+
+    .concepto-matriz-desglose__row {
+        padding: 0.4mm 0 0.4mm 1.5mm;
+        font-size: 7.5pt;
+        line-height: 1.25;
+        color: #64748b;
+    }
+
+    .concepto-matriz-desglose__desc {
+        display: block;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .concepto-matriz-desglose__meta {
+        display: block;
+        font-variant-numeric: tabular-nums;
+    }
+
     .concepto-imagen {
         width: 15mm;
         height: 15mm;
@@ -1119,6 +1143,7 @@
                                 'concepto' => $concepto,
                                 'numeroFila' => $index + 1,
                                 'variant' => 'tailwind',
+                                'mostrarMatrizCostos' => (bool) ($presupuesto['config_mostrar_matriz_costos'] ?? false),
                             ])
                         @endforeach
                     @else

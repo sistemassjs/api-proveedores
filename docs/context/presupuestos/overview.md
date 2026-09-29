@@ -21,7 +21,10 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 | Picker desde catálogo productos | **Hecho** | Empresas `is_proveedor_catalogo` + productos `mostrar_en_catalogo_publico`; snapshot |
 | Catálogo de conceptos reutilizable | **Hecho** | API + modal captura (Plus) + sección menú **Catálogo de conceptos** (list/form/detail) |
 | Catálogo compuestos (matriz P.U.) | **Hecho** | API + front catálogo (list/form/detail, filtro Compuestos, ActionSheet básico/compuesto) |
-| Matriz de costos en línea PPTO | **Hecho** | Captura: toggle + editor; PDF/preview: `config_mostrar_matriz_costos` (default off) |
+| Matriz de costos en línea PPTO | **Hecho** | Captura: toggle + editor; snapshot desde catálogo; PDF/preview/público vía `config_mostrar_matriz_costos` |
+| Matriz en plantillas | **Hecho** | Persistencia + aplicar / desde-presupuesto |
+| Capítulos / raíz estilo Opus | **Roadmap** | Ver [matriz-costos-opus.md](./matriz-costos-opus.md) Fase 2 |
+| Tipos de insumo Opus (MO, etc.) | **Roadmap** | Hoy solo `producto` \| `servicio` — Fase 1 |
 | Tarjetas Presentación (emisor / Atte.) | **Hecho** | API config + sección menú **Tarjetas** (list/form/detail); Perfil enlaza al listado |
 | Menú producto (Generar / Mis presupuestos / …) | **Hecho** | Ver [front.md](./front.md) |
 | Descuentos, IVA, términos y condiciones | **Hecho** | En formulario / PDF |
@@ -85,6 +88,8 @@ Ajustes de documento en captura (cerrados):
 
 **Pago → finalización**: roadmap.
 
+**Matriz / Opus:** aproximación documentada en [matriz-costos-opus.md](./matriz-costos-opus.md) (Fase 0 hecha; capítulos e insumos tipados = roadmap).
+
 **Gestión de recursos (v1 UI):** menú Generar / Mis presupuestos / **Recursos** (Clientes, Catálogo de conceptos, Tarjetas Presentación); CRUD list/form/detail por recurso (patrón SPP). Detalle en [front.md](./front.md).
 
 ## Docs del dominio
@@ -93,5 +98,6 @@ Ajustes de documento en captura (cerrados):
 - [database.md](./database.md)
 - [front.md](./front.md)
 - [workflows.md](./workflows.md)
+- [matriz-costos-opus.md](./matriz-costos-opus.md) — matriz de P.U. y roadmap hacia Opus
 
 Ver también: [../cross-domain.md](../cross-domain.md)

@@ -75,6 +75,17 @@ class StorePresupuestoPlantillaRequest extends FormRequest
             'conceptos.*.precio_unitario' => ['nullable', 'numeric', 'min:0'],
             'conceptos.*.imagen_base64' => ['nullable', 'string'],
             'conceptos.*.imagen_path' => ['nullable', 'string', 'max:255'],
+            'conceptos.*.tiene_matriz' => ['nullable', 'boolean'],
+            'conceptos.*.componentes' => ['nullable', 'array'],
+            'conceptos.*.componentes.*.orden' => ['nullable', 'integer', 'min:0'],
+            'conceptos.*.componentes.*.categoria' => ['nullable', 'string', 'in:producto,servicio'],
+            'conceptos.*.componentes.*.catalogo_concepto_id' => ['nullable', 'integer', 'exists:presupuesto_catalogo_conceptos,id'],
+            'conceptos.*.componentes.*.descripcion' => ['nullable', 'string', 'max:500'],
+            'conceptos.*.componentes.*.unidad' => ['nullable', 'string', 'max:50'],
+            'conceptos.*.componentes.*.cantidad' => ['nullable', 'numeric', 'min:0'],
+            'conceptos.*.componentes.*.precio_unitario' => ['nullable', 'numeric', 'min:0'],
+            'conceptos.*.componentes.*.clave' => ['nullable', 'string', 'max:40'],
+            'conceptos.*.componentes.*.clave_snapshot' => ['nullable', 'string', 'max:40'],
         ];
     }
 

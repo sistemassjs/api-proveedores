@@ -10,6 +10,7 @@ use App\Models\Presupuesto;
 use App\Models\PresupuestoPlantilla;
 use App\Models\PresupuestoPlantillaConcepto;
 use App\Models\Proveedor;
+use App\Services\Presupuesto\PresupuestoMatrizCalculoService;
 use App\Services\Presupuesto\PresupuestoPlantillaAplicarService;
 use App\Services\Presupuesto\PresupuestoPlantillaDesdePresupuestoService;
 use App\Support\PresupuestoAnexoImagenOptimizer;
@@ -30,7 +31,8 @@ class ProveedorPresupuestoPlantillaController extends Controller
 
     public function __construct(
         private readonly PresupuestoPlantillaAplicarService $aplicarService,
-        private readonly PresupuestoPlantillaDesdePresupuestoService $desdePresupuestoService
+        private readonly PresupuestoPlantillaDesdePresupuestoService $desdePresupuestoService,
+        private readonly PresupuestoMatrizCalculoService $matrizCalculo
     ) {}
 
     public function index(Request $request, Proveedor $proveedor): JsonResponse
@@ -52,7 +54,7 @@ class ProveedorPresupuestoPlantillaController extends Controller
         }
 
         $paginator = PresupuestoPlantilla::query()
-            ->with(['conceptos', 'anexos', 'anexosPdf'])
+            ->with(['conceptos.componentes', 'anexos', 'anexosPdf'])
             ->filter($filters)
             ->orderBy($sortBy, $order)
             ->paginate(max(1, min($perPage, 100)));
@@ -342,6 +344,8 @@ class ProveedorPresupuestoPlantillaController extends Controller
     {
         $plantilla->conceptos()->delete();
         $numero = 1;
+        $proveedorId = (int) $plantilla->proveedor_id;
+
         foreach ($conceptos as $fila) {
             if (! is_array($fila)) {
                 continue;
@@ -351,21 +355,39 @@ class ProveedorPresupuestoPlantillaController extends Controller
             $imagenPath = null;
             $base64 = $fila['imagen_base64'] ?? null;
             if (! $esParrafo && is_string($base64) && trim($base64) !== '') {
-                $imagenPath = $this->guardarImagenConcepto((int) $plantilla->proveedor_id, (int) $plantilla->id, $base64);
+                $imagenPath = $this->guardarImagenConcepto($proveedorId, (int) $plantilla->id, $base64);
             } elseif (! $esParrafo && ! empty($fila['imagen_path'])) {
                 $imagenPath = (string) $fila['imagen_path'];
             }
 
-            PresupuestoPlantillaConcepto::create([
+            $componentes = $fila['componentes'] ?? [];
+            $tieneMatriz = ! $esParrafo
+                && (
+                    filter_var($fila['tiene_matriz'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                    || (is_array($componentes) && count($componentes) > 0)
+                );
+
+            $concepto = PresupuestoPlantillaConcepto::create([
                 'presupuesto_plantilla_id' => $plantilla->id,
                 'numero' => $numero++,
                 'tipo' => $tipo,
+                'tiene_matriz' => $tieneMatriz,
                 'descripcion' => (string) ($fila['descripcion'] ?? ''),
                 'cantidad' => $esParrafo ? 0 : (float) ($fila['cantidad'] ?? 1),
                 'unidad' => $esParrafo ? '' : (string) ($fila['unidad'] ?? 'pieza'),
-                'precio_unitario' => $esParrafo ? 0 : (float) ($fila['precio_unitario'] ?? 0),
+                'precio_unitario' => $esParrafo || $tieneMatriz
+                    ? 0
+                    : (float) ($fila['precio_unitario'] ?? 0),
                 'imagen_path' => $imagenPath,
             ]);
+
+            if ($tieneMatriz) {
+                $this->matrizCalculo->sincronizarComponentesPlantillaLinea(
+                    $concepto,
+                    is_array($componentes) ? $componentes : [],
+                    $proveedorId
+                );
+            }
         }
     }
 

@@ -30,7 +30,8 @@ borrador → enviado → aceptar | rechazar(/con observación) → [reenviar si 
 5. **Aceptar / rechazar** — preview autenticado o token público; rechazo con motivo → `rechazado_con_observacion`.
 6. **Timeline** — sheet historial: icono en **cards del listado** + botón al **final del preview** (`estado_logs`).
 7. **Duplicar** — en **Mis presupuestos** (no en recibidos): icono `copy` → modal (switches cliente / anexos imagen / anexos PDF / tarjeta + resumen) → `POST …/duplicar` (`mantener_cliente`, `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`) → nuevo borrador (folio y `fecha_emision` nuevos; términos/IVA/`term_cond_visibilidad`, `pdf_theme`/`ppto_config`; anexos se copian solo si el flag está activo, con archivos propios; limpia rechazo/visto) y navega a `editar/:id`. Distinto de **Plantillas**.
-8. **Plantillas** — menú Presupuestos → Plantillas. Captura = misma UI que Generar PPTO (`presupuesto-page-modals`, sin cliente). **Usar** → `POST …/aplicar` → borrador sin receptor → editar. **Guardar como plantilla** (Mis presupuestos / preview emisor) → `POST …/desde-presupuesto/{id}` (copia todo excepto cliente). Lógica aislada del ciclo del documento.
+8. **Plantillas** — menú Presupuestos → Plantillas. Captura = misma UI que Generar PPTO (`presupuesto-page-modals`, sin cliente). **Usar** → `POST …/aplicar` → borrador sin receptor → editar. **Guardar como plantilla** (Mis presupuestos / preview emisor) → `POST …/desde-presupuesto/{id}` (copia todo excepto cliente, **incl. matriz de líneas**). Lógica aislada del ciclo del documento.
+9. **Matriz de costos** — en captura: toggle Plus en modal Manual o snapshot desde compuesto del catálogo; desglose al cliente si `config_mostrar_matriz_costos`. Ver [matriz-costos-opus.md](./matriz-costos-opus.md).
 
 ## Notificaciones (presupuesto)
 

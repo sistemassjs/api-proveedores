@@ -81,7 +81,7 @@ class PresupuestoPlantilla extends BaseModel
      */
     public static function eagerLodable(): array
     {
-        return ['conceptos', 'anexos', 'anexosPdf', 'proveedor', 'user'];
+        return ['conceptos.componentes', 'anexos', 'anexosPdf', 'proveedor', 'user'];
     }
 
     public function proveedor(): BelongsTo

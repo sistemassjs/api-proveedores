@@ -20,6 +20,10 @@ use Illuminate\Support\Str;
  */
 class PresupuestoPlantillaDesdePresupuestoService
 {
+    public function __construct(
+        private readonly PresupuestoMatrizCalculoService $matrizCalculo
+    ) {}
+
     /**
      * @param  array{
      *   mantener_anexos_imagen?: bool,
@@ -35,7 +39,7 @@ class PresupuestoPlantillaDesdePresupuestoService
         ?string $descripcion = null,
         array $opciones = []
     ): PresupuestoPlantilla {
-        $presupuesto->loadMissing(['conceptos', 'anexos', 'anexosPdf']);
+        $presupuesto->loadMissing(['conceptos.componentes', 'anexos', 'anexosPdf']);
 
         $mantenerAnexosImagen = (bool) ($opciones['mantener_anexos_imagen'] ?? true);
         $mantenerAnexosPdf = (bool) ($opciones['mantener_anexos_pdf'] ?? true);
@@ -126,6 +130,9 @@ class PresupuestoPlantillaDesdePresupuestoService
             $tipo = $linea->tipo ?: PresupuestoPlantillaConcepto::TIPO_CONCEPTO;
             $esParrafo = $tipo === PresupuestoPlantillaConcepto::TIPO_PARRAFO;
             $imagenPath = null;
+            $linea->loadMissing('componentes');
+            $tieneMatriz = ! $esParrafo && (bool) ($linea->tiene_matriz ?? false)
+                && $linea->componentes->isNotEmpty();
 
             if (! $esParrafo && $linea->imagen_path) {
                 $imagenPath = $this->copiarImagenConcepto(
@@ -135,16 +142,38 @@ class PresupuestoPlantillaDesdePresupuestoService
                 );
             }
 
-            PresupuestoPlantillaConcepto::create([
+            $concepto = PresupuestoPlantillaConcepto::create([
                 'presupuesto_plantilla_id' => $plantilla->id,
                 'numero' => $numero++,
                 'tipo' => $tipo,
+                'tiene_matriz' => $tieneMatriz,
                 'descripcion' => $linea->descripcion,
                 'cantidad' => $esParrafo ? 0 : (float) $linea->cantidad,
                 'unidad' => $esParrafo ? '' : ($linea->unidad ?: 'pieza'),
-                'precio_unitario' => $esParrafo ? 0 : (float) $linea->precio_unitario,
+                'precio_unitario' => $esParrafo || $tieneMatriz ? 0 : (float) $linea->precio_unitario,
                 'imagen_path' => $imagenPath,
             ]);
+
+            if ($tieneMatriz) {
+                $componentes = $linea->componentes->map(static function ($comp) {
+                    return [
+                        'orden' => (int) $comp->orden,
+                        'categoria' => $comp->categoria,
+                        'catalogo_concepto_id' => $comp->catalogo_concepto_id,
+                        'clave_snapshot' => $comp->clave_snapshot,
+                        'descripcion' => $comp->descripcion,
+                        'unidad' => $comp->unidad,
+                        'cantidad' => (float) $comp->cantidad,
+                        'precio_unitario' => (float) $comp->precio_unitario,
+                    ];
+                })->values()->all();
+
+                $this->matrizCalculo->sincronizarComponentesPlantillaLinea(
+                    $concepto,
+                    $componentes,
+                    $proveedorId
+                );
+            }
         }
     }
 

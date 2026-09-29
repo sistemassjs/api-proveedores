@@ -83,11 +83,13 @@ Al usarlo en un presupuesto se hace **snapshot** a la línea/componente (sin FK 
 
 Traslados / viáticos: **no** hay columnas `obs_traslados` / `obs_viaticos` (drop fase 3). Fuente de verdad: `term_cond_visibilidad.incluye_traslados` / `incluye_viaticos`. La API puede exponer `obs_traslados` / `obs_viaticos` en Resources como **alias derivados** de esa visibilidad (compat front).
 
-**Pendiente front:** UI de compuestos / matriz en captura (#3, #5). **Pendiente:** render PDF del desglose (#6); plantillas con matriz (#7).
+**Matriz en captura / PDF / plantillas:** hecha (Fase 0). Roadmap Opus (capítulos, tipos de insumo): [matriz-costos-opus.md](./matriz-costos-opus.md).
 
 ## Plantillas (`presupuesto_plantillas`)
 
-Recurso **aislado** del documento `presupuestos` (no `es_plantilla`). Guarda lo reutilizable al crear un PPTO: **nombre** (identificador), **conceptos**, **anexos imagen/PDF**, **tema** (`pdf_theme` / `ppto_config`) y **tarjeta de presentación** (emisor). **No** incluye descripción general del presupuesto (`concepto_general`), receptor, folio, estado, token ni logs. Al **aplicar** se crea un PPTO borrador por snapshot (`PresupuestoPlantillaAplicarService`) con `concepto_general` = `Borrador` (el usuario lo completa en el documento). **Desde presupuesto** crea plantilla sin copiar `concepto_general`. Editar la plantilla no modifica PPTOs ya creados.
+Recurso **aislado** del documento `presupuestos` (no `es_plantilla`). Guarda lo reutilizable al crear un PPTO: **nombre** (identificador), **conceptos** (incl. `tiene_matriz` + componentes), **anexos imagen/PDF**, **tema** (`pdf_theme` / `ppto_config`) y **tarjeta de presentación** (emisor). **No** incluye descripción general del presupuesto (`concepto_general`), receptor, folio, estado, token ni logs. Al **aplicar** se crea un PPTO borrador por snapshot (`PresupuestoPlantillaAplicarService`) con `concepto_general` = `Borrador` (el usuario lo completa en el documento). **Desde presupuesto** crea plantilla sin copiar `concepto_general`. Editar la plantilla no modifica PPTOs ya creados.
+
+Tabla `presupuesto_plantilla_concepto_componentes`: misma forma que componentes de línea de PPTO (mig. `2026_09_26_120000_…`).
 
 ## Campos de documento (captura / PDF)
 
@@ -99,7 +101,7 @@ Recurso **aislado** del documento `presupuestos` (no `es_plantilla`). Guarda lo 
 | `titulo_anexos` | `presupuestos` | `varchar(80)` nullable; mig. `2026_07_23_095249_…`. Vacío → **Anexos** (Resource, Blade sección imágenes, preview) |
 | `titulo_anexos_pdf` | `presupuestos` | `varchar(80)` nullable; mig. `2026_07_23_103654_…`. Vacío → **Anexos PDF** (Resource + estampado FPDI de hojas mergeadas) |
 | `config_mostrar_totales` | `presupuestos` | Si false, oculta subtotal/IVA/total/importe letra en preview y PDF |
-| `config_mostrar_matriz_costos` | `presupuestos` | Si true, el cliente puede ver desglose de componentes (default **false**). Render PDF del desglose: pendiente front/#6 |
+| `config_mostrar_matriz_costos` | `presupuestos` | Si true, preview/PDF/público muestran desglose de componentes bajo la descripción (default **false**) |
 | `ppto_config` | `presupuestos` | JSON nullable; 8 keys mm whitelist (`margen_*`, `gap_*`, `footer_height_mm`, `espacio_tras_titulo_atentamente_mm`). Modal Ajustes + merge en `PresupuestoPdfDocumentConfig` (gap logo default **7**) |
 
 ## Histórico de estados (`presupuesto_estado_logs`)

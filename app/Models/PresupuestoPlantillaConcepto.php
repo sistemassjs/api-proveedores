@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PresupuestoPlantillaConcepto extends BaseModel
 {
@@ -16,6 +17,7 @@ class PresupuestoPlantillaConcepto extends BaseModel
         'presupuesto_plantilla_id',
         'numero',
         'tipo',
+        'tiene_matriz',
         'descripcion',
         'cantidad',
         'unidad',
@@ -27,11 +29,18 @@ class PresupuestoPlantillaConcepto extends BaseModel
         'cantidad' => 'decimal:4',
         'precio_unitario' => 'decimal:2',
         'numero' => 'integer',
+        'tiene_matriz' => 'boolean',
     ];
 
     public function plantilla(): BelongsTo
     {
         return $this->belongsTo(PresupuestoPlantilla::class, 'presupuesto_plantilla_id');
+    }
+
+    public function componentes(): HasMany
+    {
+        return $this->hasMany(PresupuestoPlantillaConceptoComponente::class, 'presupuesto_plantilla_concepto_id')
+            ->orderBy('orden');
     }
 
     public function esParrafo(): bool
