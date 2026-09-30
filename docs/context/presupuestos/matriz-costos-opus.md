@@ -12,9 +12,9 @@ Se desea que GestionPlus **imite el comportamiento de Opus** al generar un presu
 Referencia Opus (comportamiento, no clone 1:1):
 
 - Pantalla raíz: capítulos + conceptos con unidad, cantidad, P.U., total.
-- Desglose del concepto: insumos tipados (materiales, mano de obra, herramienta, equipo, auxiliares, etc.) que suman el P.U.
+- Desglose del concepto: insumos tipados (materiales, mano de obra, herramienta, equipo, auxiliares, flete, trabajo) que suman el P.U.
 
-## Estado actual (v1 — Fase 0 cerrada)
+## Estado actual
 
 | Capacidad | Estado |
 |-----------|--------|
@@ -23,73 +23,65 @@ Referencia Opus (comportamiento, no clone 1:1):
 | Editor de matriz **en captura** del PPTO (modal Manual) | **Hecho** (Plus) |
 | Snapshot al elegir compuesto del catálogo | **Hecho** |
 | Switch documento `config_mostrar_matriz_costos` | **Hecho** (default off) |
-| Desglose en preview / enlace público | **Hecho** |
-| Desglose en PDF (Blade) | **Hecho** |
-| Plantillas: persistir / aplicar matriz | **Hecho** |
-| Duplicar PPTO con matriz | **Hecho** |
-| Capítulos / niveles (raíz Opus) | **Roadmap** Fase 2 |
-| Tipos de insumo Opus (MO, herramienta, % sobre MO…) | **Roadmap** Fase 1 |
-| Taxonomía familias OPUS en form producto | Dominio **catálogo** (puente); ver `docs/context/catalogo/` |
+| Desglose en preview / enlace público / PDF | **Hecho** |
+| Plantillas + duplicar con matriz | **Hecho** |
+| **Tipos de insumo Opus** en componentes | **Hecho** (MVP) |
+| Select tipo con buscador (`app-matriz-insumo-tipo-select`) | **Hecho** |
+| Filtro listado `matriz_tipo` (segmento 1 fila) | **Hecho** |
+| Doble clic en P.U. → convertir a matriz | **Hecho** |
+| Capítulos / niveles | **Roadmap** Fase 2 |
+| Totales por tipo en PDF / % sobre MO / explosión | **Roadmap** Fase 3 |
 
-### Categorías de componente (v1)
+### Categorías
 
-Solo **`producto` \| `servicio`**. No hay aún materiales / mano de obra / herramienta / equipo / auxiliares como en Opus.
+| Ámbito | Valores |
+|--------|---------|
+| Concepto de catálogo (comercial) | `producto` \| `servicio` |
+| **Componente de matriz** (Opus) | `material` \| `mano_obra` \| `herramienta` \| `equipo` \| `auxiliar` \| `flete` \| `trabajo` |
+
+`producto` / `servicio` **no** son tipos de matriz. Legacy se coacciona: `producto`→`material`, `servicio`→`mano_obra`. Default al sembrar: `material`.
+
+API: `categoriasValidas()` vs `categoriasInsumoValidas()` / `coerceCategoriaInsumo()`.  
+Front: `MatrizInsumoTipo`, `MATRIZ_INSUMO_TIPOS`, `app-matriz-insumo-tipo-select`.
 
 ### Dónde se arma la matriz
 
-1. **Catálogo de conceptos** — compuestos (gestión Plus, CRUD list/form/detail).
-2. **Captura PPTO** — switch pill **Precio fijo / Matriz** (mismo patrón que Producto/Servicio; `data-tour="ppto-matriz-toggle"` / `ppto-matriz-editor`). El P.U. queda calculado (readonly) = Σ importes.
-3. Al elegir un compuesto del catálogo se hace **snapshot** a la línea (sin FK viva obligatoria).
+1. Catálogo compuestos — cada componente con tipo Opus.
+2. Captura PPTO — switch Precio fijo / Matriz; P.U. = Σ.
+3. Doble clic en **P. UNITARIO** → siembra componente / abre editor.
+4. Seleccionar compuesto del catálogo → snapshot de todos los componentes tipados.
 
 ### Visibilidad del desglose
 
-- Flag de documento: `config_mostrar_matriz_costos` (UI: “Mostrar desglose de costos en PDF”).
-- Si está activo y la línea tiene componentes, el desglose aparece bajo la descripción en preview, enlace público y PDF.
+Flag `config_mostrar_matriz_costos` (default off): preview / PDF / enlace público.
+
+### Filtro de listado
+
+- API: `matriz_tipo=<insumo>`.
+- UI: un **segmento de una sola fila** (`matriz-tipo-filter`): solo el activo resaltado.
 
 ## Motor
 
-`App\Services\Presupuesto\PresupuestoMatrizCalculoService`
-
-- `importe = cantidad × precio_unitario` (4 decimales internos).
-- P.U. padre = Σ importes (2 decimales en columna de línea/documento).
-- `sincronizarComponentesLinea` — líneas de `presupuestos`.
-- `sincronizarComponentesPlantillaLinea` — líneas de plantillas.
-- Anti-ciclo en compuestos de catálogo.
+`PresupuestoMatrizCalculoService` — importe = cant × P.U.; P.U. padre = Σ; coerce de categorías; sync línea/plantilla/catálogo; anti-ciclo.
 
 ## Tablas
 
-| Tabla | Rol |
-|-------|-----|
-| `presupuesto_catalogo_concepto_componentes` | Matriz del compuesto en catálogo |
-| `presupuesto_concepto_componentes` | Matriz snapshot en línea de PPTO |
-| `presupuesto_plantilla_concepto_componentes` | Matriz en línea de plantilla |
-| `presupuesto_conceptos.tiene_matriz` | Bool |
-| `presupuesto_plantilla_conceptos.tiene_matriz` | Bool |
-| `presupuestos.config_mostrar_matriz_costos` | Bool documento |
+`presupuesto_*_concepto_componentes.categoria` (string 20) — sin migración de columna.
 
-## Roadmap hacia Opus (acordado)
-
-Orden recomendado:
+## Roadmap
 
 ```
-Fase 0 (hecha) → editor en captura + PDF + plantillas
-Fase 1 → tipos de insumo (materiales, MO, herramienta, equipo, auxiliares) + totales por tipo
-Fase 2 → capítulos / clave jerárquica en la raíz del PPTO
-Fase 3 → % sobre MO, indirectos Opus, explosión de insumos, vínculo fuerte con familias OPUS de catálogo
+Fase 0–1 (hecha) → matriz + tipado Opus + filtro + dblclick P.U.
+Fase 2 → capítulos
+Fase 3 → totales por tipo en PDF, %, explosión
 ```
-
-**No** convertir presupuesto → Solicitud de pago. Cobro/finalización es roadmap **dentro** de presupuestos (pasarelas), no dominio SP.
-
-## Relación con “OPUS” del catálogo de productos
-
-La taxonomía global `catalogo_familias` / `catalogo_subfamilias` (seed estilo Opus) y el picker de productos publicados son el **puente de materiales** hacia PPTOs. No sustituyen la matriz APU del concepto. Ver [../catalogo/overview.md](../catalogo/overview.md).
 
 ## Front de referencia
 
 | Pieza | Ruta |
 |-------|------|
-| Editor matriz | `components/presupuesto-matriz-costos-editor/` |
-| Modal captura | `concepto-catalogo-manual-modal` (toggle + editor) |
-| Form catálogo compuesto | `pages/catalogo-conceptos/.../presupuesto-concepto-form` |
-| Preview desglose | `presupuesto-proveedor-preview` |
-| Tours | `presupuestos-tutorials.config.ts` |
+| Tipos | `models/presupuesto-matriz-costos.model.ts` |
+| Select tipado + búsqueda | `components/matriz-insumo-tipo-select/` |
+| Editor | `components/presupuesto-matriz-costos-editor/` |
+| Filtro listado | `components/presupuesto-filters/` |
+| Doble clic P.U. | `presupuesto-page-modals.convertirConceptoAMatrizPorPrecio` |

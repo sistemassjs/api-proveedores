@@ -162,7 +162,7 @@ class UpdatePresupuestoRequest extends FormRequest
             ],
             'conceptos.*.componentes' => 'nullable|array',
             'conceptos.*.componentes.*.orden' => 'nullable|integer|min:0',
-            'conceptos.*.componentes.*.categoria' => 'nullable|string|in:producto,servicio',
+            'conceptos.*.componentes.*.categoria' => 'nullable|string|in:material,mano_obra,herramienta,equipo,auxiliar,flete,trabajo,producto,servicio',
             'conceptos.*.componentes.*.catalogo_concepto_id' => 'nullable|integer|exists:presupuesto_catalogo_conceptos,id',
             'conceptos.*.componentes.*.descripcion' => 'nullable|string|max:500',
             'conceptos.*.componentes.*.unidad' => 'nullable|string|max:50',

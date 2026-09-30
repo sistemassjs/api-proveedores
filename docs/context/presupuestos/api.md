@@ -16,7 +16,7 @@ Repo: `api-proveedores`. Prefijo gerente: `proveedores/{proveedor}/…` + `prove
 | Cartera | `{proveedor}/presupuestos/cartera-clientes` | `ProveedorPresupuestoCarteraClientesController` |
 | Catálogo conceptos | `{proveedor}/presupuestos/presupuesto-catalogo-conceptos` | `ProveedorPresupuestoCatalogoConceptosController` |
 | | `GET …/sugerencias` | Interno + productos publicados; ítems internos incluyen `es_compuesto`, `clave` |
-| | body store/update | `es_compuesto`, `clave`, `componentes[]` (producto\|servicio); compuesto recalcula P.U. |
+| | body store/update | `es_compuesto`, `clave`, `componentes[]` (tipos de insumo); compuesto recalcula P.U. |
 | Plantillas | `{proveedor}/presupuestos/plantillas` | `ProveedorPresupuestoPlantillaController` |
 | | `GET/POST /`, `GET/PUT/PATCH/DELETE /{plantilla}` | CRUD aislado del documento |
 | | `POST …/plantillas/desde-presupuesto/{presupuesto}` | Snapshot PPTO → plantilla (sin receptor) |
@@ -34,8 +34,9 @@ Repo: `api-proveedores`. Prefijo gerente: `proveedores/{proveedor}/…` + `prove
 
 | Superficie | Contrato |
 |------------|----------|
-| Catálogo store/update | `es_compuesto`, `clave`, `componentes[]` (`categoria` producto\|servicio, cant, precio o `catalogo_concepto_componente_id`). Compuesto: P.U. recalculado (`PresupuestoMatrizCalculoService`). |
+| Catálogo store/update | `es_compuesto`, `clave`, `componentes[]` (`categoria` tipada Opus: material\|mano_obra\|herramienta\|equipo\|auxiliar\|flete\|trabajo; legacy producto\|servicio aceptado y coaccionado). Compuesto: P.U. recalculado (`PresupuestoMatrizCalculoService`). |
 | Catálogo index | Filtro `es_compuesto`; `withCount` → `componentes_count`. Show carga `componentes`. |
+| Presupuesto index | Filtro opcional `matriz_tipo` (PPTOs con ≥1 componente de ese tipo). |
 | Presupuesto store/update | `config_mostrar_matriz_costos` (bool, default false). Por línea: `tiene_matriz` + `componentes[]` (o componentes sin flag ⇒ matriz). Sin matriz: `precio_unitario` obligatorio. |
 | Duplicar | Copia `config_mostrar_matriz_costos` y componentes de línea (snapshot). |
 | Plantillas store/update / aplicar / desde-presupuesto | Persisten y restauran `tiene_matriz` + componentes de línea (`sincronizarComponentesPlantillaLinea` / `sincronizarComponentesLinea`). |

@@ -24,7 +24,7 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 | Matriz de costos en línea PPTO | **Hecho** | Captura: toggle + editor; snapshot desde catálogo; PDF/preview/público vía `config_mostrar_matriz_costos` |
 | Matriz en plantillas | **Hecho** | Persistencia + aplicar / desde-presupuesto |
 | Capítulos / raíz estilo Opus | **Roadmap** | Ver [matriz-costos-opus.md](./matriz-costos-opus.md) Fase 2 |
-| Tipos de insumo Opus (MO, etc.) | **Roadmap** | Hoy solo `producto` \| `servicio` — Fase 1 |
+| Tipos de insumo Opus (MO, etc.) | **Hecho (MVP)** | `material`\|`mano_obra`\|`herramienta`\|`equipo`\|`auxiliar`\|`flete`\|`trabajo` — ver [matriz-costos-opus.md](./matriz-costos-opus.md) |
 | Tarjetas Presentación (emisor / Atte.) | **Hecho** | API config + sección menú **Tarjetas** (list/form/detail); Perfil enlaza al listado |
 | Menú producto (Generar / Mis presupuestos / …) | **Hecho** | Ver [front.md](./front.md) |
 | Descuentos, IVA, términos y condiciones | **Hecho** | En formulario / PDF |
@@ -88,7 +88,7 @@ Ajustes de documento en captura (cerrados):
 
 **Pago → finalización**: roadmap.
 
-**Matriz / Opus:** aproximación documentada en [matriz-costos-opus.md](./matriz-costos-opus.md) (Fase 0 hecha; capítulos e insumos tipados = roadmap).
+**Matriz / Opus:** aproximación documentada en [matriz-costos-opus.md](./matriz-costos-opus.md) (Fase 0 + tipado MVP; capítulos = Fase 2).
 
 **Gestión de recursos (v1 UI):** menú Generar / Mis presupuestos / **Recursos** (Clientes, Catálogo de conceptos, Tarjetas Presentación); CRUD list/form/detail por recurso (patrón SPP). Detalle en [front.md](./front.md).
 

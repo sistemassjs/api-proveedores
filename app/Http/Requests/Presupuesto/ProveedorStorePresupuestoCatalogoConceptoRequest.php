@@ -56,7 +56,11 @@ class ProveedorStorePresupuestoCatalogoConceptoRequest extends FormRequest
             'componentes.*.categoria' => [
                 'nullable',
                 'string',
-                Rule::in(PresupuestoCatalogoConcepto::categoriasValidas()),
+                Rule::in([
+                    ...PresupuestoCatalogoConcepto::categoriasInsumoValidas(),
+                    PresupuestoCatalogoConcepto::CATEGORIA_PRODUCTO,
+                    PresupuestoCatalogoConcepto::CATEGORIA_SERVICIO,
+                ]),
             ],
             'componentes.*.catalogo_concepto_componente_id' => [
                 'nullable',

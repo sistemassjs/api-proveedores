@@ -58,7 +58,7 @@ Tipos: `concepto` | `parrafo`. Campos libres: descripción, cantidad, unidad, pr
 ### Matriz de P.U. (línea)
 
 - `presupuesto_conceptos.tiene_matriz` (bool): si true, el `precio_unitario` se **calcula** desde `presupuesto_concepto_componentes`.
-- Componentes: `categoria` solo `producto` \| `servicio`; `cantidad × precio_unitario = importe`; P.U. línea = Σ importes (redondeo 2 en la línea).
+- Componentes: `categoria` = tipo Opus (`material`\|`mano_obra`\|`herramienta`\|`equipo`\|`auxiliar`\|`flete`\|`trabajo`); legacy `producto`/`servicio` se coaccionan; `cantidad × precio_unitario = importe`; P.U. línea = Σ importes (redondeo 2 en la línea).
 - Snapshot al guardar: puede traer `catalogo_concepto_id` (mismo proveedor) o renglón manual.
 - Párrafos: sin matriz.
 - Motor: `App\Services\Presupuesto\PresupuestoMatrizCalculoService` (mismo que catálogo compuesto).
@@ -69,7 +69,7 @@ Tabla `presupuesto_catalogo_conceptos`:
 
 | Campo | Notas |
 |-------|--------|
-| `categoria` | `producto` \| `servicio` (sin “otro”) |
+| `categoria` | Concepto catálogo: `producto`\|`servicio`. Componente matriz: tipos de insumo (ver matriz-costos-opus) |
 | `es_compuesto` | bool; si true → P.U. calculado |
 | `clave` | nullable, unique por `(proveedor_id, clave)` (ej. `+CUA-01`) |
 | `precio_unitario` | decimal(15,4); manual si básico, Σ si compuesto |
@@ -83,7 +83,7 @@ Al usarlo en un presupuesto se hace **snapshot** a la línea/componente (sin FK 
 
 Traslados / viáticos: **no** hay columnas `obs_traslados` / `obs_viaticos` (drop fase 3). Fuente de verdad: `term_cond_visibilidad.incluye_traslados` / `incluye_viaticos`. La API puede exponer `obs_traslados` / `obs_viaticos` en Resources como **alias derivados** de esa visibilidad (compat front).
 
-**Matriz en captura / PDF / plantillas:** hecha (Fase 0). Roadmap Opus (capítulos, tipos de insumo): [matriz-costos-opus.md](./matriz-costos-opus.md).
+**Matriz en captura / PDF / plantillas / tipado MVP / filtro `matriz_tipo`:** hecha. Roadmap (capítulos, totales por tipo en PDF): [matriz-costos-opus.md](./matriz-costos-opus.md).
 
 ## Plantillas (`presupuesto_plantillas`)
 

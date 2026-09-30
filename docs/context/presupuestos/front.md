@@ -277,5 +277,6 @@ Regenerar el PDF tras cambios de contenido en el HTML o imágenes bajo `src/asse
 - Badge Plus en tab y acciones de catálogo. El tab Catálogo lista **empresas tipo catálogo** (`GET /catalogo/empresas`) con productos `mostrar_en_catalogo_publico`; cards muestran **nombre comercial** + **razón social** (si difieren); al elegir se hace **snapshot** (sin FK). Filtros avanzados solo dentro de una empresa: barra de chips OPUS (familia + subfamilias anidadas; sin marca). Editar/eliminar solo aplica a conceptos internos.
 - Sección **Catálogo de conceptos** en rutas propias (`…/catalogo-conceptos` + crear/editar/detalle); ActionSheet básico vs compuesto; filtro Compuestos; badge en card/detalle.
 - Captura PPTO: switch **Mostrar desglose de costos en PDF** (`config_mostrar_matriz_costos`, default off). Preview, PDF y enlace público muestran el desglose bajo la descripción.
-- Matriz / Opus (roadmap): [matriz-costos-opus.md](./matriz-costos-opus.md).
+- **Tipos de insumo Opus** en editor (select con buscador). Listado: segmento `matrizTipo` (1 fila). Captura: **doble clic en P. UNITARIO** convierte a matriz / abre editor.
+- Matriz / Opus: [matriz-costos-opus.md](./matriz-costos-opus.md).
 - El feed admin `catalogo-publico` quedó fuera del picker (deprecado / plan de apagado). Ver [../cross-domain.md](../cross-domain.md) y [../catalogo/api.md](../catalogo/api.md).

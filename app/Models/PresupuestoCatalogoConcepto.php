@@ -11,6 +11,21 @@ class PresupuestoCatalogoConcepto extends BaseModel
 
     public const CATEGORIA_SERVICIO = 'servicio';
 
+    /** Tipos de insumo en matriz de costos (componentes). */
+    public const INSUMO_MATERIAL = 'material';
+
+    public const INSUMO_MANO_OBRA = 'mano_obra';
+
+    public const INSUMO_HERRAMIENTA = 'herramienta';
+
+    public const INSUMO_EQUIPO = 'equipo';
+
+    public const INSUMO_AUXILIAR = 'auxiliar';
+
+    public const INSUMO_FLETE = 'flete';
+
+    public const INSUMO_TRABAJO = 'trabajo';
+
     public const DESCRIPCION_MAX = 500;
 
     public const CLAVE_MAX = 40;
@@ -138,6 +153,8 @@ class PresupuestoCatalogoConcepto extends BaseModel
     }
 
     /**
+     * Categoría comercial del concepto de catálogo (producto|servicio).
+     *
      * @return list<string>
      */
     public static function categoriasValidas(): array
@@ -146,5 +163,64 @@ class PresupuestoCatalogoConcepto extends BaseModel
             self::CATEGORIA_PRODUCTO,
             self::CATEGORIA_SERVICIO,
         ];
+    }
+
+    /**
+     * Tipos de insumo Opus válidos en componentes de matriz
+     * (sin producto/servicio: esas son categorías comerciales del catálogo).
+     *
+     * @return list<string>
+     */
+    public static function categoriasInsumoValidas(): array
+    {
+        return [
+            self::INSUMO_MATERIAL,
+            self::INSUMO_MANO_OBRA,
+            self::INSUMO_HERRAMIENTA,
+            self::INSUMO_EQUIPO,
+            self::INSUMO_AUXILIAR,
+            self::INSUMO_FLETE,
+            self::INSUMO_TRABAJO,
+        ];
+    }
+
+    /**
+     * Acepta tipos Opus o legacy producto/servicio (mapeados).
+     */
+    public static function coerceCategoriaInsumo(?string $categoria): string
+    {
+        $cat = trim((string) $categoria);
+        if (self::esCategoriaInsumoValida($cat)) {
+            return $cat;
+        }
+        if ($cat === self::CATEGORIA_PRODUCTO) {
+            return self::INSUMO_MATERIAL;
+        }
+        if ($cat === self::CATEGORIA_SERVICIO) {
+            return self::INSUMO_MANO_OBRA;
+        }
+
+        return self::INSUMO_MATERIAL;
+    }
+
+    public static function esCategoriaInsumoValida(?string $categoria): bool
+    {
+        return $categoria !== null
+            && $categoria !== ''
+            && in_array($categoria, self::categoriasInsumoValidas(), true);
+    }
+
+    public static function labelCategoriaInsumo(string $categoria): string
+    {
+        return match (self::coerceCategoriaInsumo($categoria)) {
+            self::INSUMO_MATERIAL => 'Material',
+            self::INSUMO_MANO_OBRA => 'Mano de obra',
+            self::INSUMO_HERRAMIENTA => 'Herramienta',
+            self::INSUMO_EQUIPO => 'Equipo',
+            self::INSUMO_AUXILIAR => 'Auxiliar',
+            self::INSUMO_FLETE => 'Flete',
+            self::INSUMO_TRABAJO => 'Trabajo',
+            default => $categoria,
+        };
     }
 }

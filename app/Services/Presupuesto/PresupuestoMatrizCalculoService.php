@@ -11,7 +11,7 @@ use InvalidArgumentException;
 
 /**
  * Motor único de matriz de P.U.: importe = cantidad × precio_unitario; P.U. padre = Σ importes.
- * Sin strategies por tipo en v1 (producto|servicio solo clasifican).
+ * Tipos de insumo: material|mano_obra|herramienta|equipo|auxiliar|producto|servicio.
  */
 class PresupuestoMatrizCalculoService
 {
@@ -84,12 +84,9 @@ class PresupuestoMatrizCalculoService
                 continue;
             }
 
-            $categoria = (string) ($row['categoria'] ?? '');
-            if (! in_array($categoria, PresupuestoCatalogoConcepto::categoriasValidas(), true)) {
-                throw new InvalidArgumentException(
-                    'Cada componente debe ser producto o servicio.'
-                );
-            }
+            $categoria = PresupuestoCatalogoConcepto::coerceCategoriaInsumo(
+                (string) ($row['categoria'] ?? '')
+            );
 
             $descripcion = trim((string) ($row['descripcion'] ?? ''));
             $unidad = trim((string) ($row['unidad'] ?? ''));
@@ -302,7 +299,7 @@ class PresupuestoMatrizCalculoService
         }
 
         return [
-            'categoria' => (string) $item->categoria,
+            'categoria' => PresupuestoCatalogoConcepto::coerceCategoriaInsumo((string) $item->categoria),
             'clave' => $this->normalizarClave($item->clave),
             'descripcion' => (string) $item->descripcion,
             'unidad' => (string) $item->unidad,

@@ -37,6 +37,7 @@ class Presupuesto extends BaseModel
         'item_visto' => 'ItemVisto',
         'segmento' => 'Segmento',
         'ultimas_presupuestos' => 'UltimasPresupuestos',
+        'matriz_tipo' => 'MatrizTipo',
     ];
 
     public const ESTADO_BORRADOR = 'borrador';
@@ -1345,6 +1346,34 @@ class Presupuesto extends BaseModel
     public function filterByUltimasPresupuestos($query, $value)
     {
         return $query->ultimasPresupuestos((int) $value);
+    }
+
+    /**
+     * PPTOs con al menos un componente de matriz del tipo indicado.
+     */
+    public function filterByMatrizTipo($query, $value)
+    {
+        $raw = is_string($value) ? trim($value) : '';
+        if ($raw === '') {
+            return $query;
+        }
+
+        $tipo = PresupuestoCatalogoConcepto::coerceCategoriaInsumo($raw);
+        if (! PresupuestoCatalogoConcepto::esCategoriaInsumoValida($tipo)) {
+            return $query;
+        }
+
+        $aliases = [$tipo];
+        if ($tipo === PresupuestoCatalogoConcepto::INSUMO_MATERIAL) {
+            $aliases[] = PresupuestoCatalogoConcepto::CATEGORIA_PRODUCTO;
+        }
+        if ($tipo === PresupuestoCatalogoConcepto::INSUMO_MANO_OBRA) {
+            $aliases[] = PresupuestoCatalogoConcepto::CATEGORIA_SERVICIO;
+        }
+
+        return $query->whereHas('conceptos.componentes', function ($q) use ($aliases) {
+            $q->whereIn('categoria', $aliases);
+        });
     }
 
 
