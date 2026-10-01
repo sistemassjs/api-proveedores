@@ -13,6 +13,7 @@ class CategoriaResource extends JsonResource
             'nombre' => $this->nombre,
             'descripcion' => $this->descripcion,
             'estatus' => $this->estatus,
+            'nivel' => $this->nivel,
             'subcategorias' => $this->whenLoaded('children'),  // Aquí cargamos las subcategorías si están disponibles
         ];
     }

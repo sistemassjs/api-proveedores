@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Categoria;
 
+use App\Models\Categoria;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -23,10 +24,35 @@ class CategoriaUpdateRequest extends FormRequest
 
     public function rules(): array
     {
+        $proveedorId = $this->route('proveedor')?->id;
+        $categoriaId = (int) $this->route('categoria');
+
         return [
             'nombre' => ['sometimes', 'string', 'max:60'],
             'descripcion' => ['sometimes', 'string', 'max:255'],
-            'categoria_padre_id' => ['sometimes', 'integer', 'exists:categorias,id'],
+            'categoria_padre_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'different:categoria_id',
+                function ($attribute, $value, $fail) use ($proveedorId, $categoriaId) {
+                    if ($value === null) {
+                        return;
+                    }
+
+                    if ((int) $value === $categoriaId) {
+                        $fail('Una categoría no puede ser su propia categoría padre.');
+                        return;
+                    }
+
+                    if (! Categoria::where('id', $value)
+                        ->where('proveedor_id', $proveedorId)
+                        ->where('nivel', '<', 2)
+                        ->exists()) {
+                        $fail('La categoría padre no es válida o no pertenece a este proveedor.');
+                    }
+                },
+            ],
         ];
     }
 
