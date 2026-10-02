@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoGeneral;
 use App\Http\Requests\Categoria\CategoriaStoreRequest;
+use App\Http\Requests\Categoria\CategoriaUpdateRequest;
 use App\Http\Resources\CategoriaAcordeonResource;
 use App\Http\Resources\CategoriaResource;
 use App\Models\Categoria;
@@ -96,17 +97,34 @@ class ProveedorCategoriaController extends Controller
         return $this->success($categoria);
     }
 
-    public function update(Request $request, Proveedor $proveedor, $categoriaId)
+    public function update(CategoriaUpdateRequest $request, Proveedor $proveedor, $categoriaId)
     {
-        $categoria = Categoria::findOrFail($categoriaId);
+        $categoria = Categoria::where('proveedor_id', $proveedor->id)
+            ->findOrFail($categoriaId);
 
-        $request->validate([
-            'nombre' => 'sometimes|string|max:255',
+        $categoriaPadreId = $request->has('categoria_padre_id')
+            ? $request->input('categoria_padre_id')
+            : $categoria->parent_id;
+        $nivel = 0;
+
+        if ($categoriaPadreId) {
+            $padre = Categoria::where('proveedor_id', $proveedor->id)
+                ->findOrFail($categoriaPadreId);
+            $nivel = $padre->nivel + 1;
+
+            if ($nivel > 2) {
+                return $this->error('Solo se permiten hasta 2 niveles de subcategorías.', 422);
+            }
+        }
+
+        $categoria->update([
+            'nombre' => $request->input('nombre', $categoria->nombre),
+            'descripcion' => $request->input('descripcion', $categoria->descripcion),
+            'parent_id' => $categoriaPadreId,
+            'nivel' => $nivel,
         ]);
 
-        $categoria->update($request->only(['nombre']));
-
-        return $this->success($categoria);
+        return $this->success($categoria->fresh());
     }
 
     public function destroy(Request $request, Proveedor $proveedor, $categoriaId)
