@@ -424,7 +424,9 @@ final class PresupuestoPdfDocumentConfig
             'paginasDocumentacionPdf' => $paginasDocumentacionPdf,
             'paginasTrasSeccionPresupuesto' => $paginasAnexosPdf + $paginasDocumentacionPdf,
             'cierreAtentamente' => PresupuestoPdfLayout::calcularCierreAtentamente($presupuestoPayload, $this),
-            'conceptosListaPdf' => $presupuestoPayload['conceptos'] ?? [],
+            'conceptosListaPdf' => array_values($presupuestoPayload['conceptos'] ?? []),
+            'colorRowEven' => (string) ($this->themeService->getTheme($this->themeKey)['variables']['color-row-even'] ?? '#eff6ff'),
+            'colorRowOdd' => (string) ($this->themeService->getTheme($this->themeKey)['variables']['color-white'] ?? '#ffffff'),
             'tieneBloqueTerminos' => count($terminosLista) > 0
                 || count($validacionesLista) > 0
                 || count($observacionesLista) > 0,

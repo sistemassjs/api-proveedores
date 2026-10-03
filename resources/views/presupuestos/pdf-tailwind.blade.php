@@ -485,13 +485,11 @@
         font-size: 6.5pt;
         border: 1px solid var(--border-default);
         vertical-align: top;
-    }
-
-    .tw-table tbody tr:nth-child(odd) {
         background: var(--table-row-odd-bg);
     }
 
-    .tw-table tbody tr:nth-child(even) {
+    /* Cebra por clase (índice de concepto); DomPDF pinta mejor en td que en tr */
+    .tw-table tbody tr.concepto-row-pair--even > td {
         background: var(--table-row-even-bg);
     }
 
@@ -577,7 +575,6 @@
         border-top: 0;
         padding-top: 0;
         vertical-align: top;
-        background: transparent;
     }
 
     .tw-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num {
@@ -1238,13 +1235,16 @@
                         $monedaPrefijoFila = $monedaCodigoFila === 'EUR' ? '€' : '$';
                     @endphp
                     @if (count($conceptos) > 0)
-                        @foreach ($conceptos as $index => $concepto)
+                        @foreach (array_values($conceptos) as $index => $concepto)
                             @include('presupuestos.partials.presupuesto-pdf-fila-concepto', [
                                 'concepto' => $concepto,
                                 'numeroFila' => $index + 1,
                                 'variant' => 'tailwind',
                                 'mostrarMatrizCostos' => (bool) ($presupuesto['config_mostrar_matriz_costos'] ?? false),
                                 'monedaPrefijo' => $monedaPrefijoFila,
+                                'esFilaCebraPar' => ($index % 2) === 1,
+                                'colorRowEven' => $colorRowEven ?? '#eff6ff',
+                                'colorRowOdd' => $colorRowOdd ?? '#ffffff',
                             ])
                         @endforeach
                     @else

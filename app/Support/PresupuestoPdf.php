@@ -145,7 +145,7 @@ final class PresupuestoPdf
                 }
 
                 return $fila;
-            })->toArray(),
+            })->values()->toArray(),
             'anexos' => $anexosBase64,
             'documentacion_adjuntos' => [],
             'terminos_enunciados' => $enunciadosClasificados['terminos'],

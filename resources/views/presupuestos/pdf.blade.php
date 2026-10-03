@@ -523,6 +523,7 @@
                     vertical-align: top;
                     line-height: 1.15;
                     overflow: hidden;
+                    background: #ffffff;
                 }
 
                 .presupuesto-table tbody td:first-child {
@@ -556,7 +557,8 @@
                     font-weight: 600;
                 }
 
-                .presupuesto-table tbody tr:nth-child(even) {
+                /* Cebra por clase (índice de concepto); DomPDF pinta mejor en td */
+                .presupuesto-table tbody tr.concepto-row-pair--even > td {
                     background: #f8f9fa;
                 }
 
@@ -609,7 +611,6 @@
                     border-top: 0;
                     padding-top: 0;
                     vertical-align: top;
-                    background: transparent;
                 }
 
                 .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num {
@@ -1290,13 +1291,16 @@
                                     $monedaPrefijoFila = $monedaCodigoFila === 'EUR' ? '€' : '$';
                                 @endphp
                                 @if (count($conceptos) > 0)
-                                    @foreach ($conceptos as $index => $concepto)
+                                    @foreach (array_values($conceptos) as $index => $concepto)
                                         @include('presupuestos.partials.presupuesto-pdf-fila-concepto', [
                                             'concepto' => $concepto,
                                             'numeroFila' => $index + 1,
                                             'variant' => 'default',
                                             'mostrarMatrizCostos' => (bool) ($presupuesto['config_mostrar_matriz_costos'] ?? false),
                                             'monedaPrefijo' => $monedaPrefijoFila,
+                                            'esFilaCebraPar' => ($index % 2) === 1,
+                                            'colorRowEven' => $colorRowEven ?? '#f8f9fa',
+                                            'colorRowOdd' => $colorRowOdd ?? '#ffffff',
                                         ])
                                     @endforeach
                                 @else
