@@ -108,7 +108,12 @@ Sin `producto_id` en `presupuesto_conceptos`.
 |---------|-----|
 | `admin.php` | CRUD admin / OPUS; **`/admin/catalogo-empresas`** gestión productos; catalogo-publico feed = deprecado |
 | `shared.php` | `/catalogo/empresas`, tienda, lectura OPUS; `catalogo-publico/*` legacy temporal |
-| `public.php` | Indexes read-only |
+| `public.php` | Indexes read-only; **`/public/catalogo/empresas…`** (tienda abierta, sin auth) |
+
+### Catálogo público abierto (tienda)
+
+Sin autenticación. Misma fuente que el picker (`is_proveedor_catalogo` + productos publicados).  
+Controller: `Catalogo\CatalogoPublicoController`. Detalle de contratos y cotizador: [../cotizaciones/api.md](../cotizaciones/api.md).
 | `construcc.php` | Búsqueda productos para Construcc (**no** es lógica SP) |
 
 ## Servicios

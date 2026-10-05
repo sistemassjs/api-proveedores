@@ -20,6 +20,7 @@ Administrar productos, categorías/subcategorías **por empresa**, marcas; asign
 - Pivot sucursal-producto (stock/precio local)
 - Import CSV + auditorías de import
 - Lectura autenticada para picker PPTOs (`/catalogo/empresas`)
+- Lectura **pública abierta** para tienda/cotizador (`/public/catalogo/empresas…`) — ver dominio [cotizaciones](../cotizaciones/)
 - Consumo read-only desde shared/construcc/tienda (consumidores)
 
 ## Qué NO es este dominio

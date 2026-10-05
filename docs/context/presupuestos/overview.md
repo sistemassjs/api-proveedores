@@ -63,7 +63,7 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 |----------------|--------|
 | Solicitudes de pago (SP/SPP) | No hay conversión presupuesto → SP |
 | Catálogo de **productos** | Sin FK; el picker **lee** productos publicados y hace snapshot. Ver [../cross-domain.md](../cross-domain.md) |
-| Cotizaciones / pedidos | Otros flujos |
+| Cotizaciones (cotizador NexProv) / pedidos | Otros flujos — ver [../cotizaciones/](../cotizaciones/) |
 
 ## Advertencia de lenguaje
 

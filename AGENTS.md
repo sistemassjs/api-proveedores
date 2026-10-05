@@ -11,6 +11,7 @@ Empezar por: [`docs/context/README.md`](docs/context/README.md)
 | Catalogo de productos | `docs/context/catalogo/` |
 | Solicitudes de pago | `docs/context/solicitudes-pago/` |
 | Presupuestos | `docs/context/presupuestos/` |
+| Cotizaciones (cotizador NexProv) | `docs/context/cotizaciones/` |
 
 - Plataforma (auth, proveedor_id, ApiResponse): `docs/context/platform-shared.md`
 - Apps cliente / acceso por usuario (GestionPlus / NexProv): `docs/context/platform-client-apps.md`
@@ -18,7 +19,7 @@ Empezar por: [`docs/context/README.md`](docs/context/README.md)
 - Usuarios / roles / matriz MVP (core): `docs/context/platform-users-roles.md`
 - Relaciones entre dominios: `docs/context/cross-domain.md`
 
-**Regla:** tres dominios aislados; no mezclar. Ver `.cursor/rules/domains-aislados.mdc`.
+**Regla:** dominios aislados; no mezclar. Ver `.cursor/rules/domains-aislados.mdc`.
 
 La UI (Angular) esta en `app-proveedores`; la documentacion de front por dominio esta en `docs/context/*/front.md` **aqui**, no en el repo front.
 
@@ -31,7 +32,7 @@ Laravel · PHP 8 · MySQL · Sanctum · ApiResponse (`status`, `code`, `message`
 | Archivo | Notas |
 |---------|--------|
 | `00-general.mdc` | Siempre |
-| `domains-aislados.mdc` | Siempre — tres dominios |
+| `domains-aislados.mdc` | Siempre — dominios aislados |
 | `api-controllers.mdc` | Controllers |
 | `api-resources.mdc` | Resources |
 | `api-models.mdc` | Models |

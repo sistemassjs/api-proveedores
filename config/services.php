@@ -87,4 +87,15 @@ return [
         'project_id' => env('FCM_PROJECT_ID', 'app-proveedores-notificacion'),
         'sender_id' => env('FCM_SENDER_ID', '989092385974'),
     ],
+
+    /**
+     * WhatsApp para respuestas de cotización (opcional).
+     * Si enabled=false o falla la API, el flujo usa wa.me (deep-link) y no se bloquea.
+     */
+    'whatsapp' => [
+        'enabled' => (bool) env('WHATSAPP_API_ENABLED', false),
+        'api_url' => env('WHATSAPP_API_URL'),
+        'token' => env('WHATSAPP_API_TOKEN'),
+        'from' => env('WHATSAPP_API_FROM'),
+    ],
 ];

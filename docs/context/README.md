@@ -2,17 +2,18 @@
 
 **Fuente unica:** este directorio en `api-proveedores`. No hay documentacion de dominios en `app-proveedores`.
 
-Este ecosistema (`api-proveedores` + `app-proveedores`) tiene **tres dominios de negocio aislados**. Cohabitan en el mismo monorepo, pero **no deben mezclarse** al implementar o refactorizar.
+Este ecosistema (`api-proveedores` + `app-proveedores`) tiene **dominios de negocio aislados**. Cohabitan en el mismo monorepo, pero **no deben mezclarse** al implementar o refactorizar.
 
 > **Futuro:** hay intencion de dividirlos en apps independientes. Aun no esta definido. Mientras tanto, tratar cada dominio como caso aislado.
 
-## Los tres dominios
+## Dominios de negocio
 
 | Dominio | Carpeta | Que es | Que no es |
 |---------|---------|--------|-----------|
-| **Catalogo** | [catalogo/](./catalogo/) | Productos, categorias (por empresa), familias OPUS globales, marcas, unidades globales, stock sucursal, import CSV | No es SP ni presupuestos |
+| **Catalogo** | [catalogo/](./catalogo/) | Productos, categorias (por empresa), familias OPUS globales, marcas, unidades globales, stock sucursal, import CSV; lectura publica `/public/catalogo` | No es SP ni presupuestos ni cotizador |
 | **Solicitudes de pago** | [solicitudes-pago/](./solicitudes-pago/) | SP/SPP, facturas, comprobantes, OC a SP, empresas constructoras | No es catalogo ni presupuestos |
 | **Presupuestos** | [presupuestos/](./presupuestos/) | Presupuestos multi-giro, PDF, cartera, monedas MXN/USD/EUR; cobro roadmap (Plus / pasarelas) | No es SP ni catalogo de productos |
+| **Cotizaciones** | [cotizaciones/](./cotizaciones/) | Solicitud publica de cotizacion (cotizador), inbox NexProv, PDF, respuesta email/WhatsApp | No es SP ni presupuestos ni legacy `cotizaciones` Construcc |
 
 La UI Angular se describe en cada dominio en `front.md`, pero el codigo vive en `app-proveedores`.
 
@@ -30,6 +31,7 @@ La UI Angular se describe en cada dominio en `front.md`, pero el codigo vive en 
 | Productos / categorias / marcas / import | `@docs/context/catalogo/overview.md` |
 | SP, facturas, pagos, OC, Construcciones | `@docs/context/solicitudes-pago/overview.md` |
 | Presupuestos, PDF, cartera, enlace publico | `@docs/context/presupuestos/overview.md` |
+| Cotizador publico / inbox NexProv / respuesta WA-email | `@docs/context/cotizaciones/overview.md` |
 | Usuarios, roles, matriz de acceso por rol (MVP) | `@docs/context/platform-users-roles.md` |
 | Auth / registro empresa / shell / ApiResponse / métricas plataforma / **perfil público** | `@docs/context/platform-shared.md` |
 | **Apps cliente** (header, `user_client_apps`, login por app) | `@docs/context/platform-client-apps.md` |

@@ -15,6 +15,8 @@ use App\Http\Controllers\ProveedorPublicController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\MetricasLookerstudioController;
 use App\Http\Controllers\ApiStatusController;
+use App\Http\Controllers\Catalogo\CatalogoPublicoController;
+use App\Http\Controllers\Cotizacion\CotizadorPublicoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -99,6 +101,27 @@ Route::get(
     [\App\Http\Controllers\ConstruccReportesController::class, 'descargarComprobantesPago']
 )->name('construcc.reportes.descargar-comprobantes-pago')
     ->middleware(['throttle:60,1']);
+
+/**
+ * CATÁLOGO PÚBLICO ABIERTO (modo tienda) — sin autenticación
+ * Fuente: empresas is_proveedor_catalogo + productos mostrar_en_catalogo_publico
+ */
+Route::middleware(['throttle:60,1'])->prefix('public/catalogo')->group(function () {
+    Route::get('empresas', [CatalogoPublicoController::class, 'empresas']);
+    Route::get('empresas/{proveedor}/productos/facets', [CatalogoPublicoController::class, 'facets']);
+    Route::get('empresas/{proveedor}/productos/{producto}', [CatalogoPublicoController::class, 'showProducto']);
+    Route::get('empresas/{proveedor}/productos', [CatalogoPublicoController::class, 'productos']);
+});
+
+/**
+ * COTIZADOR PÚBLICO — empresas + sugerencias + alta de solicitud
+ */
+Route::middleware(['throttle:30,1'])->prefix('public/cotizador')->group(function () {
+    Route::get('empresas', [CotizadorPublicoController::class, 'empresas']);
+    Route::get('empresas/{proveedor}/productos/sugerencias', [CotizadorPublicoController::class, 'sugerencias']);
+    Route::post('empresas/{proveedor}/solicitudes', [CotizadorPublicoController::class, 'store'])
+        ->middleware(['throttle:10,1']);
+});
 
 /**
  * FORMULARIO DE CONTACTO

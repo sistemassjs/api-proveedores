@@ -8,9 +8,12 @@ Los tres dominios son **aislados**. Este archivo lista solo lo que existe de ver
 |--------|------------------------|---------|
 | Catálogo → SP | **No** | SP no usa `producto_id` ni líneas de catálogo |
 | Catálogo productos → Presupuestos | **Lectura + snapshot** | El picker de PPTOs lista empresas `is_proveedor_catalogo` con productos `mostrar_en_catalogo_publico`. Al elegir se **copia** a `presupuesto_conceptos` (sin FK `producto_id`). Ver [catalogo/api.md](./catalogo/api.md#catálogo-empresas-picker-pptos) |
+| Catálogo productos → Cotizaciones | **Lectura pública + snapshot** | Cotizador/tienda públicos (`/public/catalogo`, `/public/cotizador`) leen productos publicados. Al crear solicitud se **copia** a `solicitud_cotizacion_detalles` (FK `producto_id` nullable). Ver [cotizaciones/api.md](./cotizaciones/api.md) |
 | Catálogo de conceptos (PPTOs) | **Propio de presupuestos** | Tabla `presupuesto_catalogo_conceptos`; no es el dominio Catálogo de productos |
 | Feed admin `catalogo_publico_items` → PPTOs | **Deprecado** | Sustituido por productos publicados. Admin/import del feed: **plan de apagado** |
 | Presupuestos → SP | **No** | No hay conversión presupuesto → SP. El cobro/finalización de presupuestos es **roadmap dentro de presupuestos** (cuentas + pasarelas), no el dominio SP |
+| Cotizaciones → SP / Presupuestos | **No** | No hay conversión solicitud cotización → SP ni → presupuesto |
+| Cotizaciones ↔ legacy `cotizaciones` | **No** | Entidad Construcc distinta; no reutilizar |
 | SP → Catálogo | **No** | Endpoints de productos bajo `construcc/…` son otro dominio, mismo archivo de rutas |
 | Cualquiera → Plataforma | **Sí** | Auth, `proveedor_id`, roles/usuarios (core), storage, notificaciones infra |
 
@@ -23,6 +26,16 @@ Mecanismo: **solo lectura + snapshot** (mismo comportamiento UX que tenía el fe
 3. Snapshot a la línea: `nombre`→`descripcion`, unidad de medida, `precio_base`, `imagen_principal`; cantidad la pone el usuario.
 4. Sin FK a `productos`. El documento PPTO queda autónomo.
 5. API: `GET /catalogo/empresas…` (`shared.php`). Sugerencias PPTOs origen `catalogo` leen productos (no `catalogo_publico_items`).
+
+## Puente Catálogo → Cotizaciones (v1)
+
+Mecanismo: **lectura pública + snapshot**.
+
+1. Tienda: `GET /public/catalogo/empresas…` (sin auth).
+2. Cotizador: empresas + `sugerencias?q=` + `POST …/solicitudes` (sin auth; una empresa por solicitud).
+3. Snapshot a `solicitud_cotizacion_detalles` (nombre, unidad, precios, imagen, código); `producto_id` opcional.
+4. En NexProv la empresa puede agregar productos **públicos o privados** del mismo proveedor y editar precios/cantidades.
+5. Notificaciones de entrada: solo app `nexprov`.
 
 ## Acoplamientos suaves (no son puentes de negocio)
 
