@@ -258,18 +258,22 @@ Route::prefix('proveedores')
             });
 
         /**
-         * SOLICITUDES DE COTIZACIÓN (NexProv — cotizador público)
-         * Inbox, edición de líneas, PDF, respuesta email/WhatsApp.
+         * SOLICITUDES DE COTIZACIÓN (NexProv)
+         * Inbox, alta interna, vigencia/políticas, PDF, respuesta, procesada, galería.
          */
         Route::prefix('{proveedor}/solicitudes-cotizacion')
             ->middleware(['proveedor.access'])
             ->group(function () {
                 Route::get('/', [ProveedorSolicitudCotizacionController::class, 'index'])->middleware(['audit']);
+                Route::post('/', [ProveedorSolicitudCotizacionController::class, 'store'])->middleware(['audit']);
                 Route::get('/productos', [ProveedorSolicitudCotizacionController::class, 'productosParaAgregar']);
+                Route::get('/galeria', [ProveedorSolicitudCotizacionController::class, 'galeria'])->middleware(['audit']);
+                Route::get('/galeria/{archivo}/pdf', [ProveedorSolicitudCotizacionController::class, 'descargarArchivo']);
                 Route::get('/{solicitudCotizacion}', [ProveedorSolicitudCotizacionController::class, 'show'])->middleware(['audit']);
                 Route::patch('/{solicitudCotizacion}', [ProveedorSolicitudCotizacionController::class, 'update'])->middleware(['audit']);
                 Route::get('/{solicitudCotizacion}/pdf', [ProveedorSolicitudCotizacionController::class, 'previewPdf']);
                 Route::post('/{solicitudCotizacion}/responder', [ProveedorSolicitudCotizacionController::class, 'responder'])->middleware(['audit']);
+                Route::post('/{solicitudCotizacion}/procesar', [ProveedorSolicitudCotizacionController::class, 'procesar'])->middleware(['audit']);
                 Route::get('/{solicitudCotizacion}/respuestas/{respuesta}/pdf', [ProveedorSolicitudCotizacionController::class, 'descargarRespuestaPdf']);
             });
 

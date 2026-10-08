@@ -20,17 +20,33 @@ Rutas UI sugeridas:
 
 - Listado: `/pages/proveedor/cotizaciones/solicitudes`
 - Detalle: `/pages/proveedor/cotizaciones/solicitudes/:id`
+- Alta interna: `/pages/proveedor/cotizaciones/solicitudes/nueva`
+- Galería: `/pages/proveedor/cotizaciones/galeria`
 
 API: `/api/proveedores/{proveedor}/solicitudes-cotizacion…`
 
-Inbox con chips de estatus (`estatus_counts` en meta).  
-En detalle: editar líneas, agregar producto (públicos/privados), marcar sugerencia, preview PDF, responder email/WhatsApp/ambos.  
-Si WhatsApp devuelve `whatsapp_link`, ofrecer abrir/copiar aunque la API haya fallado.
+#### Inbox
+
+Chips de estatus (`estatus_counts` en meta), filtro por `origen`.
+
+#### Detalle / elaboración
+
+- Editar líneas, agregar producto, marcar sugerencia.
+- Campos **vigencia_hasta** y **políticas** (textarea multilínea).
+- `solicitante_empresa` si origen `empresa_tercero`.
+- Preview PDF.
+- Responder email/WhatsApp/ambos (`whatsapp_link` → abrir/copiar).
+- Acción **Marcar procesada** (cuando el cliente usó la cotización).
+
+#### Galería
+
+Listado de PDFs (`GET …/galeria`) con filtro `tipo=envio,procesada` y descarga `…/galeria/{id}/pdf`.
 
 ## Notificaciones
 
 Tipo broadcast: `solicitud-cotizacion-recibida`.  
-Solo tokens/app `nexprov`. Deep-link al detalle.
+Solo tokens/app `nexprov`. Deep-link al detalle.  
+No se dispara en alta interna.
 
 ## No usar
 

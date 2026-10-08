@@ -7,6 +7,7 @@ enum EstadoSolicitudCotizacion: string
     case RECIBIDA = 'recibida';
     case EN_REVISION = 'en_revision';
     case RESPONDIDA = 'respondida';
+    case PROCESADA = 'procesada';
     case CERRADA = 'cerrada';
     case RECHAZADA = 'rechazada';
 
@@ -21,6 +22,7 @@ enum EstadoSolicitudCotizacion: string
             self::RECIBIDA => 'Recibida',
             self::EN_REVISION => 'En revisión',
             self::RESPONDIDA => 'Respondida',
+            self::PROCESADA => 'Procesada',
             self::CERRADA => 'Cerrada',
             self::RECHAZADA => 'Rechazada',
         };

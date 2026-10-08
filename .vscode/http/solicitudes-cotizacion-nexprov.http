@@ -1,0 +1,45 @@
+###
+# Solicitudes de cotización NexProv — preview PDF público (TEMP pruebas navegador)
+# Proveedor: FERRETERIA LM (id=19)
+#
+# Abrir en el navegador (sin token):
+###
+
+@baseUrl = http://localhost:8000/api
+@proveedorId = 19
+
+### A — Mínima · SC000001 · id=1
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/1/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/1/pdf
+Accept: application/pdf
+
+### B — Media · SC000002 · id=2
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/2/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/2/pdf
+Accept: application/pdf
+
+### C — 10 líneas · SC000003 · id=3
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/3/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/3/pdf
+Accept: application/pdf
+
+### D — Solo email · SC000004 · id=4
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/4/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/4/pdf
+Accept: application/pdf
+
+### E — Stress 50 líneas · SC000005 · id=5
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/5/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/5/pdf
+Accept: application/pdf
+
+### F — Por búsquedas (mix) · SC000006 · id=6
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/6/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/6/pdf
+Accept: application/pdf
+
+### G — Por búsquedas (1 por término) · SC000007 · id=7
+# http://localhost:8000/api/public/solicitudes-cotizacion/19/7/pdf
+GET {{baseUrl}}/public/solicitudes-cotizacion/{{proveedorId}}/7/pdf
+Accept: application/pdf
+

@@ -24,6 +24,7 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 | Storage / mail / FCM | Traits, Mail, Notifications genéricas | Archivos, correo, push |
 | **Apps cliente** | [platform-client-apps.md](./platform-client-apps.md) | Header `X-Client-App`, tabla `user_client_apps`, login/registro por app. Google OAuth multi-app vía state (`platform-auth-socialite.md`). |
 | Shell menús (front) | `app-sidebar-menu` / `app-desktop-sidebar` | Dos menús distintos; ver sección siguiente |
+| **Ajuste de imagen** | `SquareImageCropService` + modal `@theme` | Recorte 1:1 WhatsApp: zoom, asas, cuadrícula, ±90°, flip; ver sección |
 | **Perfil público** | Sección siguiente | Página de presentación compartible por enlace |
 
 ## Registro de empresa (formulario GestionPlus / NexProv)
@@ -72,6 +73,20 @@ Al leer `route.data` en cadena de padres: **priorizar la ruta hoja**; no dejar q
 | Catálogo productos | Productos / Marcas / Categorías / Importación | según cada routing |
 | Presupuestos | según `presupuesto-proveedor.routes.ts` / recursos | listado, crear, preview, clientes… |
 | Dashboard Admin | Dashboard | Panel administrativo |
+
+## Ajuste de imagen (recorte cuadrado, front)
+
+UI de plataforma (no dominio): modal estilo WhatsApp para logos, avatares, anexos y fotos de conceptos/usuarios.
+
+| Pieza | Ubicación |
+|-------|-----------|
+| Modal | `app-proveedores` → `@theme/components/square-image-crop-modal/` |
+| API de apertura | `SquareImageCropService.cropSquareFromFile` / `cropSquareFromDataUrl` (`@core/services`) |
+| Compresión post-recorte | presets `logo` \| `avatar` \| `anexo` vía `ImageCompressionService` |
+
+**Funciones del modal:** modos **Imagen / Marco** (arrastre sin conflicto), pan, pinch/slider/rueda zoom, dial de rotación (al lado de la botonera), **±90°**, **volteo H/V**, **restablecer**, **recorte 1:1 con asas**, **cuadrícula de tercios**, export PNG del área recortada. Relación de aspecto fija **1:1**.
+
+**Uso:** inyectar `SquareImageCropService`; no reimplementar crop en features. Callers: logo empresa, avatar perfil, foto usuario, tarjetas/clientes presupuesto, anexos/conceptos.
 
 ## Métricas de plataforma (operativo)
 

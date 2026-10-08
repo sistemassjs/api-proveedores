@@ -7,6 +7,7 @@ use App\Mail\Cotizacion\CotizacionRespuestaMail;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\SolicitudCotizacion;
+use App\Models\SolicitudCotizacionArchivo;
 use App\Models\SolicitudCotizacionDetalle;
 use App\Models\SolicitudCotizacionRespuesta;
 use App\Models\User;
@@ -32,13 +33,14 @@ class SolicitudCotizacionService
             $solicitud = SolicitudCotizacion::create([
                 'proveedor_id' => $proveedor->id,
                 'folio' => SolicitudCotizacion::generarFolio($proveedor->id),
-                'origen' => 'publico_cotizador',
+                'origen' => SolicitudCotizacion::ORIGEN_PUBLICO,
                 'estatus' => EstadoSolicitudCotizacion::RECIBIDA->value,
                 'cliente_nombre' => $data['cliente_nombre'],
                 'cliente_email' => $data['cliente_email'],
                 'cliente_telefono' => $data['cliente_telefono'] ?? null,
                 'cliente_whatsapp' => $data['cliente_whatsapp'] ?? null,
                 'cliente_notas' => $data['cliente_notas'] ?? null,
+                'vigencia_hasta' => now()->addDays(15)->toDateString(),
                 'total' => 0,
             ]);
 
@@ -90,6 +92,48 @@ class SolicitudCotizacionService
     }
 
     /**
+     * Alta interna en NexProv (sin paso público). Origen: nexprov_interna | empresa_tercero.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function crearDesdeNexprov(Proveedor $proveedor, array $data, ?User $usuario = null): SolicitudCotizacion
+    {
+        return DB::transaction(function () use ($proveedor, $data) {
+            $origen = $data['origen'] ?? SolicitudCotizacion::ORIGEN_NEXPROV;
+            if (! in_array($origen, [
+                SolicitudCotizacion::ORIGEN_NEXPROV,
+                SolicitudCotizacion::ORIGEN_EMPRESA_TERCERO,
+            ], true)) {
+                $origen = SolicitudCotizacion::ORIGEN_NEXPROV;
+            }
+
+            $solicitud = SolicitudCotizacion::create([
+                'proveedor_id' => $proveedor->id,
+                'folio' => SolicitudCotizacion::generarFolio($proveedor->id),
+                'origen' => $origen,
+                'estatus' => EstadoSolicitudCotizacion::EN_REVISION->value,
+                'cliente_nombre' => $data['cliente_nombre'],
+                'cliente_email' => $data['cliente_email'],
+                'cliente_telefono' => $data['cliente_telefono'] ?? null,
+                'cliente_whatsapp' => $data['cliente_whatsapp'] ?? null,
+                'cliente_notas' => $data['cliente_notas'] ?? null,
+                'solicitante_empresa' => $data['solicitante_empresa'] ?? null,
+                'observaciones_internas' => $data['observaciones_internas'] ?? null,
+                'vigencia_hasta' => $data['vigencia_hasta'] ?? now()->addDays(15)->toDateString(),
+                'politicas' => $data['politicas'] ?? null,
+                'total' => 0,
+            ]);
+
+            if (! empty($data['detalles']) && is_array($data['detalles'])) {
+                $this->sincronizarDetalles($solicitud, $data['detalles']);
+                $solicitud->recalcularTotal();
+            }
+
+            return $solicitud->fresh(SolicitudCotizacion::eagerLodable());
+        });
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      */
     public function actualizar(SolicitudCotizacion $solicitud, array $data): SolicitudCotizacion
@@ -101,16 +145,28 @@ class SolicitudCotizacionService
                 'cliente_telefono',
                 'cliente_whatsapp',
                 'cliente_notas',
+                'solicitante_empresa',
                 'observaciones_internas',
+                'vigencia_hasta',
+                'politicas',
                 'estatus',
             ])->filter(fn ($v) => $v !== null)->all();
 
+            if (array_key_exists('politicas', $data) && $data['politicas'] === null) {
+                $cabecera['politicas'] = null;
+            }
+
             if ($cabecera !== []) {
-                if (isset($cabecera['estatus']) && in_array($cabecera['estatus'], [
-                    EstadoSolicitudCotizacion::CERRADA->value,
-                    EstadoSolicitudCotizacion::RECHAZADA->value,
-                ], true)) {
-                    $cabecera['cerrada_at'] = now();
+                if (isset($cabecera['estatus'])) {
+                    if (in_array($cabecera['estatus'], [
+                        EstadoSolicitudCotizacion::CERRADA->value,
+                        EstadoSolicitudCotizacion::RECHAZADA->value,
+                    ], true)) {
+                        $cabecera['cerrada_at'] = now();
+                    }
+                    if ($cabecera['estatus'] === EstadoSolicitudCotizacion::PROCESADA->value) {
+                        $cabecera['procesada_at'] = $solicitud->procesada_at ?? now();
+                    }
                 }
                 $solicitud->update($cabecera);
             }
@@ -121,6 +177,63 @@ class SolicitudCotizacionService
 
             $solicitud->marcarEnRevisionSiRecibida();
             $solicitud->recalcularTotal();
+
+            return $solicitud->fresh(SolicitudCotizacion::eagerLodable());
+        });
+    }
+
+    /**
+     * Marca la cotización como procesada (cliente usó la cotización) y archiva PDF en galería.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function marcarProcesada(SolicitudCotizacion $solicitud, array $data, ?User $usuario): SolicitudCotizacion
+    {
+        return DB::transaction(function () use ($solicitud, $data, $usuario) {
+            $solicitud->loadMissing(['proveedor', 'detalles', 'archivos']);
+
+            if ($solicitud->detalles()->count() < 1) {
+                throw new \InvalidArgumentException('La solicitud no tiene líneas para archivar.');
+            }
+
+            $generarPdf = ! array_key_exists('generar_pdf', $data) || (bool) $data['generar_pdf'];
+
+            if ($generarPdf) {
+                $pdfPath = CotizacionPdf::generarYGuardar($solicitud);
+                $this->registrarArchivo(
+                    $solicitud,
+                    $pdfPath,
+                    'procesada',
+                    'Cotizacion_'.$solicitud->folio.'_procesada.pdf',
+                    $usuario,
+                    null
+                );
+            } elseif ($solicitud->archivos()->whereNotNull('pdf_path')->exists() === false) {
+                // Sin PDF previo: generar de todos modos
+                $pdfPath = CotizacionPdf::generarYGuardar($solicitud);
+                $this->registrarArchivo(
+                    $solicitud,
+                    $pdfPath,
+                    'procesada',
+                    'Cotizacion_'.$solicitud->folio.'_procesada.pdf',
+                    $usuario,
+                    null
+                );
+            }
+
+            $nota = trim((string) ($data['nota'] ?? ''));
+            $update = [
+                'estatus' => EstadoSolicitudCotizacion::PROCESADA->value,
+                'procesada_at' => now(),
+            ];
+            if ($nota !== '') {
+                $prev = trim((string) ($solicitud->observaciones_internas ?? ''));
+                $update['observaciones_internas'] = $prev === ''
+                    ? '[Procesada] '.$nota
+                    : $prev."\n[Procesada] ".$nota;
+            }
+
+            $solicitud->update($update);
 
             return $solicitud->fresh(SolicitudCotizacion::eagerLodable());
         });
@@ -167,7 +280,6 @@ class SolicitudCotizacionService
         SolicitudCotizacionDetalle::query()
             ->where('solicitud_cotizacion_id', $solicitud->id)
             ->when($idsMantener !== [], fn ($q) => $q->whereNotIn('id', $idsMantener))
-            ->when($idsMantener === [], fn ($q) => $q) // lista vacía tras solo eliminaciones
             ->delete();
     }
 
@@ -258,7 +370,6 @@ class SolicitudCotizacionService
 
         if (in_array($canales, ['whatsapp', 'ambos'], true)) {
             $pdfUrl = null;
-            // Link privado no es público; el mensaje WA lleva el folio/total. PDF va por email.
             $wa = $this->whatsApp->enviarOGenerarLink($solicitud, $mensaje, $pdfUrl);
         }
 
@@ -279,8 +390,18 @@ class SolicitudCotizacionService
                 'total' => (float) $solicitud->total,
                 'lineas' => $solicitud->detalles->count(),
                 'cliente_email' => $solicitud->cliente_email,
+                'vigencia_hasta' => optional($solicitud->vigencia_hasta)->toDateString(),
             ],
         ]);
+
+        $this->registrarArchivo(
+            $solicitud,
+            $pdfPath,
+            'envio',
+            'Cotizacion_'.$solicitud->folio.'.pdf',
+            $usuario,
+            $respuesta->id
+        );
 
         $canalUtil = ($emailEstado === 'enviado')
             || in_array($wa['estado'], ['link_generado', 'enviado_api'], true);
@@ -295,6 +416,25 @@ class SolicitudCotizacionService
         }
 
         return $respuesta->fresh(['enviadoPor']);
+    }
+
+    private function registrarArchivo(
+        SolicitudCotizacion $solicitud,
+        string $pdfPath,
+        string $tipo,
+        string $nombre,
+        ?User $usuario,
+        ?int $respuestaId
+    ): SolicitudCotizacionArchivo {
+        return SolicitudCotizacionArchivo::create([
+            'proveedor_id' => $solicitud->proveedor_id,
+            'solicitud_cotizacion_id' => $solicitud->id,
+            'respuesta_id' => $respuestaId,
+            'creado_por_user_id' => $usuario?->id,
+            'tipo' => $tipo,
+            'nombre' => $nombre,
+            'pdf_path' => $pdfPath,
+        ]);
     }
 
     private function notificarEmpresaNexprov(SolicitudCotizacion $solicitud): void

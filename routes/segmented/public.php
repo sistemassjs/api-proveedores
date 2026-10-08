@@ -17,6 +17,7 @@ use App\Http\Controllers\MetricasLookerstudioController;
 use App\Http\Controllers\ApiStatusController;
 use App\Http\Controllers\Catalogo\CatalogoPublicoController;
 use App\Http\Controllers\Cotizacion\CotizadorPublicoController;
+use App\Http\Controllers\Cotizacion\ProveedorSolicitudCotizacionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -121,6 +122,14 @@ Route::middleware(['throttle:30,1'])->prefix('public/cotizador')->group(function
     Route::get('empresas/{proveedor}/productos/sugerencias', [CotizadorPublicoController::class, 'sugerencias']);
     Route::post('empresas/{proveedor}/solicitudes', [CotizadorPublicoController::class, 'store'])
         ->middleware(['throttle:10,1']);
+});
+
+/**
+ * TEMP (pruebas navegador): preview PDF de solicitud sin auth.
+ * Quitar antes de producción. La ruta autenticada sigue en gerente.php.
+ */
+Route::middleware(['throttle:60,1'])->prefix('public/solicitudes-cotizacion')->group(function () {
+    Route::get('{proveedor}/{solicitudCotizacion}/pdf', [ProveedorSolicitudCotizacionController::class, 'previewPdf']);
 });
 
 /**

@@ -14,6 +14,12 @@ class SolicitudCotizacion extends BaseModel
 
     protected $table = 'solicitud_cotizaciones';
 
+    public const ORIGEN_PUBLICO = 'publico_cotizador';
+
+    public const ORIGEN_NEXPROV = 'nexprov_interna';
+
+    public const ORIGEN_EMPRESA_TERCERO = 'empresa_tercero';
+
     protected $fillable = [
         'proveedor_id',
         'folio',
@@ -24,20 +30,27 @@ class SolicitudCotizacion extends BaseModel
         'cliente_telefono',
         'cliente_whatsapp',
         'cliente_notas',
+        'solicitante_empresa',
         'observaciones_internas',
+        'vigencia_hasta',
+        'politicas',
         'total',
         'respondida_at',
         'cerrada_at',
+        'procesada_at',
     ];
 
     protected $casts = [
         'total' => 'decimal:2',
+        'vigencia_hasta' => 'date',
         'respondida_at' => 'datetime',
         'cerrada_at' => 'datetime',
+        'procesada_at' => 'datetime',
     ];
 
     protected static $filters = [
         'estatus' => 'Estatus',
+        'origen' => 'Origen',
         'search' => 'Search',
         'fecha_desde' => 'FechaDesde',
         'fecha_hasta' => 'FechaHasta',
@@ -49,6 +62,7 @@ class SolicitudCotizacion extends BaseModel
             'proveedor',
             'detalles',
             'respuestas',
+            'archivos',
         ];
     }
 
@@ -67,9 +81,19 @@ class SolicitudCotizacion extends BaseModel
         return $this->hasMany(SolicitudCotizacionRespuesta::class)->orderByDesc('created_at');
     }
 
+    public function archivos(): HasMany
+    {
+        return $this->hasMany(SolicitudCotizacionArchivo::class)->orderByDesc('created_at');
+    }
+
     public function filterByEstatus($query, $value)
     {
         return $query->whereIn('estatus', explode(',', (string) $value));
+    }
+
+    public function filterByOrigen($query, $value)
+    {
+        return $query->whereIn('origen', explode(',', (string) $value));
     }
 
     public function filterBySearch($query, $value)
@@ -81,7 +105,8 @@ class SolicitudCotizacion extends BaseModel
                 ->orWhere('cliente_nombre', 'like', "%{$term}%")
                 ->orWhere('cliente_email', 'like', "%{$term}%")
                 ->orWhere('cliente_telefono', 'like', "%{$term}%")
-                ->orWhere('cliente_whatsapp', 'like', "%{$term}%");
+                ->orWhere('cliente_whatsapp', 'like', "%{$term}%")
+                ->orWhere('solicitante_empresa', 'like', "%{$term}%");
         });
     }
 
@@ -124,5 +149,27 @@ class SolicitudCotizacion extends BaseModel
         if ($this->estatus === EstadoSolicitudCotizacion::RECIBIDA->value) {
             $this->update(['estatus' => EstadoSolicitudCotizacion::EN_REVISION->value]);
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function politicasLista(): array
+    {
+        $raw = trim((string) ($this->politicas ?? ''));
+        if ($raw === '') {
+            return [
+                'Sujeto a disponibilidad y cambios de precio.',
+                'Los precios están expresados en moneda nacional (M.N.).',
+            ];
+        }
+
+        $lineas = preg_split('/\r\n|\r|\n/', $raw) ?: [];
+        $lineas = array_values(array_filter(array_map('trim', $lineas), fn ($l) => $l !== ''));
+
+        return $lineas !== [] ? $lineas : [
+            'Sujeto a disponibilidad y cambios de precio.',
+            'Los precios están expresados en moneda nacional (M.N.).',
+        ];
     }
 }

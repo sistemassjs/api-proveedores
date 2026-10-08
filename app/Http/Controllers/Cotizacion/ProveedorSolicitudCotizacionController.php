@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Cotizacion;
 
 use App\Enums\EstadoSolicitudCotizacion;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Cotizacion\ProcesarSolicitudCotizacionRequest;
 use App\Http\Requests\Cotizacion\ResponderSolicitudCotizacionRequest;
+use App\Http\Requests\Cotizacion\StoreSolicitudCotizacionNexprovRequest;
 use App\Http\Requests\Cotizacion\UpdateSolicitudCotizacionRequest;
+use App\Http\Resources\Cotizacion\SolicitudCotizacionArchivoResource;
 use App\Http\Resources\Cotizacion\SolicitudCotizacionResource;
 use App\Http\Resources\Cotizacion\SolicitudCotizacionRespuestaResource;
 use App\Models\Producto;
 use App\Models\Proveedor;
 use App\Models\SolicitudCotizacion;
+use App\Models\SolicitudCotizacionArchivo;
 use App\Models\SolicitudCotizacionRespuesta;
 use App\Services\Cotizacion\SolicitudCotizacionService;
 use App\Support\CotizacionPdf;
@@ -62,6 +66,84 @@ class ProveedorSolicitudCotizacionController extends Controller
         );
     }
 
+    /**
+     * Galería de PDFs archivados del proveedor (envíos + procesadas).
+     */
+    public function galeria(Request $request, Proveedor $proveedor): JsonResponse
+    {
+        $tipo = trim((string) $request->input('tipo', ''));
+        $search = trim((string) $request->input('search', ''));
+        $perPage = max(5, min((int) $request->input('per_page', 20), 100));
+
+        $query = SolicitudCotizacionArchivo::query()
+            ->with(['solicitud', 'creadoPor'])
+            ->where('proveedor_id', $proveedor->id)
+            ->orderByDesc('created_at');
+
+        if ($tipo !== '') {
+            $query->whereIn('tipo', explode(',', $tipo));
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'like', "%{$search}%")
+                    ->orWhereHas('solicitud', function ($sq) use ($search) {
+                        $sq->where('folio', 'like', "%{$search}%")
+                            ->orWhere('cliente_nombre', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $paginator = $query->paginate($perPage);
+        $data = SolicitudCotizacionArchivoResource::collection($paginator)->resolve();
+
+        return $this->paginated(
+            $paginator->setCollection(collect($data)),
+            'Galería de archivos de cotización.'
+        );
+    }
+
+    public function descargarArchivo(
+        Proveedor $proveedor,
+        SolicitudCotizacionArchivo $archivo
+    ): Response|JsonResponse {
+        if ((int) $archivo->proveedor_id !== (int) $proveedor->id) {
+            return $this->error('El archivo no pertenece a este proveedor.', null, 403);
+        }
+
+        if (! $archivo->pdf_path || ! Storage::disk('private')->exists($archivo->pdf_path)) {
+            return $this->error('PDF no disponible.', null, 404);
+        }
+
+        return response()->download(
+            Storage::disk('private')->path($archivo->pdf_path),
+            $archivo->nombre ?: ('Cotizacion_'.$archivo->id.'.pdf')
+        );
+    }
+
+    public function store(
+        StoreSolicitudCotizacionNexprovRequest $request,
+        Proveedor $proveedor
+    ): JsonResponse {
+        try {
+            $solicitud = $this->service->crearDesdeNexprov(
+                $proveedor,
+                $request->validated(),
+                $request->user()
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
+        } catch (\Throwable $e) {
+            return $this->error('No se pudo crear la cotización.', $e->getMessage(), 500);
+        }
+
+        return $this->success(
+            new SolicitudCotizacionResource($solicitud),
+            'Cotización creada.',
+            201
+        );
+    }
+
     public function show(Proveedor $proveedor, SolicitudCotizacion $solicitudCotizacion): JsonResponse
     {
         if (! $this->pertenece($proveedor, $solicitudCotizacion)) {
@@ -97,6 +179,33 @@ class ProveedorSolicitudCotizacionController extends Controller
         return $this->success(
             new SolicitudCotizacionResource($actualizada),
             'Solicitud actualizada.'
+        );
+    }
+
+    public function procesar(
+        ProcesarSolicitudCotizacionRequest $request,
+        Proveedor $proveedor,
+        SolicitudCotizacion $solicitudCotizacion
+    ): JsonResponse {
+        if (! $this->pertenece($proveedor, $solicitudCotizacion)) {
+            return $this->error('La solicitud no pertenece a este proveedor.', null, 403);
+        }
+
+        try {
+            $procesada = $this->service->marcarProcesada(
+                $solicitudCotizacion,
+                $request->validated(),
+                $request->user()
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), null, 422);
+        } catch (\Throwable $e) {
+            return $this->error('No se pudo marcar como procesada.', $e->getMessage(), 500);
+        }
+
+        return $this->success(
+            new SolicitudCotizacionResource($procesada),
+            'Cotización marcada como procesada y archivada.'
         );
     }
 
