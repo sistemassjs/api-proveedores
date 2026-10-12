@@ -63,6 +63,7 @@ class CrearSolicitudPagoSinFacturaRequest extends FormRequest
             // 'factura_xml.required' => 'El archivo XML de la factura es obligatorio',
             // 'factura_xml.mimes' => 'El archivo debe ser un XML válido',
             // 'factura_xml.max' => 'El archivo XML no debe superar los 5MB',
+            'cotizacion.required' => 'El archivo de cotización es obligatorio',
             'cotizacion.mimes' => 'El archivo de cotización debe ser un formato válido (PDF, imagen o documento)',
             'cotizacion.max' => 'El archivo de cotización no debe superar los 10MB',
             'proveedor_id.required' => 'Debe seleccionar un proveedor',
