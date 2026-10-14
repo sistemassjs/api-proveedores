@@ -57,10 +57,12 @@ class ProveedorMarcaController extends Controller
     {
         $request->validate([
             'nombre' => 'required|string|max:255',
+            'descripcion' => 'nullable|string',
         ]);
 
         $marca = Marca::create([
             'nombre' => $request->nombre,
+            'descripcion' => $request->descripcion,
             'proveedor_id' => $proveedor->id,
         ]);
 
@@ -80,9 +82,10 @@ class ProveedorMarcaController extends Controller
 
         $request->validate([
             'nombre' => 'sometimes|string|max:255',
+            'descripcion' => 'nullable|string',
         ]);
 
-        $marca->update($request->only(['nombre']));
+        $marca->update($request->only(['nombre', 'descripcion']));
 
         return $this->success($marca);
     }
