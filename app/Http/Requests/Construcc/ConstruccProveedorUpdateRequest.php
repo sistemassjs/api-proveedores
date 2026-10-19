@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Construcc;
 
+use App\Models\Proveedor;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -37,7 +38,16 @@ class ConstruccProveedorUpdateRequest extends FormRequest
         return [
             // Datos del proveedor con validación sometimes
             'razon_social' => 'sometimes|string|max:255|unique:proveedores,razon_social,' . $proveedorId,
-            'rfc' => 'sometimes|string|min:12|max:13|unique:proveedores,rfc,' . $proveedorId,
+            // RFC genérico SAT puede repetirse; el resto sigue único (BD: rfc_unico).
+            'rfc' => array_values(array_filter([
+                'sometimes',
+                'string',
+                'min:12',
+                'max:13',
+                Proveedor::esRfcGenerico($this->input('rfc'))
+                    ? null
+                    : Rule::unique('proveedores', 'rfc')->ignore($proveedorId),
+            ])),
             'nombre_comercial' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|max:255|unique:proveedores,email,' . $proveedorId,
             'telefono' => 'sometimes|string|max:20|unique:proveedores,telefono,' . $proveedorId,

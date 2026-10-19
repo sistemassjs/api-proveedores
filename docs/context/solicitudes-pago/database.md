@@ -14,6 +14,18 @@
 | `EmpresaConstrucc` | `empresa_construcc` | Empresa constructora (+ consecutivos) |
 | `OcConstrucc` | `oc_construcc` | Tracking ligero OC externa |
 | `OrdenCompra` | local | Soporte conversión OC→SP |
+| `Proveedor` (alta Construcc) | `proveedores` | Alta `tipo_alta = 2` desde API Construcc; ver unicidad RFC abajo |
+
+## Unicidad de RFC en `proveedores` (alta Construcc)
+
+- Columna de negocio: `rfc` (nullable; índice de búsqueda `proveedores_rfc_index`).
+- Unicidad real: columna generada **`rfc_unico`** (`VARCHAR(255) STORED`) + unique `proveedores_rfc_unico_unique`.
+  - Si `UPPER(rfc) = XAXX010101000` (RFC genérico SAT) → `rfc_unico = NULL` → **se puede repetir**.
+  - Cualquier otro RFC → `rfc_unico = rfc` → **sigue único**.
+- Migración: `2026_10_19_130802_allow_generic_rfc_duplicates_on_proveedores_table`.
+- Constante / helper: `Proveedor::RFC_GENERICO`, `Proveedor::esRfcGenerico()`.
+- Validación Laravel (solo rutas Construcc store/update y alta SP integrada): omite `unique` / no usa el genérico como “ya existe”.
+- Admin / perfil GestionPlus: siguen validando `unique` a nivel FormRequest.
 
 ## `pagos_spp.origen`
 

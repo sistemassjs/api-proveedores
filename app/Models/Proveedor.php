@@ -18,6 +18,17 @@ class Proveedor extends BaseModel
 
     protected $table = 'proveedores';
 
+    /** RFC genérico SAT (público en general). Puede repetirse en altas Construcc. */
+    public const RFC_GENERICO = 'XAXX010101000';
+
+    /**
+     * Indica si el RFC es el genérico SAT (permite duplicados en rutas Construcc).
+     */
+    public static function esRfcGenerico(?string $rfc): bool
+    {
+        return strtoupper(trim((string) $rfc)) === self::RFC_GENERICO;
+    }
+
     protected $fillable = [
         // Información general
         'logo',
@@ -35,6 +46,7 @@ class Proveedor extends BaseModel
         'nombre_de_quien_registra',
         'monto_pagado',
         // NOTA: El UNIQUE de razon_social se desactivó en una migración para permitir el registro manual de Manuel.
+        // NOTA: rfc — unicidad vía columna generada rfc_unico (permite repetir RFC_GENERICO).
         'razon_social',
         'tipos_empresa_id',
         'tipos_empresa_otro',

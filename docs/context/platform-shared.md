@@ -31,6 +31,8 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 
 Alta por formulario (`POST /auth/register_proveedor`). Contratos HTTP iguales en **GestionPlus** y **NexProv**. La app de origen va en `X-Client-App` (otorga acceso + correo con nombre/URL de esa app). Ver [platform-client-apps.md](./platform-client-apps.md). No aplica a registro básico SP ni a `tipo_alta = 2` (Construcción).
 
+Alta Construcc (`tipo_alta = 2`, ApiKey): el RFC genérico SAT `XAXX010101000` **puede duplicarse**; el resto de RFCs siguen únicos. Detalle en [solicitudes-pago/database.md](./solicitudes-pago/database.md#unicidad-de-rfc-en-proveedores-alta-construcc).
+
 | Paso | Qué persiste |
 |------|----------------|
 | Formulario de empresa | `Proveedor` + `User` GERENTE (`password` **null**) + pivot `PRINCIPAL`. Correo `/gen-pass`. El login falla mientras no hay contraseña (`blank(password)`). |

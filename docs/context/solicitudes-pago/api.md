@@ -35,6 +35,16 @@ Controller: `AdminSolicitudPagoController`. Preview en ficha empresa: `GET /admi
 
 Middleware ApiKey. Controllers: `ConstruccSolicitudPagoController`, `ConstruccPagosSPPController`, `ConstruccProveedorSolicitudPagoController`, etc.
 
+### Alta / edición de proveedores (`/construcc/proveedores`)
+
+| Método | Ruta | Notas |
+|--------|------|-------|
+| `POST` | `/` | Alta `tipo_alta = 2`. Request: `ConstruccProveedorStoreRequest` |
+| `PUT` | `/{proveedor}` | Update. Request: `ConstruccProveedorUpdateRequest` |
+| `GET` | `/buscar-por-rfc` | Búsqueda; con varios genéricos devuelve el primero |
+
+**RFC genérico SAT `XAXX010101000`:** en estas rutas **sí se puede registrar más de un proveedor** con ese RFC. El resto de RFCs siguen únicos (BD `rfc_unico` + regla `unique` en FormRequest). Ver [database.md](./database.md#unicidad-de-rfc-en-proveedores-alta-construcc).
+
 ### Pagos SPP / directos (`/construcc/pagos-spp`)
 
 | Método | Ruta | Notas |

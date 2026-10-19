@@ -1940,11 +1940,21 @@ class ConstruccSolicitudPagoController extends Controller
             // ============================================
             // PASO 1: Validar y buscar proveedor existente
             // ============================================
-            $proveedorExistente = Proveedor::where('rfc', $validated['proveedor_rfc'])
-                ->orWhere('email', $validated['proveedor_email'])
-                ->orWhere('telefono', $validated['proveedor_telefono'])
-                ->when(isset($validated['proveedor_celular']), function ($query) use ($validated) {
-                    return $query->orWhere('telefono', $validated['proveedor_celular']);
+            // RFC genérico SAT puede repetirse: no se usa como criterio de "ya existe".
+            $proveedorExistente = Proveedor::query()
+                ->where(function ($q) use ($validated) {
+                    $rfc = strtoupper((string) $validated['proveedor_rfc']);
+                    if (! Proveedor::esRfcGenerico($rfc)) {
+                        $q->where('rfc', $rfc)
+                            ->orWhere('email', $validated['proveedor_email'])
+                            ->orWhere('telefono', $validated['proveedor_telefono']);
+                    } else {
+                        $q->where('email', $validated['proveedor_email'])
+                            ->orWhere('telefono', $validated['proveedor_telefono']);
+                    }
+                    if (isset($validated['proveedor_celular'])) {
+                        $q->orWhere('telefono', $validated['proveedor_celular']);
+                    }
                 })
                 ->first();
 
