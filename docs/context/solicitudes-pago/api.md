@@ -41,9 +41,14 @@ Middleware ApiKey. Controllers: `ConstruccSolicitudPagoController`, `ConstruccPa
 |--------|------|-------|
 | `POST` | `/` | Alta `tipo_alta = 2`. Request: `ConstruccProveedorStoreRequest` |
 | `PUT` | `/{proveedor}` | Update. Request: `ConstruccProveedorUpdateRequest` |
-| `GET` | `/buscar-por-rfc` | Búsqueda; con varios genéricos devuelve el primero |
+| `GET` | `/buscar-por-rfc` | Búsqueda por RFC. Si es genérico SAT → siempre `data: null` (no modal vincular en Construcc) |
 
-**RFC genérico SAT `XAXX010101000`:** en estas rutas **sí se puede registrar más de un proveedor** con ese RFC. El resto de RFCs siguen únicos (BD `rfc_unico` + regla `unique` en FormRequest). Ver [database.md](./database.md#unicidad-de-rfc-en-proveedores-alta-construcc).
+**RFC genérico SAT `XAXX010101000`:**
+- Se puede **registrar más de un** proveedor con ese RFC (store/update + BD `rfc_unico`).
+- `buscar-por-rfc` **no** lo reporta como existente (`message: No existe`, `data: null`) para que Construcc no abra el modal “Proveedor existente / Vincular”.
+- El resto de RFCs siguen únicos y sí disparan la búsqueda/vinculación habitual.
+
+Ver [database.md](./database.md#unicidad-de-rfc-en-proveedores-alta-construcc).
 
 ### Pagos SPP / directos (`/construcc/pagos-spp`)
 

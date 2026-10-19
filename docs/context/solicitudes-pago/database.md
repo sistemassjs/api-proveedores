@@ -25,6 +25,7 @@
 - Migración: `2026_10_19_130802_allow_generic_rfc_duplicates_on_proveedores_table`.
 - Constante / helper: `Proveedor::RFC_GENERICO`, `Proveedor::esRfcGenerico()`.
 - Validación Laravel (solo rutas Construcc store/update y alta SP integrada): omite `unique` / no usa el genérico como “ya existe”.
+- `GET /construcc/proveedores/buscar-por-rfc`: si el RFC es genérico, responde `data: null` (Construcc no muestra modal de vincular).
 - Admin / perfil GestionPlus: siguen validando `unique` a nivel FormRequest.
 
 ## `pagos_spp.origen`
