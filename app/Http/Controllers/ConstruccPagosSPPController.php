@@ -654,6 +654,13 @@ class ConstruccPagosSPPController extends Controller
                 $ultimos4 = substr($campo, -4);
             }
 
+            $fechaPago = now()->format('Y-m-d H:i:s');
+            if (! empty($infoComprobante['fecha'])) {
+                $hora = trim((string) ($infoComprobante['hora'] ?? '00:00:00'));
+                $fechaPago = Carbon::parse(trim($infoComprobante['fecha']) . ' ' . $hora)
+                    ->format('Y-m-d H:i:s');
+            }
+
             $pago = PagoSPP::create([
                 'origen' => PagoSPP::ORIGEN_SPP,
                 'comprobante_pago' => $comprobantePath,
@@ -666,11 +673,8 @@ class ConstruccPagosSPPController extends Controller
                 'usuario_registro_id' => $validated['usuario_id'],
                 'usuario_registro_nombre' => $validated['usuario_nombre'],
                 'monto_total' => $validated['monto_total'],
-                'fecha_pago' => Carbon::parse(
-                    trim($validated['info_comprobante']['fecha']) . ' ' .
-                        trim($validated['info_comprobante']['hora'])
-                )->format('Y-m-d H:i:s'),
-                'referencia_pago' => $validated['info_comprobante']['referencia'] ?? '',
+                'fecha_pago' => $fechaPago,
+                'referencia_pago' => $infoComprobante['referencia'] ?? '',
                 'banco_destino' => $infoComprobante['bancoDestino'] ?? '',
                 'titular_cuenta_destino' => $infoComprobante['nombreBeneficiario'] ?? '',
                 'clave_rastreo' => $infoComprobante['claveRastreo'] ?? '',

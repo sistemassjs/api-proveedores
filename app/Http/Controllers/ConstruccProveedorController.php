@@ -155,6 +155,9 @@ class ConstruccProveedorController extends Controller
 
     /**
      * Búsqueda por RFC. GET ?rfc=XXX&empresa_id=ID (opcional)
+     *
+     * El RFC genérico SAT no se reporta como existente: permite alta nueva en Construcc
+     * sin el modal de “vincular proveedor”.
      */
     public function buscarPorRfc(Request $request): JsonResponse
     {
@@ -162,6 +165,16 @@ class ConstruccProveedorController extends Controller
         if (empty($rfc)) {
             return response()->json(['success' => false, 'message' => 'El RFC es obligatorio.', 'data' => null], 422);
         }
+
+        // Público en general: no vincular por RFC; el alta puede repetir este valor.
+        if (Proveedor::esRfcGenerico($rfc)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No existe',
+                'data' => null,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        }
+
         $query = Proveedor::query();
         $this->aplicarFiltroEmpresa($query, $request->filled('empresa_id') ? $request->integer('empresa_id') : null);
         $proveedor = $query->where('rfc', strtoupper($rfc))->first();
