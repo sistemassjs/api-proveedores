@@ -782,10 +782,10 @@ class CsvImportController extends Controller
         foreach ($catalogos['categorias'] as $nombreCategoria => $subcategorias) {
             $catalogosImportResults['categorias']['total']++;
             try {
-                // Categoría principal
+                // Raíz = nivel 0; hija = nivel 1 (alineado con CRUD / validación de producto)
                 $categoria = Categoria::updateOrCreate(
-                    ['nombre' => $nombreCategoria, 'proveedor_id' => $proveedorId, 'nivel' => 1],
-                    ['activo' => true]
+                    ['nombre' => $nombreCategoria, 'proveedor_id' => $proveedorId, 'parent_id' => null],
+                    ['nivel' => 0, 'activo' => true]
                 );
                 $catalogosImportResults['categorias']['imported']++;
 
@@ -794,8 +794,8 @@ class CsvImportController extends Controller
                     $catalogosImportResults['categorias']['total']++;
                     try {
                         Categoria::updateOrCreate(
-                            ['nombre' => $nombreSubcategoria, 'parent_id' => $categoria->id, 'proveedor_id' => $proveedorId, 'nivel' => 2],
-                            ['activo' => true]
+                            ['nombre' => $nombreSubcategoria, 'parent_id' => $categoria->id, 'proveedor_id' => $proveedorId],
+                            ['nivel' => 1, 'activo' => true]
                         );
                         $catalogosImportResults['categorias']['imported']++;
                     } catch (\Throwable $e) {

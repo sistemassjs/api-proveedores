@@ -31,11 +31,13 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 
 Alta por formulario (`POST /auth/register_proveedor`). Contratos HTTP iguales en **GestionPlus** y **NexProv**. La app de origen va en `X-Client-App` (otorga acceso + correo con nombre/URL de esa app). Ver [platform-client-apps.md](./platform-client-apps.md). No aplica a registro básico SP ni a `tipo_alta = 2` (Construcción).
 
+**NexProv → catálogo:** al otorgar acceso `nexprov` (alta nueva, `activar_app` en login/registro, o Google OAuth `?app=nexprov`), `User::grantClientApp` activa `proveedores.is_proveedor_catalogo = true` en el proveedor principal. GestionPlus / SP / Construcc no tocan esa bandera. Ver [catalogo/overview.md](./catalogo/overview.md).
+
 Alta Construcc (`tipo_alta = 2`, ApiKey): el RFC genérico SAT `XAXX010101000` **puede duplicarse**; el resto de RFCs siguen únicos. Detalle en [solicitudes-pago/database.md](./solicitudes-pago/database.md#unicidad-de-rfc-en-proveedores-alta-construcc).
 
 | Paso | Qué persiste |
 |------|----------------|
-| Formulario de empresa | `Proveedor` + `User` GERENTE (`password` **null**) + pivot `PRINCIPAL`. Correo `/gen-pass`. El login falla mientras no hay contraseña (`blank(password)`). |
+| Formulario de empresa | `Proveedor` + `User` GERENTE (`password` **null**) + pivot `PRINCIPAL`. Correo `/gen-pass`. El login falla mientras no hay contraseña (`blank(password)`). Si app = `nexprov` → `is_proveedor_catalogo = true`. |
 | `/gen-pass` (`register_proveedor_completar`) **o** `password/forgot` → `password/reset` | **Update** de `users.password`. Si el alta sigue pendiente: sucursal Matriz, `registro_completado_at`, limpia token, `estatus` = `registro_completado`. |
 
 `users.password` ya es nullable (mismo patrón que OAuth). Recuperar contraseña funciona **antes** de `/gen-pass` porque el usuario ya existe. Reenviar correo de activación sigue válido mientras `registro_completado_at` sea null.

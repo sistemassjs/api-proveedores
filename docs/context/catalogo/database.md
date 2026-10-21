@@ -26,6 +26,17 @@
   (producto.categoria_id / subcategoria_id)
 ```
 
+### Niveles `categorias.nivel` (obligatorio)
+
+| Rol | `parent_id` | `nivel` |
+|-----|-------------|---------|
+| Categoría padre (raíz) | `null` | **0** |
+| Subcategoría (hija directa) | id del padre | **1** |
+| Nieto (CRUD permite hasta 2) | id de hija | **2** |
+
+`ProductoStoreRequest` / `ProductoUpdateRequest` exigen `categoria_id` con **nivel 0**.  
+Import CSV (`CSVImportJob`, `CsvImportController`) y bulk (`ProveedorProductoBulkService`) deben crear raíces en 0 e hijas en 1. Migración de corrección: `fix_categorias_nivel_raiz_importacion`.
+
 ## Unidades
 
 `unidad_medidas` es catálogo **global**. `producto.unidad_medida_id` = unidad de venta. Opcionales: `unidad_contenido_id`, `unidad_base_id`, `presentacion`, `cantidad_contenida`, `factor_conversion`.

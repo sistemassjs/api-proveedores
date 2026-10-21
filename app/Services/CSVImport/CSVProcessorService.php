@@ -1208,13 +1208,13 @@ class CSVProcessorService
             ];
         })->toArray();
 
-        // Add new categorias
+        // Add new categorias (raíz = nivel 0)
         foreach ($nuevas as $categoria) {
             $mergedData[] = [
                 'id' => null,
                 'nombre' => $categoria,
                 'descripcion' => null,
-                'nivel' => 1,
+                'nivel' => 0,
                 'es_nueva' => true,
             ];
         }
@@ -1267,7 +1267,7 @@ class CSVProcessorService
             ];
         })->toArray();
 
-        // Add new subcategorias
+        // Add new subcategorias (hija directa = nivel 1)
         foreach ($nuevas as $subcategoria) {
             $mergedData[] = [
                 'id' => null,
@@ -1275,7 +1275,7 @@ class CSVProcessorService
                 'descripcion' => null,
                 'parent_id' => null,
                 'parent_nombre' => null,
-                'nivel' => 2,
+                'nivel' => 1,
                 'es_nueva' => true,
             ];
         }

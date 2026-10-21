@@ -10,6 +10,8 @@ Administrar productos, categorías/subcategorías **por empresa**, marcas; asign
 
 **Publicación para presupuestos:** bandera `mostrar_en_catalogo_publico` en `productos`. Solo proveedores `is_proveedor_catalogo` con productos publicados aparecen en el picker de PPTOs (`GET /catalogo/empresas`). Mecanismo: **lectura + snapshot** (sin FK). Detalle en [../cross-domain.md](../cross-domain.md).
 
+**Origen de `is_proveedor_catalogo`:** además del marcado admin (`marcar-catalogo` / form `?catalogo=1`), se activa automáticamente al otorgar acceso NexProv (`User::grantClientApp('nexprov')`: alta, `activar_app` u OAuth). Ver [../platform-client-apps.md](../platform-client-apps.md).
+
 ## Límites (qué entra)
 
 - Producto (campos universales + precios + specs/docs/imágenes + `mostrar_en_catalogo_publico`)

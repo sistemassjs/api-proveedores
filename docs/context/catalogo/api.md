@@ -52,6 +52,7 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 - Columnas opcionales: `familia`, `subfamilia`, más campos universales; `PropiedadN_Clave` / `PropiedadN_Valor` → EAV.
 - Homologación OPUS no bloqueante: match por `familia`/`subfamilia` o, si faltan, por `categoria`/`subcategoria` local (`CatalogoOpusHomologacionService`). Si no hay match de familia → OPUS null; local se guarda igual.
 - Columna `precio` → `precio_base`.
+- **Categorías al importar:** raíz `nivel = 0`, hija `nivel = 1` (antes el CSV masivo usaba 1/2 y rompía el update de producto). Ver [database.md](./database.md#niveles-categoriasnivel-obligatorio).
 - Formato genérico vs lineamiento NEXPROV (columnas actuales, gaps y encabezado v1.1): [plantilla-importacion.md](./plantilla-importacion.md).
 - Tabla temporal de import guarda `payload` JSON con la fila completa (p. ej. `PropiedadN_*`, `familia`, `tags`) para que el job persista especificaciones EAV.
 

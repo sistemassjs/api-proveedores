@@ -275,15 +275,36 @@ class User extends Authenticatable
 
     /**
      * Otorga acceso a una app cliente (idempotente).
+     * Si la app es NexProv, activa is_proveedor_catalogo en el proveedor principal.
      */
     public function grantClientApp(?string $appKey = null): UserClientApp
     {
         $key = \App\Support\ClientApp::normalize($appKey);
 
-        return $this->clientApps()->firstOrCreate(
+        $clientApp = $this->clientApps()->firstOrCreate(
             ['app_key' => $key],
             []
         );
+
+        if ($key === 'nexprov') {
+            $this->activarProveedorCatalogoSiNexProv();
+        }
+
+        return $clientApp;
+    }
+
+    /**
+     * Alta o activación NexProv: marca la empresa principal como proveedor de catálogo.
+     */
+    private function activarProveedorCatalogoSiNexProv(): void
+    {
+        $proveedor = $this->proveedorPrincipal();
+        if (! $proveedor || $proveedor->is_proveedor_catalogo) {
+            return;
+        }
+
+        $proveedor->is_proveedor_catalogo = true;
+        $proveedor->save();
     }
 
     /**
