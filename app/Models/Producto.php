@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProductoTipo;
 use App\Traits\Filterable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -154,7 +155,9 @@ class Producto extends BaseModel
 
     public function filterByTipo($query, $value)
     {
-        return $query->where('tipo', $value);
+        $codigo = ProductoTipo::codigoParaGuardar($value);
+
+        return $query->where('tipo', $codigo);
     }
 
     public function filterByActivo($query, $value)

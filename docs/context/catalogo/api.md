@@ -39,6 +39,7 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 - **Create required:** solo `nombre` y `codigo_interno`. Opcionales: descripción, categoría/subcategoría local, marca, unidad, tres precios, y universales.
 - **Taxonomías en paralelo:** `categoria_id`/`subcategoria_id` (local proveedor) y `familia_id`/`subfamilia_id` (OPUS). En CRUD son independientes (sin auto-homologación). En bulk/CSV se intenta empatar OPUS desde textos familia o, si faltan, categoría local para reducir nulls.
 - Store/update: campos universales opcionales (`tipo`, presentación/conversión, `tags`, etc.). Update usa `sometimes` (solo aplica keys enviadas).
+- **`tipo`**: bandera `p` (producto), `s` (servicio), `r` (renta). Nullable. El alta/edición también acepta el nombre legado y guarda el código. La respuesta trae `tipo` + `tipo_nombre`. El listado incluye `meta.tipos` (`codigo`, `nombre`) para el selector; nuevas banderas se agregan en `App\Enums\ProductoTipo`.
 - Array `especificaciones[]` (`atributo`|`clave`, `valor`, `unidad`, `orden`) se sincroniza en create/update.
 - Precios: `precio_base`, `precio_mayoreo`, `precio_menudeo` — opcionales; `''` → `null`.
 - **`mostrar_en_catalogo_publico`** (bool, default `false`): si el producto se lista en el picker de presupuestos vía `/catalogo/empresas`.

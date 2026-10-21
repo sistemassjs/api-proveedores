@@ -36,7 +36,17 @@ Se mantienen columnas en `productos`: `precio_base`, `precio_mayoreo`, `precio_m
 
 ## Campos universales adicionales en `productos`
 
-`tipo`, `codigo_fabricante`, `codigo_barras`, `disponibilidad`, `tiempo_entrega`, `url_producto`, `tags` (json), más presentación/conversión y FKs OPUS anteriores.
+`tipo` (bandera corta, ver abajo), `codigo_fabricante`, `codigo_barras`, `disponibilidad`, `tiempo_entrega`, `url_producto`, `tags` (json), más presentación/conversión y FKs OPUS anteriores.
+
+**`tipo`** (string nullable): bandera comercial del ítem. Catálogo en `App\Enums\ProductoTipo` — un caso nuevo es una bandera nueva.
+
+| Código | Nombre |
+|--------|--------|
+| `p` | Producto |
+| `s` | Servicio |
+| `r` | Renta |
+
+Alta y edición aceptan el código o el nombre legado (`producto`, `servicio`, `renta`) y persisten el código. El listado de productos del proveedor incluye `meta.tipos` con ese catálogo.
 
 **`mostrar_en_catalogo_publico`** (boolean, default `false`): publica el producto en el picker de presupuestos (`/catalogo/empresas`). Índice `(proveedor_id, mostrar_en_catalogo_publico)`.
 

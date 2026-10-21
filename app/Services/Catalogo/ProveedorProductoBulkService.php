@@ -3,6 +3,7 @@
 namespace App\Services\Catalogo;
 
 use App\Enums\EstadoGeneral;
+use App\Enums\ProductoTipo;
 use App\Models\Categoria;
 use App\Models\Marca;
 use App\Models\Producto;
@@ -106,7 +107,7 @@ class ProveedorProductoBulkService
                         'nombre' => $row['nombre'],
                         'descripcion' => $row['descripcion'] ?? null,
                         'modelo' => $row['modelo'] ?? null,
-                        'tipo' => $row['tipo'] ?? null,
+                        'tipo' => ProductoTipo::codigoParaGuardar($row['tipo'] ?? null),
                         'codigo_fabricante' => $row['codigo_fabricante'] ?? null,
                         'codigo_barras' => $row['codigo_barras'] ?? null,
                         'sku' => $codigo,

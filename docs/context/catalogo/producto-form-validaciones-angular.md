@@ -80,7 +80,7 @@ Endpoints (gerente):
 
 | Campo | Restricciones |
 |-------|----------------|
-| `tipo` | nullable; `producto` \| `servicio` \| `renta` |
+| `tipo` | nullable; bandera `p` (producto), `s` (servicio), `r` (renta). También se acepta el nombre legado y la API guarda el código |
 | `modelo` | nullable, string, max:60 |
 | `codigo_fabricante` | nullable, string, max:100 |
 | `codigo_barras` | nullable, string, max:100 |
@@ -94,6 +94,20 @@ Endpoints (gerente):
 | `url_producto` | nullable, string, max:500 |
 | `tags` | nullable, array; cada ítem string max:100 |
 | `mostrar_en_catalogo_publico` | nullable, boolean (default BD `false`) |
+
+#### Bandera `tipo` (producto / servicio)
+
+Selector del alta y la edición. El valor que se guarda es el código. El catálogo vive en `App\Enums\ProductoTipo`: un caso nuevo es una bandera nueva.
+
+| Enviar | Se guarda | Nombre |
+|--------|-----------|--------|
+| `p` o `producto` | `p` | Producto |
+| `s` o `servicio` | `s` | Servicio |
+| `r` o `renta` | `r` | Renta |
+
+- Opcional. Si no se envía, queda `null`.
+- Respuesta del producto: `tipo` (código) y `tipo_nombre` (nombre).
+- `GET …/productos` incluye `meta.tipos`: `[{ "codigo": "p", "nombre": "Producto" }, …]` para no hardcodear el selector.
 | `especificaciones` | nullable, array (ver abajo) |
 | `proveedor_id` | sometimes; lo fija la ruta — no enviar desde el form |
 
@@ -142,7 +156,7 @@ Usar estos textos en el front (espejo API) o mapear `errors[campo]`.
 | `precio_mayoreo.min` | El precio de mayoreo no puede ser negativo. |
 | `precio_menudeo.numeric` | El precio de menudeo debe ser un número. |
 | `precio_menudeo.min` | El precio de menudeo no puede ser negativo. |
-| `tipo.in` | El tipo debe ser producto, servicio o renta. |
+| `tipo.in` | La bandera de tipo no es válida. Usa p (Producto), s (Servicio), r (Renta). |
 | `familia_id.required` | La familia es obligatoria cuando se indica subfamilia. |
 | `familia_id.exists` | La familia OPUS seleccionada no es válida. |
 | `familia_id.integer` | La familia OPUS debe ser un identificador numérico. |
@@ -205,7 +219,7 @@ Usar estos textos en el front (espejo API) o mapear `errors[campo]`.
   "familia_id": 2,
   "subfamilia_id": 8,
   "precio_base": 185.5,
-  "tipo": "producto",
+  "tipo": "p",
   "mostrar_en_catalogo_publico": true,
   "tags": ["obra", "cemento"],
   "especificaciones": [

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Producto\Concerns;
 
+use App\Enums\ProductoTipo;
 use App\Models\CatalogoSubfamilia;
 use Illuminate\Validation\Rule;
 
@@ -26,6 +27,20 @@ trait MapsProductoCatalogoUniversales
         if ($changed) {
             $this->merge($payload);
         }
+    }
+
+    /**
+     * Normaliza la bandera de tipo (p/s/r o el nombre legado) antes de validar.
+     */
+    protected function normalizeTipoInput(): void
+    {
+        if (! $this->exists('tipo')) {
+            return;
+        }
+
+        $this->merge([
+            'tipo' => ProductoTipo::codigoParaGuardar($this->input('tipo')),
+        ]);
     }
 
     protected function normalizePrecioValue(mixed $value): mixed
@@ -68,7 +83,7 @@ trait MapsProductoCatalogoUniversales
         $prefix = $sometimes ? ['sometimes'] : [];
 
         return [
-            'tipo' => array_merge($prefix, ['nullable', 'string', Rule::in(['producto', 'servicio', 'renta'])]),
+            'tipo' => array_merge($prefix, ['nullable', 'string', Rule::in(ProductoTipo::values())]),
             'modelo' => array_merge($prefix, ['nullable', 'string', 'max:60']),
             'codigo_fabricante' => array_merge($prefix, ['nullable', 'string', 'max:100']),
             'codigo_barras' => array_merge($prefix, ['nullable', 'string', 'max:100']),
@@ -125,7 +140,7 @@ trait MapsProductoCatalogoUniversales
     protected function mensajesCamposUniversales(): array
     {
         return [
-            'tipo.in' => 'El tipo debe ser producto, servicio o renta.',
+            'tipo.in' => 'La bandera de tipo no es válida. Usa '.ProductoTipo::mensajeValores().'.',
             'modelo.max' => 'El modelo no puede superar 60 caracteres.',
             'codigo_fabricante.max' => 'El código de fabricante no puede superar 100 caracteres.',
             'codigo_barras.max' => 'El código de barras no puede superar 100 caracteres.',

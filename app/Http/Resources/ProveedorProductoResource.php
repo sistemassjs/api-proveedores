@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\ProductoTipo;
 use App\Http\Resources\Catalogo\CatalogoFamiliaResource;
 use App\Http\Resources\Catalogo\CatalogoSubfamiliaResource;
 use App\Http\Resources\Producto\ProductoDocumentoResource;
@@ -12,8 +13,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class ProveedorProductoResource extends JsonResource
 {
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(Request $request): array
     {
+        $tipo = ProductoTipo::tryNormalize($this->tipo);
+
         return [
             'id' => $this->id,
             'sku' => $this->sku,
@@ -23,7 +29,8 @@ class ProveedorProductoResource extends JsonResource
             'nombre' => $this->nombre,
             'descripcion' => $this->descripcion,
             'modelo' => $this->modelo,
-            'tipo' => $this->tipo,
+            'tipo' => $tipo?->value,
+            'tipo_nombre' => $tipo?->label(),
 
             'precio_base' => (float) $this->precio_base,
             'precio_mayoreo' => (float) $this->precio_mayoreo,

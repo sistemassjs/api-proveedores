@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\ProductoTipo;
 use App\Models\Categoria;
 use App\Models\ImportAudit;
 use App\Models\Marca;
@@ -576,7 +577,7 @@ class CSVImportJob implements ShouldQueue
             'precio_base' => $this->parseNullablePrice($precioBase),
             'precio_mayoreo' => $this->parseNullablePrice($productData['precio_mayoreo'] ?? null),
             'precio_menudeo' => $this->parseNullablePrice($productData['precio_menudeo'] ?? null),
-            'tipo' => $this->nullableString($productData['tipo'] ?? null),
+            'tipo' => ProductoTipo::tryNormalize($productData['tipo'] ?? null)?->value,
             'modelo' => $this->nullableString($productData['modelo'] ?? null),
             'codigo_fabricante' => $this->nullableString($productData['codigo_fabricante'] ?? null),
             'codigo_barras' => $this->nullableString($productData['codigo_barras'] ?? null),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Catalogo;
 
+use App\Enums\ProductoTipo;
 use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -39,7 +40,7 @@ class CatalogoEmpresaProductoSugerenciaResource extends JsonResource
             'empresa' => $empresa !== '' ? $empresa : null,
             'logo' => $proveedor ? PublicStorageUrl::make($proveedor->logo) : null,
             'proveedor_id' => (int) $this->proveedor_id,
-            'categoria_ui' => $this->tipo ?: 'producto',
+            'categoria_ui' => ProductoTipo::tryNormalize($this->tipo)?->label() ?? 'Producto',
             'marca' => $this->relationLoaded('marca') && $this->marca
                 ? $this->marca->nombre
                 : null,

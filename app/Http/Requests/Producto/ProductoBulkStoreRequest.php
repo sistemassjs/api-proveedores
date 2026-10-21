@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Producto;
 
+use App\Enums\ProductoTipo;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ProductoBulkStoreRequest extends FormRequest
 {
@@ -21,6 +23,10 @@ class ProductoBulkStoreRequest extends FormRequest
         foreach ($productos as $i => $row) {
             if (! is_array($row)) {
                 continue;
+            }
+
+            if (array_key_exists('tipo', $row)) {
+                $productos[$i]['tipo'] = ProductoTipo::codigoParaGuardar($row['tipo']);
             }
 
             foreach (['precio_base', 'precio_mayoreo', 'precio_menudeo'] as $campo) {
@@ -77,7 +83,7 @@ class ProductoBulkStoreRequest extends FormRequest
             'productos.*.nombre' => ['required', 'string', 'max:255'],
             'productos.*.descripcion' => ['nullable', 'string', 'max:255'],
             'productos.*.modelo' => ['nullable', 'string', 'max:60'],
-            'productos.*.tipo' => ['nullable', 'string', 'in:producto,servicio,renta'],
+            'productos.*.tipo' => ['nullable', 'string', Rule::in(ProductoTipo::values())],
             'productos.*.codigo_fabricante' => ['nullable', 'string', 'max:100'],
             'productos.*.codigo_barras' => ['nullable', 'string', 'max:100'],
             'productos.*.precio_base' => $precioRules,
@@ -127,7 +133,7 @@ class ProductoBulkStoreRequest extends FormRequest
         return [
             'productos.required' => 'Debe enviar al menos un producto.',
             'productos.*.nombre.required' => 'Cada producto debe tener nombre.',
-            'productos.*.tipo.in' => 'El tipo debe ser producto, servicio o renta.',
+            'productos.*.tipo.in' => 'La bandera de tipo no es válida. Usa '.ProductoTipo::mensajeValores().'.',
             'productos.*.precio_base.min' => 'El precio base debe ser null, 0 o un número mayor a 0.',
             'productos.*.precio_mayoreo.min' => 'El precio mayoreo debe ser null, 0 o un número mayor a 0.',
             'productos.*.precio_menudeo.min' => 'El precio menudeo debe ser null, 0 o un número mayor a 0.',

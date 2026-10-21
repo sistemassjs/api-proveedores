@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProductoTipo;
 use App\Exceptions\Api\Crud\ResourceNotFoundException;
 use App\Http\Requests\Producto\ProductoBulkStoreRequest;
 use App\Http\Requests\Producto\ProductoStoreRequest;
@@ -38,7 +39,12 @@ class ProveedorProductoController extends Controller
 
         $data = ProveedorProductoResource::collection($paginator)->resolve();
 
-        return $this->paginated($paginator->setCollection(collect($data)));
+        return $this->paginated(
+            $paginator->setCollection(collect($data)),
+            'Datos paginados.',
+            200,
+            ['tipos' => ProductoTipo::catalogo()]
+        );
     }
 
     public function show(Request $request, Proveedor $proveedor, $productoId)

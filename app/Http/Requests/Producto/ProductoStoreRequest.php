@@ -20,6 +20,7 @@ class ProductoStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->normalizePreciosInput();
+        $this->normalizeTipoInput();
     }
 
     public function rules(): array

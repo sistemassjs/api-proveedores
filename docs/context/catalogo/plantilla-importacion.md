@@ -69,7 +69,7 @@ No eliminar columnas opcionales de la plantilla solo porque un proveedor no las 
 | `precio_menudeo` | Precio menudeo | OK |
 | `familia` | Familia (OPUS) | OK (homologación en bulk/CSV) |
 | `subfamilia` | Subfamilia OPUS | OK |
-| `tipo` | Tipo (Producto / Servicio / Renta) | OK |
+| `tipo` | Bandera: `p` producto, `s` servicio, `r` renta (también el nombre) | OK |
 | `modelo` | Modelo | OK |
 | `codigo_fabricante` | Código fabricante | OK |
 | `codigo_barras` | Código de barras | OK |
@@ -129,7 +129,7 @@ codigo,producto,descripcion,tipo,familia,subfamilia,categoria,subcategoria,marca
 | Campo lineamiento | En plantilla CSV | En BD / import hoy | Acción |
 |-------------------|------------------|--------------------|--------|
 | Empresa / Proveedor | — (ruta) | `proveedor_id` | Ninguna |
-| Tipo | `tipo` | Sí | Documentar valores: `producto`, `servicio`, `renta` |
+| Tipo | `tipo` | Sí | Banderas: `p`, `s`, `r` (se aceptan `producto`, `servicio`, `renta`) |
 | Familia | `familia` | OPUS FK | Usar en plantilla |
 | Grupo / Categoría | `categoria` | Local | Ya en `.data` |
 | Subcategoría | `subcategoria` | Local | Ya en `.data` |
@@ -179,7 +179,8 @@ Pendiente endurecer según lineamiento:
 - Validar `moneda` cuando haya precio
 - Advertir familia/categoría incompletas
 - Diff explícito de campos que se actualizarán
-- Valores canónicos de `tipo` y `disponibilidad`
+- Valores canónicos de `tipo`: `p`, `s`, `r` (el import también acepta el nombre)
+- Valores canónicos de `disponibilidad`
 
 ---
 
