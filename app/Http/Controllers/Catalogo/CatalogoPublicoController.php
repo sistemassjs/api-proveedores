@@ -8,6 +8,7 @@ use App\Http\Resources\Catalogo\CatalogoEmpresaProductoSugerenciaResource;
 use App\Models\CatalogoFamilia;
 use App\Models\Producto;
 use App\Models\Proveedor;
+use App\Models\ProveedorPerfilPublico;
 use App\Support\PublicStorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,6 +76,36 @@ class CatalogoPublicoController extends Controller
         })->values();
 
         return $this->paginated($paginator->setCollection($data), 'Empresas del catálogo público.');
+    }
+
+    /**
+     * Ficha pública de una empresa del catálogo.
+     * Identidad del listado siempre; contacto, tarjetas, fiscal y bancos
+     * solo si el perfil público está publicado.
+     */
+    public function showEmpresa(Proveedor $proveedor): JsonResponse
+    {
+        if (! $this->esEmpresaCatalogo($proveedor)) {
+            return $this->error('La empresa no participa en el catálogo público.', null, 404);
+        }
+
+        $razonSocial = trim((string) ($proveedor->razon_social ?? ''));
+        $nombreComercial = trim((string) ($proveedor->nombre_comercial ?? ''));
+        $empresa = $nombreComercial !== ''
+            ? $nombreComercial
+            : ($razonSocial !== '' ? $razonSocial : ('Proveedor #'.$proveedor->id));
+
+        $total = (int) $this->productosPublicosQuery($proveedor)->count();
+
+        return $this->success([
+            'proveedor_id' => (int) $proveedor->id,
+            'empresa' => $empresa,
+            'razon_social' => $razonSocial !== '' ? $razonSocial : null,
+            'nombre_comercial' => $nombreComercial !== '' ? $nombreComercial : null,
+            'logo' => PublicStorageUrl::make($proveedor->logo),
+            'total_productos' => $total,
+            'perfil' => $this->perfilPublicado($proveedor),
+        ], 'Empresa del catálogo público.');
     }
 
     public function productos(Request $request, Proveedor $proveedor): JsonResponse
@@ -201,6 +232,93 @@ class CatalogoPublicoController extends Controller
             'categorias' => $familias,
             'marcas' => [],
         ], 'Filtros OPUS del catálogo público.');
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function perfilPublicado(Proveedor $proveedor): ?array
+    {
+        $perfil = ProveedorPerfilPublico::query()
+            ->where('proveedor_id', $proveedor->id)
+            ->where('is_published', true)
+            ->first();
+
+        if (! $perfil || ! is_array($perfil->snapshot)) {
+            return null;
+        }
+
+        $snapshot = $perfil->snapshot;
+        $out = [];
+
+        foreach (['empresa', 'contacto', 'fiscal'] as $key) {
+            if (! isset($snapshot[$key]) || ! is_array($snapshot[$key])) {
+                continue;
+            }
+            $section = $this->limpiarSeccionPublica($snapshot[$key]);
+            if ($section !== []) {
+                $out[$key] = $section;
+            }
+        }
+
+        foreach (['tarjetas', 'bancos'] as $key) {
+            if (! empty($snapshot[$key]) && is_array($snapshot[$key])) {
+                $out[$key] = array_values($snapshot[$key]);
+            }
+        }
+
+        if (isset($out['empresa']['logo'])) {
+            $out['empresa']['logo'] = PublicStorageUrl::make($proveedor->logo)
+                ?: PublicStorageUrl::make((string) $out['empresa']['logo']);
+        }
+
+        return $out === [] ? null : $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $section
+     * @return array<string, mixed>
+     */
+    private function limpiarSeccionPublica(array $section): array
+    {
+        $out = [];
+
+        foreach ($section as $key => $value) {
+            if ($key === 'constancias' && is_array($value)) {
+                $constancias = array_values(array_filter(
+                    $value,
+                    fn ($item) => is_array($item) && is_string($item['pdf_url'] ?? null) && trim($item['pdf_url']) !== ''
+                ));
+                if ($constancias !== []) {
+                    $out['constancias'] = array_map(function (array $item) {
+                        $item['pdf_url'] = PublicStorageUrl::make($item['pdf_url']);
+
+                        return $item;
+                    }, $constancias);
+                }
+                continue;
+            }
+
+            if (is_string($value)) {
+                $value = trim($value);
+                if ($value === '') {
+                    continue;
+                }
+                $out[$key] = $value;
+                continue;
+            }
+
+            if (is_int($value) || is_float($value)) {
+                $out[$key] = $value;
+                continue;
+            }
+
+            if (is_array($value) && $value !== []) {
+                $out[$key] = $value;
+            }
+        }
+
+        return $out;
     }
 
     private function esEmpresaCatalogo(Proveedor $proveedor): bool

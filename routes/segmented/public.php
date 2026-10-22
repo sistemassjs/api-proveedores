@@ -109,6 +109,7 @@ Route::get(
  */
 Route::middleware(['throttle:60,1'])->prefix('public/catalogo')->group(function () {
     Route::get('empresas', [CatalogoPublicoController::class, 'empresas']);
+    Route::get('empresas/{proveedor}', [CatalogoPublicoController::class, 'showEmpresa']);
     Route::get('empresas/{proveedor}/productos/facets', [CatalogoPublicoController::class, 'facets']);
     Route::get('empresas/{proveedor}/productos/{producto}', [CatalogoPublicoController::class, 'showProducto']);
     Route::get('empresas/{proveedor}/productos', [CatalogoPublicoController::class, 'productos']);
