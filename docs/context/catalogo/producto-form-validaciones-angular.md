@@ -354,15 +354,14 @@ Hoy el default es `nivel: [1, …]`. Si se persiste en categorías con `parent_i
 | Hijas | `nivel = padre.nivel + 1` |
 | Datos existentes | Revisar/corregir categorías raíz con `nivel ≠ 0` en BD si ya se crearon mal |
 
-### 3.4 Opcional en back (api-proveedores)
+### 3.4 Back (api-proveedores) — estado
 
-No es bloqueante para el fix de front, pero ayuda:
-
-| Cambio | Para qué |
-|--------|----------|
-| Exponer `nivel` (y `parent_id`) en `CategoriaResource` | Que el front pueda filtrar/validar opciones sin adivinar |
-| Consistencia datos | Script o migración puntual: raíces `parent_id` null → `nivel = 0` |
-| Relajar regla `nivel === 0` | Solo si negocio acepta otra definición de “padre”; hoy create/update de producto la exigen |
+| Cambio | Estado |
+|--------|--------|
+| Import CSV crea raíz `nivel = 0` / hija `1` (`CSVImportJob`, `CsvImportController`, preview) | **Hecho** |
+| Migración datos `fix_categorias_nivel_raiz_importacion` | **Hecho** (ejecutar `migrate`) |
+| Exponer `nivel` / `parent_id` en `CategoriaResource` | Opcional UI |
+| Relajar regla `nivel === 0` en producto | No: la regla se mantiene |
 
 ### 3.5 Checklist rápido nexprov
 

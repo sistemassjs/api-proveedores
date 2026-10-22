@@ -344,20 +344,25 @@ class CSVImportJob implements ShouldQueue
 
         foreach ($categories as $categoriaName => $subcategorias) {
             try {
-                // Create main category
+                // Raíz = nivel 0 (misma convención que ProveedorCategoriaController / Producto*Request)
                 $categoria = Categoria::firstOrCreate(
                     [
                         'nombre' => $categoriaName,
                         'proveedor_id' => $this->importAudit->proveedor_id,
-                        'nivel' => 1,
                         'parent_id' => null,
                     ],
                     [
+                        'nivel' => 0,
                         'activo' => true,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]
                 );
+
+                if ((int) $categoria->nivel !== 0) {
+                    $categoria->nivel = 0;
+                    $categoria->save();
+                }
 
                 $this->catalogMappings['categorias'][$categoriaName] = $categoria->id;
 
@@ -367,21 +372,26 @@ class CSVImportJob implements ShouldQueue
                     $this->processingStats['categorias_existentes']++;
                 }
 
-                // Create subcategories
+                // Hija directa = nivel 1
                 foreach ($subcategorias as $subcategoriaName) {
                     $subcategoria = Categoria::firstOrCreate(
                         [
                             'nombre' => $subcategoriaName,
                             'parent_id' => $categoria->id,
                             'proveedor_id' => $this->importAudit->proveedor_id,
-                            'nivel' => 2,
                         ],
                         [
+                            'nivel' => 1,
                             'activo' => true,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]
                     );
+
+                    if ((int) $subcategoria->nivel !== 1) {
+                        $subcategoria->nivel = 1;
+                        $subcategoria->save();
+                    }
 
                     $this->catalogMappings['categorias'][$subcategoriaName] = $subcategoria->id;
 

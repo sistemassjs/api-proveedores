@@ -192,10 +192,11 @@ class TiendaTemporalSeeder extends Seeder
                 [
                     'proveedor_id' => $proveedor->id,
                     'nombre' => $nombreCat,
+                    'parent_id' => null,
                 ],
                 [
                     'descripcion' => "Categoría demo: {$nombreCat}",
-                    'nivel' => 1,
+                    'nivel' => 0,
                     'activo' => true,
                 ]
             );

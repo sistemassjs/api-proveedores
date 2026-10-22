@@ -45,7 +45,7 @@ sequenceDiagram
 2. Si no hay: buscar `users` por email → **auto-vincular** cuenta OAuth
 3. Si no hay user: crear **GERENTE** + **proveedor stub** (datos mínimos desde Google) + pivot PRINCIPAL (sin sucursal Matriz en OAuth: evita lock `mysql`/`mysql5` en `sucursales`)
 4. Respetar `UserCuentaEstado` (bloqueado/suspendido)
-5. **Otorgar** `user_client_apps` para la `app` del state (Google = prueba de posesión del email)
+5. **Otorgar** `user_client_apps` para la `app` del state (Google = prueba de posesión del email). Si `app = nexprov`, `grantClientApp` también pone `is_proveedor_catalogo = true` en el proveedor principal.
 6. `pending_registro=1` si el proveedor no tiene `perfil_empresa_completo` / `registro_completado_at` → PWA abre **Mi Empresa**
 
 > En BD local **no** existe rol `USUARIO`; el alta social usa `GERENTE` (id 3).
