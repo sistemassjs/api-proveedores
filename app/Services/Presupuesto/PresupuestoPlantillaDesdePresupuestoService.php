@@ -142,7 +142,7 @@ class PresupuestoPlantillaDesdePresupuestoService
                 );
             }
 
-            $concepto = PresupuestoPlantillaConcepto::create([
+            $concepto = PresupuestoPlantillaConcepto::create(array_merge([
                 'presupuesto_plantilla_id' => $plantilla->id,
                 'numero' => $numero++,
                 'tipo' => $tipo,
@@ -152,7 +152,13 @@ class PresupuestoPlantillaDesdePresupuestoService
                 'unidad' => $esParrafo ? '' : ($linea->unidad ?: 'pieza'),
                 'precio_unitario' => $esParrafo || $tieneMatriz ? 0 : (float) $linea->precio_unitario,
                 'imagen_path' => $imagenPath,
-            ]);
+            ], $this->matrizCalculo->columnasIndirectosPropios([
+                'indirectos_modo' => $linea->indirectos_modo,
+                'indirecto_oficina_porcentaje' => $linea->indirecto_oficina_porcentaje,
+                'indirecto_campo_porcentaje' => $linea->indirecto_campo_porcentaje,
+                'indirecto_utilidad_porcentaje' => $linea->indirecto_utilidad_porcentaje,
+                'indirecto_cargos_porcentaje' => $linea->indirecto_cargos_porcentaje,
+            ])));
 
             if ($tieneMatriz) {
                 $componentes = $linea->componentes->map(static function ($comp) {

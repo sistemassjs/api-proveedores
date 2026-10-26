@@ -29,6 +29,11 @@ class PresupuestoConceptoResource extends JsonResource
             'precio_unitario' => (float) $this->precio_unitario,
             'precio_total' => (float) $this->precio_total,
             'tiene_matriz' => (bool) ($this->tiene_matriz ?? false),
+            'indirectos_modo' => ($this->indirectos_modo ?? 'general') === 'propio' ? 'propio' : 'general',
+            'indirecto_oficina_porcentaje' => $this->indirecto_oficina_porcentaje !== null ? (float) $this->indirecto_oficina_porcentaje : null,
+            'indirecto_campo_porcentaje' => $this->indirecto_campo_porcentaje !== null ? (float) $this->indirecto_campo_porcentaje : null,
+            'indirecto_utilidad_porcentaje' => $this->indirecto_utilidad_porcentaje !== null ? (float) $this->indirecto_utilidad_porcentaje : null,
+            'indirecto_cargos_porcentaje' => $this->indirecto_cargos_porcentaje !== null ? (float) $this->indirecto_cargos_porcentaje : null,
             'componentes' => PresupuestoConceptoComponenteResource::collection(
                 $this->whenLoaded('componentes')
             ),

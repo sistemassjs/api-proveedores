@@ -35,6 +35,11 @@ class PresupuestoConcepto extends BaseModel
         'imagen_path',
         'proveedor_nombre',
         'proveedor_logo_url',
+        'indirectos_modo',
+        'indirecto_oficina_porcentaje',
+        'indirecto_campo_porcentaje',
+        'indirecto_utilidad_porcentaje',
+        'indirecto_cargos_porcentaje',
     ];
 
     protected $casts = [
@@ -42,6 +47,10 @@ class PresupuestoConcepto extends BaseModel
         'cantidad' => 'decimal:4',
         'precio_unitario' => 'decimal:2',
         'precio_total' => 'decimal:2',
+        'indirecto_oficina_porcentaje' => 'decimal:4',
+        'indirecto_campo_porcentaje' => 'decimal:4',
+        'indirecto_utilidad_porcentaje' => 'decimal:4',
+        'indirecto_cargos_porcentaje' => 'decimal:4',
     ];
 
     /**

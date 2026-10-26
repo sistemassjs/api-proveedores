@@ -2,6 +2,7 @@
 
 namespace App\Services\Presupuesto;
 
+use App\Models\Presupuesto;
 use App\Models\PresupuestoCatalogoConcepto;
 use App\Models\PresupuestoCatalogoConceptoComponente;
 use App\Models\PresupuestoConcepto;
@@ -203,10 +204,14 @@ class PresupuestoMatrizCalculoService
      *
      * @param  list<array<string, mixed>>  $componentes
      */
+    /**
+     * @param  array{oficina: float, campo: float, utilidad: float, cargos: float}|null  $indirectos
+     */
     public function sincronizarComponentesLinea(
         PresupuestoConcepto $concepto,
         array $componentes,
-        int $proveedorId
+        int $proveedorId,
+        ?array $indirectos = null
     ): PresupuestoConcepto {
         $normalizados = $this->normalizarComponentes($componentes, $proveedorId, null);
 
@@ -232,8 +237,10 @@ class PresupuestoMatrizCalculoService
             ]);
         }
 
-        // Columna de línea sigue en 2 decimales de negocio del documento.
-        $concepto->precio_unitario = round($this->sumarImportes($normalizados), 2);
+        $costoDirecto = $this->sumarImportes($normalizados);
+        $concepto->precio_unitario = $indirectos === null
+            ? round($costoDirecto, 2)
+            : $this->precioConIndirectos($costoDirecto, $indirectos);
         $concepto->tiene_matriz = true;
         $concepto->calcularImporte();
         $concepto->save();
@@ -354,5 +361,185 @@ class PresupuestoMatrizCalculoService
         $clave = trim((string) $clave);
 
         return $clave === '' ? null : mb_substr($clave, 0, 40);
+    }
+
+    /**
+     * Pie de precio. Cada importe se redondea a 2 decimales (hoja P1.6).
+     *
+     * @param  array{oficina?: float|int|string, campo?: float|int|string, utilidad?: float|int|string, cargos?: float|int|string}  $porcentajes
+     */
+    public function precioConIndirectos(float|string $costoDirecto, array $porcentajes): float
+    {
+        $pct = $this->normalizarPorcentajesIndirectos($porcentajes);
+        $cd = round((float) $costoDirecto, 2);
+        $oficina = round($cd * ($pct['oficina'] / 100), 2);
+        $campo = round($cd * ($pct['campo'] / 100), 2);
+        $base = round($cd + $oficina + $campo, 2);
+        $utilidad = round($base * ($pct['utilidad'] / 100), 2);
+        $base2 = round($base + $utilidad, 2);
+        $cargos = round($base2 * ($pct['cargos'] / 100), 2);
+
+        return round($base2 + $cargos, 2);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{oficina: float, campo: float, utilidad: float, cargos: float}
+     */
+    public function normalizarPorcentajesIndirectos(array $data): array
+    {
+        return [
+            'oficina' => $this->acotarPorcentaje($data['oficina'] ?? $data['indirecto_oficina_porcentaje'] ?? 0),
+            'campo' => $this->acotarPorcentaje($data['campo'] ?? $data['indirecto_campo_porcentaje'] ?? 0),
+            'utilidad' => $this->acotarPorcentaje($data['utilidad'] ?? $data['indirecto_utilidad_porcentaje'] ?? 0),
+            'cargos' => $this->acotarPorcentaje($data['cargos'] ?? $data['indirecto_cargos_porcentaje'] ?? 0),
+        ];
+    }
+
+    /**
+     * Columnas de override. Modo general deja los porcentajes en null.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{indirectos_modo: string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float}
+     */
+    public function columnasIndirectosPropios(array $data): array
+    {
+        $modo = ($data['indirectos_modo'] ?? 'general') === 'propio' ? 'propio' : 'general';
+        if ($modo !== 'propio') {
+            return [
+                'indirectos_modo' => 'general',
+                'indirecto_oficina_porcentaje' => null,
+                'indirecto_campo_porcentaje' => null,
+                'indirecto_utilidad_porcentaje' => null,
+                'indirecto_cargos_porcentaje' => null,
+            ];
+        }
+
+        $pct = $this->normalizarPorcentajesIndirectos($data);
+
+        return [
+            'indirectos_modo' => 'propio',
+            'indirecto_oficina_porcentaje' => $pct['oficina'],
+            'indirecto_campo_porcentaje' => $pct['campo'],
+            'indirecto_utilidad_porcentaje' => $pct['utilidad'],
+            'indirecto_cargos_porcentaje' => $pct['cargos'],
+        ];
+    }
+
+    /**
+     * Porcentajes que aplican a una línea: los propios, o los generales del presupuesto.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{oficina: float, campo: float, utilidad: float, cargos: float}
+     */
+    public function resolverPorcentajesLinea(array $data, Presupuesto $presupuesto): array
+    {
+        $modo = ($data['indirectos_modo'] ?? 'general') === 'propio' ? 'propio' : 'general';
+        if ($modo === 'propio') {
+            return $this->normalizarPorcentajesIndirectos($data);
+        }
+
+        return $this->normalizarPorcentajesIndirectos([
+            'indirecto_oficina_porcentaje' => $presupuesto->indirecto_oficina_porcentaje,
+            'indirecto_campo_porcentaje' => $presupuesto->indirecto_campo_porcentaje,
+            'indirecto_utilidad_porcentaje' => $presupuesto->indirecto_utilidad_porcentaje,
+            'indirecto_cargos_porcentaje' => $presupuesto->indirecto_cargos_porcentaje,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function atributosIndirectosRecurso(object $model): array
+    {
+        $modo = ($model->indirectos_modo ?? 'general') === 'propio' ? 'propio' : 'general';
+
+        return [
+            'indirectos_modo' => $modo,
+            'indirecto_oficina_porcentaje' => $model->indirecto_oficina_porcentaje !== null
+                ? (float) $model->indirecto_oficina_porcentaje
+                : null,
+            'indirecto_campo_porcentaje' => $model->indirecto_campo_porcentaje !== null
+                ? (float) $model->indirecto_campo_porcentaje
+                : null,
+            'indirecto_utilidad_porcentaje' => $model->indirecto_utilidad_porcentaje !== null
+                ? (float) $model->indirecto_utilidad_porcentaje
+                : null,
+            'indirecto_cargos_porcentaje' => $model->indirecto_cargos_porcentaje !== null
+                ? (float) $model->indirecto_cargos_porcentaje
+                : null,
+        ];
+    }
+
+    /**
+     * Si cambia un compuesto, las matrices del catálogo que lo usan vuelven a sumar su costo directo.
+     */
+    public function propagarCostoEnCatalogo(int $conceptoId, int $proveedorId): void
+    {
+        $visitados = [];
+        $cola = [$conceptoId];
+
+        while ($cola !== []) {
+            $id = array_shift($cola);
+            if ($id === null || isset($visitados[$id])) {
+                continue;
+            }
+            $visitados[$id] = true;
+
+            $padreIds = PresupuestoCatalogoConceptoComponente::query()
+                ->where('catalogo_concepto_componente_id', $id)
+                ->pluck('catalogo_concepto_id')
+                ->map(fn ($padreId) => (int) $padreId)
+                ->unique()
+                ->all();
+
+            foreach ($padreIds as $padreId) {
+                $padre = PresupuestoCatalogoConcepto::query()
+                    ->where('id', $padreId)
+                    ->where('proveedor_id', $proveedorId)
+                    ->first();
+                if (! $padre || ! $padre->es_compuesto) {
+                    continue;
+                }
+
+                $padre->load('componentes');
+                foreach ($padre->componentes as $componente) {
+                    $ref = (int) ($componente->catalogo_concepto_componente_id ?? 0);
+                    if ($ref !== $id) {
+                        continue;
+                    }
+                    $snapshot = $this->snapshotDesdeCatalogo($ref, $proveedorId);
+                    $componente->categoria = $snapshot['categoria'];
+                    $componente->clave_snapshot = $snapshot['clave'];
+                    $componente->descripcion = $snapshot['descripcion'];
+                    $componente->unidad = $snapshot['unidad'];
+                    $componente->precio_unitario = $snapshot['precio_unitario'];
+                    $componente->importe = $this->calcularImporte(
+                        (float) $componente->cantidad,
+                        (float) $componente->precio_unitario
+                    );
+                    $componente->save();
+                }
+
+                $padre->precio_unitario = $this->sumarImportes(
+                    $padre->componentes->map(fn ($c) => ['importe' => $c->importe])->all()
+                );
+                $padre->save();
+                $cola[] = (int) $padre->id;
+            }
+        }
+    }
+
+    private function acotarPorcentaje(mixed $value): float
+    {
+        $n = round((float) $value, 4);
+        if ($n < 0) {
+            return 0.0;
+        }
+        if ($n > 100) {
+            return 100.0;
+        }
+
+        return $n;
     }
 }

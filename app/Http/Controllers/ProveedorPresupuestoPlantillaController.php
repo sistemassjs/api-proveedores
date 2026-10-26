@@ -367,7 +367,7 @@ class ProveedorPresupuestoPlantillaController extends Controller
                     || (is_array($componentes) && count($componentes) > 0)
                 );
 
-            $concepto = PresupuestoPlantillaConcepto::create([
+            $concepto = PresupuestoPlantillaConcepto::create(array_merge([
                 'presupuesto_plantilla_id' => $plantilla->id,
                 'numero' => $numero++,
                 'tipo' => $tipo,
@@ -379,7 +379,7 @@ class ProveedorPresupuestoPlantillaController extends Controller
                     ? 0
                     : (float) ($fila['precio_unitario'] ?? 0),
                 'imagen_path' => $imagenPath,
-            ]);
+            ], $this->matrizCalculo->columnasIndirectosPropios($fila)));
 
             if ($tieneMatriz) {
                 $this->matrizCalculo->sincronizarComponentesPlantillaLinea(

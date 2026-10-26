@@ -34,6 +34,11 @@ class ProveedorStorePresupuestoCatalogoConceptoRequest extends FormRequest
                 Rule::in(PresupuestoCatalogoConcepto::categoriasValidas()),
             ],
             'es_compuesto' => ['sometimes', 'boolean'],
+            'indirectos_modo' => ['sometimes', 'string', 'in:general,propio'],
+            'indirecto_oficina_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'indirecto_campo_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'indirecto_utilidad_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'indirecto_cargos_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'clave' => [
                 'nullable',
                 'string',
