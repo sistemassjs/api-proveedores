@@ -3,7 +3,8 @@
 namespace App\Services\CSVImport;
 
 /**
- * Comprueba que una URL de imagen responda y que el contenido sea jpeg, png, webp o gif.
+ * Comprueba que una URL de imagen responda con un tipo image/jpeg, image/jpg,
+ * image/png, image/gif o image/webp (o con la firma binaria de esos formatos).
  * No descarga el archivo al disco: solo lee los primeros bytes, con corte a los 2 s.
  */
 class ProductoImagenUrlInspector
@@ -12,50 +13,108 @@ class ProductoImagenUrlInspector
 
     private const READ_BYTES = 64;
 
+    /** @var list<string> */
+    private const ALLOWED_MIME_TYPES = [
+        'image/jpeg',
+        'image/jpg',
+        'image/pjpeg',
+        'image/png',
+        'image/x-png',
+        'image/gif',
+        'image/webp',
+    ];
+
     /**
-     * @return array{ok: bool, message: ?string}
+     * @return array{ok: bool, message: ?string, http_code: ?int, curl_error: ?string, bytes: int, content_type: ?string}
      */
     public function inspect(string $url): array
     {
         $url = trim($url);
         if ($url === '') {
-            return ['ok' => false, 'message' => 'La URL de imagen está vacía.'];
+            return $this->reject('La URL de imagen está vacía.');
         }
 
         if (strlen($url) > self::MAX_URL_LENGTH) {
-            return ['ok' => false, 'message' => 'La URL de imagen excede '.self::MAX_URL_LENGTH.' caracteres.'];
+            return $this->reject('La URL de imagen excede '.self::MAX_URL_LENGTH.' caracteres.');
         }
 
         if (! $this->isPublicHttpUrl($url)) {
-            return ['ok' => false, 'message' => 'La URL de imagen no es http(s) pública.'];
+            return $this->reject('La URL de imagen no es http(s) pública.');
         }
 
         $fetched = $this->fetchPrefix($url);
-        if ($fetched === null) {
-            return ['ok' => false, 'message' => 'El enlace de imagen no responde.'];
+        if ($fetched['body'] === null && ! $this->isAllowedImageMime($fetched['content_type'])) {
+            return $this->reject('El enlace de imagen no responde.', $fetched);
         }
 
-        if (! $this->looksLikeAllowedImage($fetched)) {
-            return ['ok' => false, 'message' => 'El enlace no corresponde a una imagen jpeg, png, webp o gif.'];
+        $httpOk = in_array($fetched['http_code'], [200, 206], true);
+        $mimeOk = $this->isAllowedImageMime($fetched['content_type']);
+        $magicOk = $fetched['body'] !== null && $this->looksLikeAllowedImage($fetched['body']);
+
+        if (! $httpOk || (! $mimeOk && ! $magicOk)) {
+            $type = $fetched['content_type'] ?: 'sin content-type';
+
+            return $this->reject(
+                'El enlace no corresponde a una imagen jpeg, jpg, png, webp o gif ('.$type.').',
+                $fetched
+            );
         }
 
-        return ['ok' => true, 'message' => null];
+        return [
+            'ok' => true,
+            'message' => null,
+            'http_code' => $fetched['http_code'],
+            'curl_error' => $fetched['curl_error'],
+            'bytes' => $fetched['bytes'],
+            'content_type' => $fetched['content_type'],
+        ];
+    }
+
+    /**
+     * @param  array{http_code: ?int, curl_error: ?string, bytes: int, content_type: ?string}|null  $fetched
+     * @return array{ok: bool, message: string, http_code: ?int, curl_error: ?string, bytes: int, content_type: ?string}
+     */
+    private function reject(string $message, ?array $fetched = null): array
+    {
+        return [
+            'ok' => false,
+            'message' => $message,
+            'http_code' => $fetched['http_code'] ?? null,
+            'curl_error' => $fetched['curl_error'] ?? null,
+            'bytes' => $fetched['bytes'] ?? 0,
+            'content_type' => $fetched['content_type'] ?? null,
+        ];
     }
 
     /**
      * Lee como máximo READ_BYTES y corta a los 2 s. No usa el cliente HTTP en stream:
      * esa descarga no respetaba el timeout y dejaba el job en 15 %.
+     *
+     * @return array{body: ?string, http_code: ?int, curl_error: ?string, bytes: int, content_type: ?string}
      */
-    private function fetchPrefix(string $url): ?string
+    private function fetchPrefix(string $url): array
     {
+        $empty = [
+            'body' => null,
+            'http_code' => null,
+            'curl_error' => 'cURL no está disponible.',
+            'bytes' => 0,
+            'content_type' => null,
+        ];
         if (! function_exists('curl_init')) {
-            return null;
+            return $empty;
         }
 
         $buffer = '';
         $ch = curl_init($url);
         if ($ch === false) {
-            return null;
+            return [
+                'body' => null,
+                'http_code' => null,
+                'curl_error' => 'No se pudo iniciar cURL.',
+                'bytes' => 0,
+                'content_type' => null,
+            ];
         }
 
         curl_setopt_array($ch, [
@@ -67,7 +126,8 @@ class ProductoImagenUrlInspector
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_USERAGENT => 'NexProvCatalogoImport/1.0',
-            CURLOPT_RANGE => 'bytes=0-'.(self::READ_BYTES - 1),
+            // libcurl antepone "bytes="; "bytes=0-63" sale como "bytes=bytes=0-63" y IIS responde 400 HTML.
+            CURLOPT_RANGE => '0-'.(self::READ_BYTES - 1),
             CURLOPT_WRITEFUNCTION => function ($curl, string $data) use (&$buffer): int {
                 $buffer .= $data;
                 if (strlen($buffer) >= self::READ_BYTES) {
@@ -79,11 +139,36 @@ class ProductoImagenUrlInspector
         ]);
 
         curl_exec($ch);
+        $errno = curl_errno($ch);
+        $curlError = $errno ? curl_error($ch) : null;
+        // Cortar a los 64 bytes provoca WRITE_ERROR o PARTIAL_FILE; no es un fallo de red.
+        if (in_array($errno, [CURLE_WRITE_ERROR, CURLE_PARTIAL_FILE], true) && $buffer !== '') {
+            $curlError = null;
+        }
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         curl_close($ch);
 
         $buffer = substr($buffer, 0, self::READ_BYTES);
 
-        return $buffer === '' ? null : $buffer;
+        return [
+            'body' => $buffer === '' ? null : $buffer,
+            'http_code' => $httpCode > 0 ? $httpCode : null,
+            'curl_error' => $curlError,
+            'bytes' => strlen($buffer),
+            'content_type' => is_string($contentType) && $contentType !== '' ? $contentType : null,
+        ];
+    }
+
+    private function isAllowedImageMime(?string $contentType): bool
+    {
+        if ($contentType === null || $contentType === '') {
+            return false;
+        }
+
+        $mime = strtolower(trim(explode(';', $contentType, 2)[0]));
+
+        return in_array($mime, self::ALLOWED_MIME_TYPES, true);
     }
 
     public function looksLikeAllowedImage(string $bytes): bool

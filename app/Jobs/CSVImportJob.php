@@ -10,7 +10,6 @@ use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Services\CSVImport\CSVImportProductValidator;
 use App\Services\CSVImport\CSVProcessorService;
-use App\Services\CSVImport\ProductoImagenUrlInspector;
 use App\Services\Catalogo\CatalogoOpusHomologacionService;
 use App\Support\Catalogo\CatalogoImportPlantilla;
 use Exception;
@@ -29,6 +28,8 @@ class CSVImportJob implements ShouldQueue
     protected ImportAudit $importAudit;
 
     protected array $options;
+
+    private const LOG_URL_MAX = 500;
 
     // Job configuration
     public int $timeout = 1800; // 30 minutes
@@ -59,8 +60,6 @@ class CSVImportJob implements ShouldQueue
 
     /** @var list<array<string, mixed>> */
     protected array $imagenAdvertencias = [];
-
-    protected ?ProductoImagenUrlInspector $imagenInspector = null;
 
     protected array $catalogMappings = [
         'marcas' => [],
@@ -111,7 +110,6 @@ class CSVImportJob implements ShouldQueue
         @ini_set('memory_limit', CatalogoImportPlantilla::MEMORY_LIMIT_JOB);
 
         $this->opusMatch = $opusMatch;
-        $this->imagenInspector = new ProductoImagenUrlInspector;
         $this->startTime = microtime(true);
         $validator = new CSVImportProductValidator($this->importAudit->proveedor_id);
 
@@ -121,6 +119,12 @@ class CSVImportJob implements ShouldQueue
             'options' => $this->options,
             'php_max_execution_time' => ini_get('max_execution_time'),
             'php_memory_limit' => ini_get('memory_limit'),
+        ]);
+        Log::info('Importación iniciada', [
+            'audit_id' => $this->importAudit->id,
+            'proveedor_id' => $this->importAudit->proveedor_id,
+            'total_registros' => $this->importAudit->total_registros,
+            'options' => $this->options,
         ]);
 
         try {
@@ -662,33 +666,45 @@ class CSVImportJob implements ShouldQueue
     }
 
     /**
-     * Guarda la URL de imagen tal como viene si el enlace responde y el contenido es una imagen.
-     * Un fallo no detiene la importación del producto ni pisa una imagen ya guardada.
+     * Guarda la URL de imagen tal como viene en el CSV, sin comprobar el enlace ni el formato.
+     * Un fallo al persistir no detiene la importación del producto.
      */
     protected function applyImagenPrincipal(Producto $producto, array $productData, int $rowNumber): void
     {
         $url = trim((string) ($productData['imagen_principal'] ?? ''));
+        $context = [
+            'audit_id' => $this->importAudit->id,
+            'proveedor_id' => $this->importAudit->proveedor_id,
+            'fila' => $rowNumber,
+            'producto_id' => $producto->id,
+            'codigo' => $productData['codigo'] ?? null,
+            'producto' => $productData['producto'] ?? null,
+            'marca' => $productData['marca'] ?? null,
+            'categoria' => $productData['categoria'] ?? null,
+            'tiene_imagen' => $url !== '',
+            'imagen_principal' => $url !== '' ? mb_substr($url, 0, self::LOG_URL_MAX) : null,
+        ];
+
         if ($url === '') {
+            Log::debug('Fila sin imagen', $context);
+
             return;
         }
 
+        $stored = mb_substr($url, 0, 500);
+
         try {
-            $result = ($this->imagenInspector ?? new ProductoImagenUrlInspector)->inspect($url);
-            if (! $result['ok']) {
-                $this->recordImagenAdvertencia($rowNumber, $productData, $result['message'] ?? 'No se pudo validar la imagen.');
-
-                return;
-            }
-
-            $producto->update(['imagen_principal' => $url]);
+            $producto->update(['imagen_principal' => $stored]);
             $this->processingStats['imagenes_aceptadas']++;
+            $context['guardada'] = true;
+            $context['imagen_en_bd'] = $producto->imagen_principal;
+            $context['nota'] = 'URL guardada sin validar el enlace ni el formato.';
+            Log::info('Imagen guardada', $context);
         } catch (Exception $e) {
             $this->recordImagenAdvertencia($rowNumber, $productData, 'No se pudo guardar la URL de imagen.');
-            Log::warning('Imagen de importación omitida', [
-                'row' => $rowNumber,
-                'codigo' => $productData['codigo'] ?? 'N/A',
-                'error' => $e->getMessage(),
-            ]);
+            $context['guardada'] = false;
+            $context['motivo'] = $e->getMessage();
+            Log::warning('Imagen no guardada', $context);
         }
     }
 
@@ -866,6 +882,17 @@ class CSVImportJob implements ShouldQueue
         $this->importAudit->appendLog('Imágenes por URL', [
             'aceptadas' => $this->processingStats['imagenes_aceptadas'],
             'omitidas' => $this->processingStats['imagenes_omitidas'],
+        ]);
+
+        Log::info('Importación terminada', [
+            'audit_id' => $this->importAudit->id,
+            'proveedor_id' => $this->importAudit->proveedor_id,
+            'productos_nuevos' => $this->processingStats['productos_nuevos'],
+            'productos_actualizados' => $this->processingStats['productos_actualizados'],
+            'productos_error' => $this->processingStats['productos_error'],
+            'imagenes_guardadas' => $this->processingStats['imagenes_aceptadas'],
+            'imagenes_omitidas' => $this->processingStats['imagenes_omitidas'],
+            'segundos' => $processingTime,
         ]);
 
         $previewData = $this->importAudit->preview_data ?? [];

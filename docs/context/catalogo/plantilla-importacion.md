@@ -83,7 +83,7 @@ No eliminar columnas opcionales de la plantilla solo porque un proveedor no las 
 | `disponibilidad` | Disponibilidad | OK |
 | `tiempo_entrega` | Tiempo de entrega | OK |
 | `url_producto` | URL del producto | OK |
-| `imagen_principal` | Imagen principal | OK. El preview no marca la fila por longitud ni por un valor que no sea URL http(s). El job guarda la URL solo si responde y es jpeg, png, webp o gif; si no, el producto se importa y se omite solo ese campo |
+| `imagen_principal` | Imagen principal | OK. El preview no marca la fila. El job guarda la URL tal cual, sin validar el enlace ni el formato (máximo 500 caracteres) |
 | `tags` | Palabras clave / Tags | OK |
 | `PropiedadN_Clave` / `PropiedadN_Valor` | Propiedades dinámicas | OK (N = 1…∞ en validación; Excel puede traer 5–10) |
 
@@ -156,7 +156,7 @@ codigo,producto,descripcion,tipo,familia,subfamilia,categoria,subcategoria,marca
 | Disponibilidad | `disponibilidad` | Sí | Agregar a plantilla |
 | Tiempo entrega | `tiempo_entrega` | Sí | Agregar |
 | Logo | — | Proveedor | Fuera del CSV producto |
-| Imagen principal | `imagen_principal` | URL en `productos.imagen_principal` | Hecho: el job guarda la URL si responde y es imagen; si no, omite solo el campo. El preview no marca error ni advertencia por longitud ni por enlace no http(s). No se descarga al disco |
+| Imagen principal | `imagen_principal` | URL en `productos.imagen_principal` | Hecho: el job guarda la URL sin validar el enlace ni el formato. No se descarga al disco |
 | URL producto | `url_producto` | Sí | Agregar a plantilla |
 | Ficha técnica | `ficha_tecnica` | docs sí / CSV no | **Agregar** mapeo |
 | Tags | `tags` | Sí | Agregar a plantilla |
