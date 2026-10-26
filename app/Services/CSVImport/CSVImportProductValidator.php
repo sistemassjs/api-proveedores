@@ -119,6 +119,10 @@ class CSVImportProductValidator
             $warnings[] = 'Descripción muy larga, puede ser truncada';
         }
 
+        // imagen_principal no altera el estado de la fila (ni error ni advertencia).
+        // Longitud, texto que no es http(s) o un enlace que no es imagen se ignoran
+        // solo en el job (CSVImportJob::applyImagenPrincipal).
+
         $familiaTxt = trim($row['familia'] ?? '') !== '' ? trim($row['familia']) : $categoria;
         $subfamiliaTxt = trim($row['subfamilia'] ?? '') !== ''
             ? trim($row['subfamilia'])
@@ -179,9 +183,10 @@ class CSVImportProductValidator
             'factor_conversion' => 'optional',
             'disponibilidad' => 'optional',
             'tiempo_entrega' => 'optional',
-            'url_producto' => 'optional',
-            'tags' => 'optional',
-        ];
+        'url_producto' => 'optional',
+        'imagen_principal' => 'optional',
+        'tags' => 'optional',
+    ];
     }
 
     public function validateHeaders(array $headers): array

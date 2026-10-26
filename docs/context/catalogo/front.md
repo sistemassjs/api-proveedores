@@ -10,7 +10,7 @@ Repo: `app-proveedores`. Carpetas bajo `src/app/pages/proveedor/`:
 | `unidades-proveedor/` | Unidades (**catálogo global**; UI bajo proveedor por compatibilidad) |
 | `sucursales-proveedor/` | Sucursales (+ stock) |
 | `import-productos/` | Flujo editable + historial → `POST productos/bulk` (localStorage; ≤~1000). **No** tocar al endurecer masivo |
-| `csv-import/` | Importación masiva servidor: upload → confirm → poll status/results (`camino: csv-import-servidor`) |
+| `csv-import/` | Importación masiva servidor: upload → confirm → poll status/results (`camino: csv-import-servidor`). En NexProv el botón «Descargar plantilla» sirve `src/assets/templates/plantilla-importacion-productos-v1.1.csv` (incluye `imagen_principal`). En la vista previa, el switch «Publicar en el catálogo» manda `import_options.mostrar_en_catalogo_publico` para toda la carga (apagado = privados) |
 
 Modelos compartidos: `shared/models/producto.model.ts`.
 

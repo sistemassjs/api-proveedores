@@ -10,6 +10,7 @@ use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Services\CSVImport\CSVImportProductValidator;
 use App\Services\CSVImport\CSVProcessorService;
+use App\Services\CSVImport\ProductoImagenUrlInspector;
 use App\Services\Catalogo\CatalogoOpusHomologacionService;
 use App\Support\Catalogo\CatalogoImportPlantilla;
 use Exception;
@@ -50,9 +51,16 @@ class CSVImportJob implements ShouldQueue
         'unidades_existentes' => 0,
         'opus_homologados' => 0,
         'opus_sin_match' => 0,
+        'imagenes_aceptadas' => 0,
+        'imagenes_omitidas' => 0,
     ];
 
     protected array $errorDetails = [];
+
+    /** @var list<array<string, mixed>> */
+    protected array $imagenAdvertencias = [];
+
+    protected ?ProductoImagenUrlInspector $imagenInspector = null;
 
     protected array $catalogMappings = [
         'marcas' => [],
@@ -79,6 +87,7 @@ class CSVImportJob implements ShouldQueue
             'skip_duplicates' => false,
             'update_existing' => true,
             'create_missing_relations' => true,
+            'mostrar_en_catalogo_publico' => false,
         ], $options);
 
         $this->options['chunk_size'] = max(
@@ -102,6 +111,7 @@ class CSVImportJob implements ShouldQueue
         @ini_set('memory_limit', CatalogoImportPlantilla::MEMORY_LIMIT_JOB);
 
         $this->opusMatch = $opusMatch;
+        $this->imagenInspector = new ProductoImagenUrlInspector;
         $this->startTime = microtime(true);
         $validator = new CSVImportProductValidator($this->importAudit->proveedor_id);
 
@@ -162,17 +172,27 @@ class CSVImportJob implements ShouldQueue
                     break;
                 }
 
-                // Procesar chunk de productos
-                DB::transaction(function () use ($chunk, $validator, &$processedCount) {
-                    $this->processProductChunk($chunk, $validator, $processedCount);
-                });
+                // Una transacción por producto: la revisión HTTP de la imagen no
+                // retiene el lote entero, y el progreso se publica al commit.
+                foreach ($chunk as $index => $productData) {
+                    $rowNumber = $processedCount + $index + 1;
+                    try {
+                        $this->processSingleProductRow($productData, $validator, $rowNumber);
+                    } catch (Exception $e) {
+                        $this->recordProductError($rowNumber, $productData, [$e->getMessage()]);
+                        Log::warning('Error procesando producto individual', [
+                            'row' => $rowNumber,
+                            'codigo' => $productData['codigo'] ?? 'N/A',
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+
+                    $progressPercentage = 15 + (($rowNumber / max(1, $totalRegistros)) * 80);
+                    $this->updateProgress(min(95, $progressPercentage), $rowNumber);
+                }
 
                 $processedCount += count($chunk);
                 $offset += $chunkSize;
-
-                // Actualizar progreso basado en registros procesados
-                $progressPercentage = 15 + (($processedCount / $totalRegistros) * 80); // 15-95%
-                $this->updateProgress(min(95, $progressPercentage), $processedCount);
 
                 // Liberar memoria después de cada chunk
                 unset($chunk);
@@ -499,19 +519,8 @@ class CSVImportJob implements ShouldQueue
     {
         foreach ($productChunk as $index => $productData) {
             $rowNumber = $baseRowNumber + $index + 1;
-
             try {
-                // Validate product data
-                $validationResult = $validator->validateRow($productData, $rowNumber);
-
-                if (! empty($validationResult['errors'])) {
-                    $this->recordProductError($rowNumber, $productData, $validationResult['errors']);
-
-                    continue;
-                }
-
-                // Process single product
-                $this->processSingleProduct($productData, $rowNumber);
+                $this->processSingleProductRow($productData, $validator, $rowNumber);
             } catch (Exception $e) {
                 $this->recordProductError($rowNumber, $productData, [$e->getMessage()]);
                 Log::warning('Error procesando producto individual', [
@@ -521,6 +530,22 @@ class CSVImportJob implements ShouldQueue
                 ]);
             }
         }
+    }
+
+    /**
+     * Valida y persiste una fila. La imagen inválida no aborta el producto.
+     */
+    protected function processSingleProductRow(array $productData, CSVImportProductValidator $validator, int $rowNumber): void
+    {
+        $validationResult = $validator->validateRow($productData, $rowNumber);
+
+        if (! empty($validationResult['errors'])) {
+            $this->recordProductError($rowNumber, $productData, $validationResult['errors']);
+
+            return;
+        }
+
+        $this->processSingleProduct($productData, $rowNumber);
     }
 
     /**
@@ -600,6 +625,7 @@ class CSVImportJob implements ShouldQueue
             'tiempo_entrega' => $this->nullableString($productData['tiempo_entrega'] ?? null),
             'url_producto' => $this->nullableString($productData['url_producto'] ?? null),
             'tags' => $this->parseTags($productData['tags'] ?? null),
+            'mostrar_en_catalogo_publico' => (bool) ($this->options['mostrar_en_catalogo_publico'] ?? false),
             'activo' => true,
             'updated_at' => now(),
         ];
@@ -631,7 +657,57 @@ class CSVImportJob implements ShouldQueue
             }
         }
 
+        $this->applyImagenPrincipal($producto, $productData, $rowNumber);
         $this->syncPropiedadesFromRow($producto, $productData);
+    }
+
+    /**
+     * Guarda la URL de imagen tal como viene si el enlace responde y el contenido es una imagen.
+     * Un fallo no detiene la importación del producto ni pisa una imagen ya guardada.
+     */
+    protected function applyImagenPrincipal(Producto $producto, array $productData, int $rowNumber): void
+    {
+        $url = trim((string) ($productData['imagen_principal'] ?? ''));
+        if ($url === '') {
+            return;
+        }
+
+        try {
+            $result = ($this->imagenInspector ?? new ProductoImagenUrlInspector)->inspect($url);
+            if (! $result['ok']) {
+                $this->recordImagenAdvertencia($rowNumber, $productData, $result['message'] ?? 'No se pudo validar la imagen.');
+
+                return;
+            }
+
+            $producto->update(['imagen_principal' => $url]);
+            $this->processingStats['imagenes_aceptadas']++;
+        } catch (Exception $e) {
+            $this->recordImagenAdvertencia($rowNumber, $productData, 'No se pudo guardar la URL de imagen.');
+            Log::warning('Imagen de importación omitida', [
+                'row' => $rowNumber,
+                'codigo' => $productData['codigo'] ?? 'N/A',
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    protected function recordImagenAdvertencia(int $rowNumber, array $productData, string $message): void
+    {
+        $this->processingStats['imagenes_omitidas']++;
+
+        if (count($this->imagenAdvertencias) >= 100) {
+            return;
+        }
+
+        $this->imagenAdvertencias[] = [
+            'row' => $rowNumber,
+            'producto' => $productData['codigo'] ?? 'N/A',
+            'nombre' => $productData['producto'] ?? 'N/A',
+            'mensaje' => $message,
+            'tipo' => 'imagen_principal',
+            'timestamp' => now()->toISOString(),
+        ];
     }
 
     protected function nullableString(mixed $value): ?string
@@ -787,10 +863,21 @@ class CSVImportJob implements ShouldQueue
             'sin_match' => $this->processingStats['opus_sin_match'],
         ]);
 
+        $this->importAudit->appendLog('Imágenes por URL', [
+            'aceptadas' => $this->processingStats['imagenes_aceptadas'],
+            'omitidas' => $this->processingStats['imagenes_omitidas'],
+        ]);
+
         $previewData = $this->importAudit->preview_data ?? [];
         $previewData['opus'] = [
             'homologados' => $this->processingStats['opus_homologados'],
             'sin_match' => $this->processingStats['opus_sin_match'],
+        ];
+        $previewData['imagenes'] = [
+            'aceptadas' => $this->processingStats['imagenes_aceptadas'],
+            'omitidas' => $this->processingStats['imagenes_omitidas'],
+            'advertencias' => $this->imagenAdvertencias,
+            'advertencias_truncadas' => $this->processingStats['imagenes_omitidas'] > count($this->imagenAdvertencias),
         ];
         $this->importAudit->update([
             'preview_data' => $previewData,
@@ -837,10 +924,13 @@ class CSVImportJob implements ShouldQueue
     protected function updateProgress(float $percentage, int $count_registros_procesados): void
     {
         $pct = min(100, max(0, $percentage));
-        // Evitar UPDATE por cada chunk: solo cuando cambia al menos 1 punto porcentual
+        // El porcentaje se escribe al cambiar ≥ 1 punto; el conteo, siempre,
+        // para que el polling no se quede en 0 mientras el lote avanza.
         $prev = (float) ($this->importAudit->progreso ?? 0);
         if ($pct < 100 && abs($pct - $prev) < 1) {
-            $this->importAudit->numero_registros_procesados = $count_registros_procesados;
+            $this->importAudit->update([
+                'numero_registros_procesados' => $count_registros_procesados,
+            ]);
 
             return;
         }

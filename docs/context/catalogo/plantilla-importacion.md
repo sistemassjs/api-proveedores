@@ -7,6 +7,8 @@
 
 Ejemplo CSV: [plantilla-importacion-ejemplo-v1.1.csv](./plantilla-importacion-ejemplo-v1.1.csv)
 
+Descarga en NexProv (botón «Descargar plantilla» de `csv-import/subir-csv`): `nexprov/src/assets/templates/plantilla-importacion-productos-v1.1.csv`. Debe llevar las mismas columnas que este ejemplo, incluida `imagen_principal` (URL http(s), entre `tiempo_entrega` y `url_producto`).
+
 ---
 
 ## 1. Qué hay hoy en `.data`
@@ -81,6 +83,7 @@ No eliminar columnas opcionales de la plantilla solo porque un proveedor no las 
 | `disponibilidad` | Disponibilidad | OK |
 | `tiempo_entrega` | Tiempo de entrega | OK |
 | `url_producto` | URL del producto | OK |
+| `imagen_principal` | Imagen principal | OK. El preview no marca la fila por longitud ni por un valor que no sea URL http(s). El job guarda la URL solo si responde y es jpeg, png, webp o gif; si no, el producto se importa y se omite solo ese campo |
 | `tags` | Palabras clave / Tags | OK |
 | `PropiedadN_Clave` / `PropiedadN_Valor` | Propiedades dinámicas | OK (N = 1…∞ en validación; Excel puede traer 5–10) |
 
@@ -92,7 +95,6 @@ Estas del lineamiento **aún no** están como columnas de import CSV (aunque par
 |----------------------|-------------|-----------|-------------------------|
 | `moneda` | Moneda (MXN, USD…) — **Sí** | Alta | Hoy no hay columna en `productos` ni en el validador. Definir default `MXN` o campo nuevo. |
 | `activo` | Activo / Inactivo — **Sí** | Alta | Ya existe en BD (`activo`); **falta** aceptarlo en CSV/job. Valores: `1/0`, `true/false`, `si/no`. |
-| `imagen_principal` | Imagen principal | Media | Existe en BD; **falta** en headers de import (URL o path). |
 | `ficha_tecnica` | Ficha técnica (PDF/URL) | Media | Existe `producto_documentos`; mapear URL/path en import a documento tipo `ficha_tecnica`. |
 | `cantidad_minima` | Cantidad mínima / umbral mayoreo | Media | No existe en modelo; nueva columna o propiedad comercial. |
 | `vigencia_precio` | Vigencia del precio | Media | No existe; fecha ISO o texto. Requiere columna o tabla de precios. |
@@ -107,7 +109,7 @@ Estas del lineamiento **aún no** están como columnas de import CSV (aunque par
 ### 4.1 Usable ya (sin migraciones) — plantilla intermedia v1.1
 
 ```text
-codigo,producto,descripcion,tipo,familia,subfamilia,categoria,subcategoria,marca,modelo,codigo_fabricante,codigo_barras,unidad_medida,presentacion,cantidad_contenida,unidad_contenido,unidad_base,factor_conversion,precio,precio_mayoreo,precio_menudeo,disponibilidad,tiempo_entrega,url_producto,tags,Propiedad1_Clave,Propiedad1_Valor,Propiedad2_Clave,Propiedad2_Valor,Propiedad3_Clave,Propiedad3_Valor,Propiedad4_Clave,Propiedad4_Valor,Propiedad5_Clave,Propiedad5_Valor
+codigo,producto,descripcion,tipo,familia,subfamilia,categoria,subcategoria,marca,modelo,codigo_fabricante,codigo_barras,unidad_medida,presentacion,cantidad_contenida,unidad_contenido,unidad_base,factor_conversion,precio,precio_mayoreo,precio_menudeo,disponibilidad,tiempo_entrega,imagen_principal,url_producto,tags,Propiedad1_Clave,Propiedad1_Valor,Propiedad2_Clave,Propiedad2_Valor,Propiedad3_Clave,Propiedad3_Valor,Propiedad4_Clave,Propiedad4_Valor,Propiedad5_Clave,Propiedad5_Valor
 ```
 
 ### 4.2 Mínimo viable (compatible con `.data` actual)
@@ -154,7 +156,7 @@ codigo,producto,descripcion,tipo,familia,subfamilia,categoria,subcategoria,marca
 | Disponibilidad | `disponibilidad` | Sí | Agregar a plantilla |
 | Tiempo entrega | `tiempo_entrega` | Sí | Agregar |
 | Logo | — | Proveedor | Fuera del CSV producto |
-| Imagen principal | `imagen_principal` | BD sí / CSV no | **Agregar** a import |
+| Imagen principal | `imagen_principal` | URL en `productos.imagen_principal` | Hecho: el job guarda la URL si responde y es imagen; si no, omite solo el campo. El preview no marca error ni advertencia por longitud ni por enlace no http(s). No se descarga al disco |
 | URL producto | `url_producto` | Sí | Agregar a plantilla |
 | Ficha técnica | `ficha_tecnica` | docs sí / CSV no | **Agregar** mapeo |
 | Tags | `tags` | Sí | Agregar a plantilla |
@@ -201,7 +203,7 @@ Pendiente endurecer según lineamiento:
 ## 8. Recomendación de rollout
 
 1. **Ya (sin migración):** publicar plantilla CSV/Excel con columnas de §4.1 + propiedades; regenerar ejemplos en `.data` cuando convenga.
-2. **Corto plazo:** aceptar en import `activo`, `imagen_principal`, `ficha_tecnica` (mapeo a existentes).
+2. **Corto plazo:** aceptar en import `activo` y `ficha_tecnica` (mapeo a existentes). `imagen_principal` ya se acepta como URL.
 3. **Mediano:** decidir si `moneda`, `cantidad_minima`, `vigencia_precio` son columnas universales (migración) o quedan fuera hasta tabla de precios.
 4. Al publicar: subir `CatalogoImportPlantilla::VERSION` a `1.1` y nueva `FECHA`.
 

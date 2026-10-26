@@ -155,6 +155,7 @@ class CsvImportController extends Controller
                 'import_options.skip_duplicates' => 'nullable|boolean',
                 'import_options.update_existing' => 'nullable|boolean',
                 'import_options.create_missing_relations' => 'nullable|boolean',
+                'import_options.mostrar_en_catalogo_publico' => 'nullable|boolean',
                 'import_options.chunk_size' => "nullable|integer|min:{$chunkMin}|max:{$chunkMax}",
             ]);
 
@@ -162,6 +163,7 @@ class CsvImportController extends Controller
             $skipDuplicates = $request->input('import_options.skip_duplicates', false);
             $updateExisting = $request->input('import_options.update_existing', false);
             $createMissingRelations = $request->input('import_options.create_missing_relations', false);
+            $mostrarEnCatalogoPublico = $request->boolean('import_options.mostrar_en_catalogo_publico');
 
             $audit = ImportAudit::where('id', $auditId)
                 ->where('proveedor_id', $proveedor->id)
@@ -187,6 +189,7 @@ class CsvImportController extends Controller
                 'skip_duplicates' => $skipDuplicates,
                 'update_existing' => $updateExisting,
                 'create_missing_relations' => $createMissingRelations,
+                'mostrar_en_catalogo_publico' => $mostrarEnCatalogoPublico,
                 'chunk_size' => (int) $request->input(
                     'import_options.chunk_size',
                     CatalogoImportPlantilla::JOB_CHUNK_DEFAULT
@@ -267,6 +270,7 @@ class CsvImportController extends Controller
                 'total_registros' => $audit->total_registros ?? 0,
                 'procesados' => $audit->numero_registros_procesados,
                 'estimated_remaining' => $this->estimateRemainingTime($audit),
+                'mensaje' => $this->getCurrentProcessingPhase($audit),
                 'current_phase' => $audit->estado,
                 'plantilla' => [
                     'version' => $audit->plantilla_version ?? CatalogoImportPlantilla::VERSION,
@@ -354,6 +358,8 @@ class CsvImportController extends Controller
                     ),
                 ],
                 'opus' => $previewData['opus'] ?? null,
+                'imagenes' => $previewData['imagenes'] ?? null,
+                'advertencias' => $previewData['imagenes']['advertencias'] ?? [],
                 'plantilla' => [
                     'version' => $audit->plantilla_version ?? CatalogoImportPlantilla::VERSION,
                     'fecha' => $audit->plantilla_fecha ?? CatalogoImportPlantilla::FECHA,
@@ -1072,7 +1078,7 @@ class CsvImportController extends Controller
             case 'confirmado':
                 return 'Iniciando procesamiento';
             case 'procesando':
-                if ($progreso < 30) {
+                if ($progreso < 15) {
                     return 'Procesando catálogos';
                 } elseif ($progreso < 95) {
                     return 'Importando productos';

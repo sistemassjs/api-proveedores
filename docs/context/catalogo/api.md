@@ -52,6 +52,8 @@ Middleware de recurso: `proveedor.producto`, `proveedor.categoria`, `proveedor.m
 - Columnas opcionales: `familia`, `subfamilia`, más campos universales; `PropiedadN_Clave` / `PropiedadN_Valor` → EAV.
 - Homologación OPUS no bloqueante: match por `familia`/`subfamilia` o, si faltan, por `categoria`/`subcategoria` local (`CatalogoOpusHomologacionService`). Si no hay match de familia → OPUS null; local se guarda igual.
 - Columna `precio` → `precio_base`.
+- Columna opcional `imagen_principal`: el preview **no** marca la fila por este campo (ni error ni advertencia), aunque la URL supere 500 caracteres o no sea `http`/`https`. El job guarda la URL tal cual solo si el enlace responde (timeout corto) y los primeros bytes son jpeg, png, webp o gif. Si falla, el producto se importa igual y solo se omite la imagen. La comprobación va por producto, fuera del lote, y el status publica `procesados` sin esperar a cerrar el chunk (el 15 % es “catálogos listos”, no un bloqueo).
+- `import_options.mostrar_en_catalogo_publico` (bool, default `false`) en `POST …/csv-import/confirm`: aplica a **todos** los productos de esa carga (altas y actualizaciones). El switch de NexProv lo envía; no es columna del CSV.
 - **Categorías al importar:** raíz `nivel = 0`, hija `nivel = 1` (antes el CSV masivo usaba 1/2 y rompía el update de producto). Ver [database.md](./database.md#niveles-categoriasnivel-obligatorio).
 - Formato genérico vs lineamiento NEXPROV (columnas actuales, gaps y encabezado v1.1): [plantilla-importacion.md](./plantilla-importacion.md).
 - Tabla temporal de import guarda `payload` JSON con la fila completa (p. ej. `PropiedadN_*`, `familia`, `tags`) para que el job persista especificaciones EAV.
