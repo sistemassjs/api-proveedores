@@ -60,9 +60,8 @@ class ProveedorController extends Controller
     public function updateLogo(ProveedorUpdateLogoRequest $request, Proveedor $proveedor)
     {
         $user = $request->user();
-        $proveedor = $user->proveedorPrincipal();
 
-        if (! $proveedor) {
+        if (! $proveedor || ! $user->tieneAccesoAProveedor((int) $proveedor->id) && ! $user->isUserAdmin()) {
             throw new ResourceNotFoundException('Proveedor no encontrado.');
         }
 
@@ -125,7 +124,7 @@ class ProveedorController extends Controller
         if (! $user) {
             throw new ResourceNotFoundException('Usuario no encontrado.');
         }
-        $proveedor = $user->proveedorPrincipal();
+        $proveedor = $user->empresaActiva() ?? $user->proveedorPrincipal();
         if (! $proveedor) {
             throw new ResourceNotFoundException('Empresa no registrada en GestionPlus.');
         }
@@ -411,7 +410,7 @@ class ProveedorController extends Controller
         $user = $request->user();
 
         // Verificar acceso
-        if ($user->proveedorPrincipal()?->id !== $proveedor->id) {
+        if (! $user->isUserAdmin() && ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
             return response()->json([
                 'message' => 'No tienes permisos para subir esta constancia fiscal.',
             ], Response::HTTP_FORBIDDEN);
@@ -548,7 +547,7 @@ class ProveedorController extends Controller
         $user = $request->user();
 
         // Validar acceso
-        if ($user->proveedorPrincipal()?->id !== $proveedor->id) {
+        if (! $user->isUserAdmin() && ! $user->tieneAccesoAProveedor((int) $proveedor->id)) {
             return response()->json([
                 'message' => 'No tienes permisos para acceder a esta constancia fiscal.',
             ], Response::HTTP_FORBIDDEN);

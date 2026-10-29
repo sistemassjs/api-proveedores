@@ -11,6 +11,7 @@ class RoleMiddleware
 {
     /**
      * Control de acceso basado en roles.
+     * En rutas con {proveedor}, el rol es el de esa membresía.
      *
      * @param  string  ...$roles
      */
@@ -22,15 +23,30 @@ class RoleMiddleware
             throw new UnauthorizedException('No hay un usuario autenticado.');
         }
 
-        if (! $user->hasRole($roles)) {
-            throw new UnauthorizedException('El usuario no tiene un rol asignado. Roles permitidos: '.implode(', ', $roles).'.'.' Rol actual: '.($user->role->nombre ?? 'desconocido'));
-        }
+        $userRole = $this->roleNombre($request, $user);
+        $permitidos = array_map('strtolower', $roles);
 
-        if (! $user->hasRole($roles)) {
-            $userRole = $user->role->nombre ?? 'desconocido';
-            throw new UnauthorizedException("El usuario no tiene el rol requerido. Rol actual: {$userRole}. Roles permitidos: ".implode(', ', $roles));
+        if ($userRole === null || ! in_array(strtolower($userRole), $permitidos, true)) {
+            throw new UnauthorizedException(
+                'El usuario no tiene el rol requerido. Rol actual: '.($userRole ?? 'desconocido').'. Roles permitidos: '.implode(', ', $roles).'.'
+            );
         }
 
         return $next($request);
+    }
+
+    private function roleNombre(Request $request, $user): ?string
+    {
+        $proveedor = $request->route('proveedor');
+        $proveedorId = is_object($proveedor) ? ($proveedor->id ?? null) : $proveedor;
+
+        if (is_numeric($proveedorId) && (int) $proveedorId > 0 && method_exists($user, 'nombreRolEnProveedor')) {
+            $nombre = $user->nombreRolEnProveedor((int) $proveedorId);
+            if (is_string($nombre) && $nombre !== '') {
+                return $nombre;
+            }
+        }
+
+        return $user->role?->nombre;
     }
 }

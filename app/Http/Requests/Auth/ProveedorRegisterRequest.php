@@ -2,8 +2,6 @@
 
 namespace App\Http\Requests\Auth;
 
-use App\Models\User;
-use App\Support\ClientApp;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -77,12 +75,6 @@ class ProveedorRegisterRequest extends FormRequest
                 'required',
                 'email',
                 'max:255',
-                function (string $attribute, mixed $value, \Closure $fail) {
-                    $user = User::where('email', $value)->first();
-                    if ($user && $user->hasClientApp(ClientApp::key())) {
-                        $fail('El correo electrónico ya está registrado en '.ClientApp::name().'.');
-                    }
-                },
             ],
 
             'telefono' => ['nullable', 'array'],
@@ -98,6 +90,7 @@ class ProveedorRegisterRequest extends FormRequest
             'contacto_correo' => ['nullable', 'email', 'max:60'],
             'acepta_terminos' => ['required', 'accepted'],
             'activar_app' => ['sometimes', 'boolean'],
+            'asociar_empresa' => ['sometimes', 'boolean'],
             // Requerido al activar app solo si el user ya tiene password (lo valida AuthController).
             'password' => ['sometimes', 'nullable', 'string'],
             // 'recaptcha_token' => ['required', new ReCaptcha],

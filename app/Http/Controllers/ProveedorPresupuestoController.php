@@ -104,7 +104,7 @@ class ProveedorPresupuestoController extends Controller
     public function nextFolio(Request $request): JsonResponse
     {
         $user = $request->user();
-        $proveedor = $user?->proveedorPrincipal();
+        $proveedor = $user?->empresaActiva() ?? $user?->proveedorPrincipal();
 
         if (! $user || ! $proveedor) {
             return $this->error('No fue posible resolver la empresa en GestionPlus.', null, 422);

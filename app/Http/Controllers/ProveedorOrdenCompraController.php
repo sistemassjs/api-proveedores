@@ -18,20 +18,17 @@ class ProveedorOrdenCompraController extends Controller
     /**
      * Obtener las órdenes de compra del proveedor autenticado
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, \App\Models\Proveedor $proveedor): JsonResponse
     {
         $user = $request->user();
 
-        // Verificar que el usuario tenga un proveedor asociado
-        if (!$user->proveedorPrincipal()) {
-            return $this->error('Usuario no tiene un proveedor asociado', 403);
+        if (! $user->tieneAccesoAProveedor((int) $proveedor->id) && ! $user->isUserAdmin()) {
+            return $this->error('No tienes acceso a las órdenes de esta empresa', 403);
         }
 
-        // Parámetros de filtrado y paginación
         $params = $request->only(['page', 'per_page', 'estatus', 'fecha_desde', 'fecha_hasta', 'sort_by', 'order']);
 
-        // Obtener órdenes de compra desde la API de Construcciones
-        $result = $this->construccionesApi->getOrdenesCompraByProveedor($user->proveedorPrincipal()->id, $params);
+        $result = $this->construccionesApi->getOrdenesCompraByProveedor($proveedor->id, $params);
 
         if (!$result['success']) {
             return $this->error(
@@ -46,12 +43,11 @@ class ProveedorOrdenCompraController extends Controller
     /**
      * Obtener el detalle de una orden de compra específica
      */
-    public function show(Request $request, string $ordenCompraId): JsonResponse
+    public function show(Request $request, \App\Models\Proveedor $proveedor, string $ordenCompraId): JsonResponse
     {
         $user = $request->user();
 
-        // Verificar que el usuario tenga un proveedor asociado
-        if (!$user->proveedor_id) {
+        if (! $user->tieneAccesoAProveedor((int) $proveedor->id) && ! $user->isUserAdmin()) {
             return $this->error('Usuario no tiene un proveedor asociado', 403);
         }
 
@@ -68,7 +64,7 @@ class ProveedorOrdenCompraController extends Controller
         $ordenCompra = $result['data']['data'] ?? $result['data'];
 
         // Verificar que la orden pertenezca al proveedor
-        if (isset($ordenCompra['proveedor_id']) && $ordenCompra['proveedor_id'] != $user->proveedor_id) {
+        if (isset($ordenCompra['proveedor_id']) && (int) $ordenCompra['proveedor_id'] !== (int) $proveedor->id) {
             return $this->error('No tiene permisos para ver esta orden de compra', 403);
         }
 

@@ -15,13 +15,17 @@ class ValidateProveedorRole
             return response()->json(['error' => 'No autenticado'], 401);
         }
 
-        // Administradores siempre pasan
-        if ($user->role?->name === 'ADMINISTRADOR') {
+        $proveedor = $request->route('proveedor');
+        $proveedorId = is_object($proveedor) ? ($proveedor->id ?? null) : $proveedor;
+        $roleNombre = (is_numeric($proveedorId) && method_exists($user, 'nombreRolEnProveedor'))
+            ? $user->nombreRolEnProveedor((int) $proveedorId)
+            : $user->role?->nombre;
+
+        if ($roleNombre === 'ADMINISTRADOR') {
             return $next($request);
         }
 
-        // Verificar si el usuario tiene uno de los roles requeridos
-        if (! in_array($user->role?->name, $roles)) {
+        if (! in_array($roleNombre, $roles, true)) {
             return response()->json(['error' => 'No tienes permisos suficientes'], 403);
         }
 

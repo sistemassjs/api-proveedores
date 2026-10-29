@@ -20,6 +20,7 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 | Acceso | `tieneAccesoAProveedor`, middleware `proveedor.access` / `api.access` | Autorización por proveedor |
 | Roles | `UserRoleEnumerate` (ADMINISTRADOR, GERENTE, SUPERVISOR, VENTAS, AUXILIAR, …) | Rutas segmentadas + menú |
 | Usuarios / matriz MVP | [platform-users-roles.md](./platform-users-roles.md) | Gestión empresa: principal GERENTE, roles asignables SUP/VEN/AUX |
+| **Multiempresa** | [platform-multiempresa.md](./platform-multiempresa.md) | Una cuenta en varias empresas; empresa activa y rol por membresía |
 | Métricas de plataforma | Sección siguiente + [platform-users-roles.md](./platform-users-roles.md#métricas-y-cuentas-de-pruebas) | Totales / actividad: excluye roles internos y cuentas/empresas de pruebas |
 | Storage / mail / FCM | Traits, Mail, Notifications genéricas | Archivos, correo, push |
 | **Apps cliente** | [platform-client-apps.md](./platform-client-apps.md) | Header `X-Client-App`, tabla `user_client_apps`, login/registro por app. Google OAuth multi-app vía state (`platform-auth-socialite.md`). |
@@ -31,7 +32,7 @@ Infraestructura que usan los tres dominios. **No expandir** como “módulo núc
 
 Alta por formulario (`POST /auth/register_proveedor`). Contratos HTTP iguales en **GestionPlus** y **NexProv**. La app de origen va en `X-Client-App` (otorga acceso + correo con nombre/URL de esa app). Ver [platform-client-apps.md](./platform-client-apps.md). No aplica a registro básico SP ni a `tipo_alta = 2` (Construcción).
 
-**NexProv → catálogo:** al otorgar acceso `nexprov` (alta nueva, `activar_app` en login/registro, o Google OAuth `?app=nexprov`), `User::grantClientApp` activa `proveedores.is_proveedor_catalogo = true` en el proveedor principal. GestionPlus / SP / Construcc no tocan esa bandera. Ver [catalogo/overview.md](./catalogo/overview.md).
+**NexProv → catálogo:** al otorgar acceso `nexprov` (alta nueva, `activar_app` en login/registro, o Google OAuth `?app=nexprov`), `User::grantClientApp` activa `proveedores.is_proveedor_catalogo = true` en la **empresa activa** de esa sesión (última elegida, o la principal). GestionPlus / SP / Construcc no tocan esa bandera. Ver [catalogo/overview.md](./catalogo/overview.md) y [platform-multiempresa.md](./platform-multiempresa.md).
 
 Alta Construcc (`tipo_alta = 2`, ApiKey): el RFC genérico SAT `XAXX010101000` **puede duplicarse**; el resto de RFCs siguen únicos. Detalle en [solicitudes-pago/database.md](./solicitudes-pago/database.md#unicidad-de-rfc-en-proveedores-alta-construcc).
 

@@ -21,6 +21,7 @@ use App\Http\Requests\Auth\ProveedorReenviarCorreoRegistroRequest;
 use App\Http\Requests\Auth\CompletarRegistroProveedorRequest;
 use App\Http\Resources\ProveedorResource;
 use App\Http\Resources\Auth\UserAuthenticateResource;
+use App\Services\Auth\EmpresaActivaService;
 use App\Support\UserCuentaEstado;
 use App\Support\ClientApp;
 use App\Mail\CompletaRegistroProveedorMail;
@@ -122,8 +123,12 @@ class AuthController extends Controller
 
             if ($yaTeniaApp && $registroCompletado) {
                 return $this->error(
-                    'Tu cuenta ya tiene acceso a '.ClientApp::name().'. Inicia sesión con tu correo y contraseña.',
-                    ['codigo' => 'registro_ya_completado', 'app_key' => ClientApp::key()],
+                    'Esta cuenta ya existe. Por ahora solo un administrador puede asignarle otra empresa.',
+                    [
+                        'codigo' => 'asignacion_solo_admin',
+                        'puede_asociar' => false,
+                        'app_key' => ClientApp::key(),
+                    ],
                     409
                 );
             }
@@ -167,17 +172,14 @@ class AuthController extends Controller
                 }
 
                 $token = $userPorCredencial->createToken('API Token')->plainTextToken;
-                $userPorCredencial->load(User::eagerLodable());
 
-                return $this->success([
-                    'acceso_activado' => true,
-                    'app_key' => ClientApp::key(),
-                    'user' => new UserAuthenticateResource($userPorCredencial),
-                    'proveedor' => $proveedorDelUser
-                        ? new ProveedorResource($proveedorDelUser->load(Proveedor::eagerLodable()))
-                        : null,
-                    'token' => $token,
-                ], 'Acceso a '.ClientApp::name().' generado. Bienvenido.', 200);
+                return $this->respuestaAutenticacion(
+                    $userPorCredencial,
+                    $token,
+                    'Acceso a '.ClientApp::name().' generado. Bienvenido.',
+                    200,
+                    ['acceso_activado' => true, 'app_key' => ClientApp::key()]
+                );
             }
 
             if ($proveedorDelUser) {
@@ -276,15 +278,14 @@ class AuthController extends Controller
                 }
 
                 $token = $user->createToken('API Token')->plainTextToken;
-                $user->load(User::eagerLodable());
 
-                return $this->success([
-                    'acceso_activado' => true,
-                    'app_key' => ClientApp::key(),
-                    'user' => new UserAuthenticateResource($user),
-                    'proveedor' => new ProveedorResource($proveedorExistente->load(Proveedor::eagerLodable())),
-                    'token' => $token,
-                ], 'Acceso a '.ClientApp::name().' generado. Bienvenido.', 200);
+                return $this->respuestaAutenticacion(
+                    $user,
+                    $token,
+                    'Acceso a '.ClientApp::name().' generado. Bienvenido.',
+                    200,
+                    ['acceso_activado' => true, 'app_key' => ClientApp::key()]
+                );
             }
 
             $plainToken = $this->enviarCorreoCompletarRegistroConTokenAlmacenado($proveedorExistente);
@@ -469,11 +470,12 @@ class AuthController extends Controller
             }
         }
 
-        return $this->success([
-            'user' => new UserAuthenticateResource($user->load(User::eagerLodable())),
-            'proveedor' => new ProveedorResource($proveedor->load(Proveedor::eagerLodable())),
-            'token' => $token,
-        ], 'Registro completado exitosamente en GestionPlus', 201);
+        return $this->respuestaAutenticacion(
+            $user->load(User::eagerLodable()),
+            $token,
+            'Registro completado exitosamente en GestionPlus',
+            201
+        );
     }
 
     public function update_foto_perfil(AuthUpdateFotoPerfilRequest $request)
@@ -487,14 +489,9 @@ class AuthController extends Controller
         $user->foto_perfil_url = $path; // guardamos la ruta
         $user->save();
 
-        $proveedor = $user->proveedorPrincipal();
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return $this->success([
-            'user' => new UserAuthenticateResource($user->load(User::eagerLodable())),
-            'proveedor' => $proveedor ? new ProveedorResource($proveedor->load(Proveedor::eagerLodable())) : null,
-            'token' => $token,
-        ], 'Registro completado', 201);
+        return $this->respuestaAutenticacion($user, $token, 'Foto de perfil actualizada', 201);
     }
 
     public function login(Request $request)
@@ -541,17 +538,15 @@ class AuthController extends Controller
 
             $token = $user->createToken('API Token')->plainTextToken;
 
-            $user->load(User::eagerLodable());
-            $proveedor = $user->proveedorPrincipal();
-
-            return $this->success([
-                'user' => new UserAuthenticateResource($user),
-                'token' => $token,
-                'proveedor' => $proveedor ? new ProveedorResource($proveedor->load(Proveedor::eagerLodable())) : null,
-                'acceso_activado' => $request->boolean('activar_app'),
-            ], $request->boolean('activar_app')
-                ? 'Acceso a '.ClientApp::name().' generado. Bienvenido.'
-                : 'Login exitoso en '.ClientApp::name().'.', 201);
+            return $this->respuestaAutenticacion(
+                $user,
+                $token,
+                $request->boolean('activar_app')
+                    ? 'Acceso a '.ClientApp::name().' generado. Bienvenido.'
+                    : 'Login exitoso en '.ClientApp::name().'.',
+                201,
+                ['acceso_activado' => $request->boolean('activar_app')]
+            );
         } catch (ValidationException $e) {
             // Error en la validación de los datos de entrada
             return $this->error('Los datos proporcionados no son válidos en '.ClientApp::name().'.', $e->errors(), 422);
@@ -577,21 +572,7 @@ class AuthController extends Controller
 
         $user->load(User::eagerLodable());
 
-        if ($user->proveedores()->count() == 0) {
-            return $this->success([
-                'user' => new UserAuthenticateResource($user),
-                'token' => null,
-                'proveedor' => null,
-            ], 'Login exitoso.', 200);
-        }
-
-        $proveedor = $user->proveedorPrincipal();
-
-        return $this->success([
-            'user' => new UserAuthenticateResource($user),
-            'token' => null,
-            'proveedor' => new ProveedorResource($proveedor),
-        ], 'Login exitoso.', 200);
+        return $this->respuestaAutenticacion($user, null, 'Login exitoso.', 200);
     }
 
     public function refresh(Request $request)
@@ -612,15 +593,7 @@ class AuthController extends Controller
         // Crear un nuevo token
         $newToken = $user->createToken('API Token')->plainTextToken;
 
-        // Cargar relaciones necesarias
-        $user->load(User::eagerLodable());
-        $proveedor = $user->proveedorPrincipal();
-
-        return $this->success([
-            'user' => new UserAuthenticateResource($user),
-            'token' => $newToken,
-            'proveedor' => new ProveedorResource($proveedor),
-        ], 'Token renovado exitosamente', 200);
+        return $this->respuestaAutenticacion($user, $newToken, 'Token renovado exitosamente', 200);
     }
 
     public function logout(Request $request)
@@ -659,15 +632,7 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
         $newToken = $user->createToken('API Token')->plainTextToken;
 
-        // Cargar relaciones necesarias
-        $user->load(User::eagerLodable());
-        $proveedor = $user->proveedorPrincipal();
-
-        return $this->success([
-            'user' => new UserAuthenticateResource($user),
-            'token' => $newToken,
-            'proveedor' => new ProveedorResource($proveedor),
-        ], 'Token renovado exitosamente en GestionPlus', 200);
+        return $this->respuestaAutenticacion($user, $newToken, 'Token renovado exitosamente en GestionPlus', 200);
     }
 
     /**
@@ -807,6 +772,7 @@ class AuthController extends Controller
                 $user->proveedores()->attach($proveedor->id, [
                     'tipo_relacion' => 'PRINCIPAL',
                     'activo' => true,
+                    'role_id' => $idRoleProveedor,
                     'fecha_asignacion' => now(),
                     'observaciones' => 'Usuario principal del proveedor - Registro por enlace',
                 ]);
@@ -959,6 +925,7 @@ class AuthController extends Controller
                 $user->proveedores()->attach($proveedor->id, [
                     'tipo_relacion' => 'PRINCIPAL',
                     'activo' => true,
+                    'role_id' => $idRoleProveedor,
                     'fecha_asignacion' => now(),
                     'observaciones' => 'Usuario completó registro desde tipo_alta=2 en GestionPlus',
                 ]);
@@ -1199,6 +1166,7 @@ class AuthController extends Controller
         $user->proveedores()->attach($proveedor->id, [
             'tipo_relacion' => 'PRINCIPAL',
             'activo' => true,
+            'role_id' => $idRoleProveedor,
             'fecha_asignacion' => now(),
             'observaciones' => 'Usuario principal del proveedor',
         ]);
@@ -1259,15 +1227,7 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
         $newToken = $user->createToken('API Token')->plainTextToken;
 
-        // Cargar relaciones necesarias
-        $user->load(User::eagerLodable());
-        $proveedor = $user->proveedorPrincipal();
-
-        return $this->success([
-            'user' => new UserAuthenticateResource($user),
-            'token' => $newToken,
-            'proveedor' => $proveedor ? new ProveedorResource($proveedor) : null,
-        ], 'Contraseña actualizada correctamente en GestionPlus.', 200);
+        return $this->respuestaAutenticacion($user, $newToken, 'Contraseña actualizada correctamente en GestionPlus.', 200);
     }
 
     /**
@@ -1411,13 +1371,8 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('API Token')->plainTextToken;
-        $user->load(User::eagerLodable());
 
-        return $this->success([
-            'user' => new UserAuthenticateResource($user),
-            'token' => $token,
-            'proveedor' => $proveedor ? new ProveedorResource($proveedor->load(Proveedor::eagerLodable())) : null,
-        ], 'Contraseña restablecida exitosamente.', 200);
+        return $this->respuestaAutenticacion($user, $token, 'Contraseña restablecida exitosamente.', 200);
     }
 
     /**
@@ -1575,24 +1530,22 @@ class AuthController extends Controller
             $verificationEmailSent = true;
         }
 
-        $user->load(User::eagerLodable());
         $token = $user->createToken('API Token')->plainTextToken;
 
-        return $this->success(
+        return $this->respuestaAutenticacion(
+            $user,
+            $token,
+            $verificationEmailSent
+                ? 'Datos de usuario actualizados correctamente. Te enviamos un correo para validar tu email.'
+                : 'Datos de usuario actualizados correctamente.',
+            200,
             [
-                'user' => new UserAuthenticateResource($user),
-                'token' => $token,
-                'proveedor' => $user->proveedorPrincipal() ? new ProveedorResource($user->proveedorPrincipal()) : null,
                 'email_verification_required' => $requiresEmailVerification,
                 'email_verification_sent' => $verificationEmailSent,
                 'email_verification_message' => $verificationEmailSent
                     ? 'Te enviamos un correo para validar tu email. Revisa tu bandeja de entrada.'
                     : null,
-            ],
-            $verificationEmailSent
-                ? 'Datos de usuario actualizados correctamente. Te enviamos un correo para validar tu email.'
-                : 'Datos de usuario actualizados correctamente.',
-            200
+            ]
         );
     }
 
@@ -1742,6 +1695,7 @@ class AuthController extends Controller
             $proveedor->users()->attach($user->id, [
                 'tipo_relacion' => 'PRINCIPAL',
                 'activo' => true,
+                'role_id' => $user->role_id ?: $idRoleProveedor,
                 'fecha_asignacion' => now(),
                 'observaciones' => 'Usuario principal de la empresa',
             ]);
@@ -1750,6 +1704,72 @@ class AuthController extends Controller
         $user->grantClientApp(ClientApp::key());
 
         return $user;
+    }
+
+    public function cambiarEmpresaActiva(Request $request)
+    {
+        $validated = $request->validate([
+            'proveedor_id' => ['required', 'integer'],
+        ]);
+
+        try {
+            $payload = app(EmpresaActivaService::class)->cambiar(
+                $request->user(),
+                (int) $validated['proveedor_id']
+            );
+        } catch (\App\Exceptions\Api\Auth\UnauthorizedProveedorAccessException $e) {
+            return $this->error($e->getMessage(), ['codigo' => 'sin_acceso_empresa'], 403);
+        }
+
+        return $this->success($payload, 'Empresa activa actualizada.', 200);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    private function respuestaAutenticacion(User $user, ?string $token, string $message, int $code = 200, array $extra = [])
+    {
+        return $this->success(
+            app(EmpresaActivaService::class)->payload($user, $token, $extra),
+            $message,
+            $code
+        );
+    }
+
+    /**
+     * Alta de una empresa adicional para una cuenta que ya completó el registro.
+     *
+     * @param  array<string, mixed>  $validatedData
+     */
+    private function asociarNuevaEmpresaACuenta(User $user, array $validatedData)
+    {
+        $roleId = Role::where('nombre', UserRoleEnumerate::GERENTE->value)->value('id');
+
+        $proveedor = Proveedor::create($validatedData);
+        $proveedor->users()->attach($user->id, [
+            'tipo_relacion' => 'PRINCIPAL',
+            'activo' => true,
+            'estado' => EstadoUsuario::REGISTRO_COMPLETADO->value,
+            'role_id' => $roleId,
+            'fecha_asignacion' => now(),
+            'observaciones' => 'Empresa adicional de la misma cuenta',
+        ]);
+
+        $this->cerrarAltaProveedorPendiente($proveedor);
+
+        $user->ultima_empresa_id = $proveedor->id;
+        $user->save();
+        $user->grantClientApp(ClientApp::key());
+
+        $token = $user->createToken('API Token')->plainTextToken;
+
+        return $this->respuestaAutenticacion(
+            $user,
+            $token,
+            'Empresa agregada a tu cuenta.',
+            201,
+            ['empresa_asociada' => true, 'app_key' => ClientApp::key()]
+        );
     }
 
     /**

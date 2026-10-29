@@ -95,6 +95,7 @@ class ProveedorUsuarioController extends Controller
                 'tipo_relacion' => $tipoRelacion,
                 'activo' => $activo,
                 'estado' => 'registrado',
+                'role_id' => $validated['role_id'],
                 'fecha_asignacion' => now(),
                 'observaciones' => $observaciones ?? "Usuario {$tipoRelacion} creado",
             ]);
@@ -143,10 +144,15 @@ class ProveedorUsuarioController extends Controller
 
         DB::transaction(function () use ($request, $proveedor, $userModel, $validated, $isAdmin) {
             $userData = [];
-            foreach (['name', 'email', 'password', 'role_id', 'telefono', 'telefono_codigo_pais'] as $field) {
+            foreach (['name', 'email', 'password', 'telefono', 'telefono_codigo_pais'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $userData[$field] = $validated[$field] ?? null;
                 }
+            }
+
+            $membresiasActivas = $userModel->userProveedores()->where('activo', true)->count();
+            if (array_key_exists('role_id', $validated) && $membresiasActivas <= 1) {
+                $userData['role_id'] = $validated['role_id'];
             }
 
             if (array_key_exists('password', $userData) && ($userData['password'] === null || $userData['password'] === '')) {
@@ -158,7 +164,7 @@ class ProveedorUsuarioController extends Controller
             }
 
             $pivotData = [];
-            foreach (['tipo_relacion', 'activo', 'observaciones'] as $field) {
+            foreach (['tipo_relacion', 'activo', 'observaciones', 'role_id'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $pivotData[$field] = $validated[$field] ?? null;
                 }
@@ -351,6 +357,7 @@ class ProveedorUsuarioController extends Controller
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'tipo_relacion' => ['sometimes', 'string', 'in:PRINCIPAL,SECUNDARIO'],
+            'role_id' => ['sometimes', 'integer', 'exists:roles,id'],
             'activo' => ['sometimes', 'boolean'],
             'observaciones' => ['nullable', 'string', 'max:500'],
         ]);
@@ -378,13 +385,19 @@ class ProveedorUsuarioController extends Controller
         $observacion = $validated['observaciones']
             ?? "Usuario vinculado por administración ({$tipoRelacion})";
 
-        $proveedor->users()->attach($user->id, [
+        $roleId = $validated['role_id'] ?? $user->role_id;
+        $user->proveedores()->attach($proveedor->id, [
             'tipo_relacion' => $tipoRelacion,
             'activo' => $activo,
             'estado' => 'registrado',
+            'role_id' => $roleId,
             'fecha_asignacion' => now(),
             'observaciones' => '[' . now()->format('Y-m-d H:i:s') . '] ' . $observacion,
         ]);
+
+        if ($roleId && $user->userProveedores()->where('activo', true)->count() <= 1) {
+            $user->update(['role_id' => $roleId]);
+        }
 
         $vinculo = $proveedor->users()->where('users.id', $user->id)->first();
 
@@ -475,12 +488,12 @@ class ProveedorUsuarioController extends Controller
                 'tipo_relacion' => $validated['tipo_relacion'],
                 'activo' => true,
                 'estado' => 'registrado',
+                'role_id' => $validated['role_id'],
                 'fecha_asignacion' => now(),
                 'observaciones' => "[" . now()->format('Y-m-d H:i:s') . "] {$observacion}",
             ]);
 
-            // 8. Actualizar rol del usuario si es diferente
-            if ($user->role_id !== $validated['role_id']) {
+            if ($user->userProveedores()->where('activo', true)->count() <= 1 && $user->role_id !== $validated['role_id']) {
                 $user->update(['role_id' => $validated['role_id']]);
             }
 

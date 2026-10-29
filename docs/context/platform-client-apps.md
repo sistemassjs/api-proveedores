@@ -14,7 +14,7 @@ Amplía [platform-shared.md](./platform-shared.md). Google OAuth multi-app: ver 
 | Google OAuth | `?app=` en redirect → state firmado → `grantClientApp(app)` → callback a `frontend_url` de esa app. |
 | Forgot password | Solo si el user tiene acceso a la app del request; link de reset a esa URL. |
 | Rutas auth | **Las mismas** (`/auth/...`). No hay rutas por app. |
-| `grantClientApp('nexprov')` | Además de `user_client_apps`: si hay proveedor principal, setea `is_proveedor_catalogo = true` (idempotente). Cubre alta NexProv, modal `activar_app` y OAuth. |
+| `grantClientApp('nexprov')` | Además de `user_client_apps`: marca `is_proveedor_catalogo = true` en la empresa activa (ver [platform-multiempresa.md](./platform-multiempresa.md)). |
 
 No hay entitlement automático GestionPlus → NexProv.
 

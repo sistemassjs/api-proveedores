@@ -99,6 +99,8 @@ Sigue visible solo para **GERENTE** en menú hasta nueva definición.
 - Promover a vínculo `PRINCIPAL` desde la gestión de empresa (solo admin).
 - Mezclar esta lógica dentro de `docs/context/catalogo|solicitudes-pago|presupuestos` — aquí es plataforma.
 
+El rol operativo de quien entra a una empresa está en `user_proveedor.role_id`. Una misma cuenta puede ser gerente en una empresa y auxiliar en otra. Detalle de empresa activa, selector y notificaciones: [platform-multiempresa.md](./platform-multiempresa.md).
+
 ## Métricas y cuentas de pruebas
 
 Relacionado con KPIs de plataforma (ver también [platform-shared.md](./platform-shared.md#métricas-de-plataforma-operativo)).

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Proveedor;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -52,6 +53,7 @@ class UserResource extends JsonResource
             'oauth_providers' => $this->resolveOauthProviders(),
             'auth_google' => in_array('google', $this->resolveOauthProviders(), true),
             'client_apps' => $this->resolveClientApps(),
+            'empresas' => $this->empresasActivas(),
             'proveedor' => $proveedor === null ? null : [
                 'id' => $proveedor->id,
                 'nombre_comercial' => $proveedor->nombre_comercial,
@@ -72,6 +74,8 @@ class UserResource extends JsonResource
                 'tipo_relacion' => $pivot->tipo_relacion,
                 'activo' => (bool) $pivot->activo,
                 'estado' => $pivot->estado ?? 'registrado',
+                'role_id' => $pivot->role_id,
+                'rol' => $this->nombreRolMembresia($pivot),
                 'fecha_asignacion' => optional($pivot->fecha_asignacion)->format('Y-m-d H:i:s'),
                 'fecha_desasignacion' => optional($pivot->fecha_desasignacion)->format('Y-m-d H:i:s'),
                 'observaciones' => $pivot->observaciones,
@@ -91,6 +95,24 @@ class UserResource extends JsonResource
         }
 
         return Storage::disk('public')->url(ltrim($path, '/'));
+    }
+
+    /**
+     * Rol de la membresía con esta empresa. Si el pivot no tiene rol, usa el de la cuenta.
+     */
+    protected function nombreRolMembresia(mixed $pivot): ?string
+    {
+        static $nombres = null;
+        if ($nombres === null) {
+            $nombres = Role::query()->pluck('nombre', 'id');
+        }
+
+        $roleId = $pivot->role_id ?? null;
+        if ($roleId && isset($nombres[$roleId])) {
+            return $nombres[$roleId];
+        }
+
+        return $this->role?->nombre;
     }
 
     /**
@@ -120,6 +142,51 @@ class UserResource extends JsonResource
         }
 
         return $user->proveedorPrincipal();
+    }
+
+    /**
+     * Membresías activas para el listado admin (rol y tipo de relación por empresa).
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function empresasActivas(): array
+    {
+        /** @var User $user */
+        $user = $this->resource;
+
+        if (! $user->relationLoaded('proveedores')) {
+            return [];
+        }
+
+        $roleIds = $user->proveedores
+            ->map(fn (Proveedor $prov) => $prov->pivot->role_id ?? null)
+            ->filter()
+            ->unique()
+            ->values();
+        $roles = $roleIds->isEmpty()
+            ? collect()
+            : Role::query()->whereIn('id', $roleIds)->pluck('nombre', 'id');
+
+        return $user->proveedores
+            ->filter(function (Proveedor $prov) {
+                $pivot = $prov->pivot;
+
+                return $pivot && $pivot->activo;
+            })
+            ->map(function (Proveedor $prov) use ($roles) {
+                $pivot = $prov->pivot;
+
+                return [
+                    'id' => $prov->id,
+                    'razon_social' => $prov->razon_social,
+                    'nombre_comercial' => $prov->nombre_comercial,
+                    'rfc' => $prov->rfc,
+                    'tipo_relacion' => $pivot->tipo_relacion,
+                    'rol' => $pivot->role_id ? ($roles[$pivot->role_id] ?? null) : ($this->role?->nombre),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

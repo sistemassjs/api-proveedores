@@ -28,6 +28,7 @@ class User extends Authenticatable
         'password',
         'cambiar_pass_default',
         'role_id',
+        'ultima_empresa_id',
         'status',
         'es_cuenta_de_pruebas',
     ];
@@ -298,7 +299,7 @@ class User extends Authenticatable
      */
     private function activarProveedorCatalogoSiNexProv(): void
     {
-        $proveedor = $this->proveedorPrincipal();
+        $proveedor = $this->empresaActiva() ?? $this->proveedorPrincipal();
         if (! $proveedor || $proveedor->is_proveedor_catalogo) {
             return;
         }
@@ -328,7 +329,7 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Proveedor::class, 'user_proveedor')
             ->using(UserProveedor::class)
-            ->withPivot('tipo_relacion', 'activo', 'estado', 'fecha_asignacion', 'fecha_desasignacion', 'observaciones')
+            ->withPivot('tipo_relacion', 'activo', 'estado', 'role_id', 'fecha_asignacion', 'fecha_desasignacion', 'observaciones')
             ->withTimestamps();
     }
 
@@ -338,6 +339,34 @@ class User extends Authenticatable
      *
      * @return Proveedor|null El proveedor principal del usuario o null si no tiene
      */
+    /**
+     * Empresa de la sesión (última elegida, o principal, o la primera activa).
+     */
+    public function empresaActiva(): ?Proveedor
+    {
+        return app(\App\Services\Auth\EmpresaActivaService::class)->resolver($this);
+    }
+
+    /**
+     * Nombre del rol en una empresa. Si la membresía no tiene rol, usa users.role.
+     */
+    public function nombreRolEnProveedor(int $proveedorId): ?string
+    {
+        $roleId = $this->userProveedores()
+            ->where('proveedor_id', $proveedorId)
+            ->where('activo', true)
+            ->value('role_id');
+
+        if ($roleId) {
+            $nombre = Role::query()->whereKey($roleId)->value('nombre');
+            if (is_string($nombre) && $nombre !== '') {
+                return $nombre;
+            }
+        }
+
+        return $this->role?->nombre;
+    }
+
     public function proveedorPrincipal()
     {
         return $this->userProveedores()

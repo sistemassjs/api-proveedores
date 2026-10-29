@@ -4,8 +4,6 @@ namespace App\Services\Auth;
 
 use App\Enums\EstadoUsuario;
 use App\Enums\UserRoleEnumerate;
-use App\Http\Resources\Auth\UserAuthenticateResource;
-use App\Http\Resources\ProveedorResource;
 use App\Models\OauthAccount;
 use App\Models\Proveedor;
 use App\Models\Role;
@@ -224,9 +222,7 @@ class SocialAuthService
 
         $user->load(User::eagerLodable());
         $token = $user->createToken('OAuth Token')->plainTextToken;
-        $proveedor = $user->proveedores()->count() > 0
-            ? $user->proveedorPrincipal()
-            : null;
+        $proveedor = $user->empresaActiva();
 
         $pendingRegistro = $proveedor === null
             || ! (bool) $proveedor->perfil_empresa_completo
@@ -248,14 +244,9 @@ class SocialAuthService
      */
     public function sessionPayload(array $auth): array
     {
-        return [
-            'user' => new UserAuthenticateResource($auth['user']),
-            'token' => $auth['token'],
-            'proveedor' => $auth['proveedor']
-                ? new ProveedorResource($auth['proveedor'])
-                : null,
+        return app(EmpresaActivaService::class)->payload($auth['user'], $auth['token'], [
             'pending_registro' => $auth['pending_registro'],
-        ];
+        ]);
     }
 
     /**
@@ -315,6 +306,7 @@ class SocialAuthService
         $user->proveedores()->attach($proveedor->id, [
             'tipo_relacion' => 'PRINCIPAL',
             'activo' => true,
+            'role_id' => $role->id,
             'fecha_asignacion' => now(),
             'observaciones' => 'Usuario principal (alta OAuth)',
         ]);

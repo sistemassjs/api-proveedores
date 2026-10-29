@@ -141,6 +141,7 @@ class NotificationController extends Controller
         $readParam = strtolower(trim((string) $request->input('read', 'unread')));
 
         $query = $user->notifications()->latest();
+        $this->aplicarFiltroEmpresa($query, $request);
 
         if (in_array($readParam, ['1', 'true', 'read', 'leidas', 'leídas'], true)) {
             $query->whereNotNull('read_at');
@@ -209,10 +210,12 @@ class NotificationController extends Controller
     /**
      * Marcar todas las notificaciones como leídas
      */
-    public function markAllAsRead()
+    public function markAllAsRead(Request $request)
     {
         $user = Auth::user();
-        $user->unreadNotifications->markAsRead();
+        $query = $user->unreadNotifications();
+        $this->aplicarFiltroEmpresa($query, $request);
+        $query->update(['read_at' => now()]);
 
         return response()->json([
             'success' => true,
@@ -233,6 +236,8 @@ class NotificationController extends Controller
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc');
 
+        $this->aplicarFiltroEmpresa($query, $request);
+
         if ($lastTimestamp) {
             $query->where('created_at', '>', $lastTimestamp);
         }
@@ -245,7 +250,7 @@ class NotificationController extends Controller
                 'has_changes' => $notifications->count() > 0,
                 'notifications' => $notifications,
                 'timestamp' => now()->toIsoString(),
-                'unread_count' => $user->unreadNotifications->count()
+                'unread_count' => $this->contarNoLeidasDeEmpresa($user, $request)
             ]
         ]);
     }
@@ -260,8 +265,9 @@ class NotificationController extends Controller
 
         // Obtener todas las notificaciones no leídas del tipo 'solicitud_pago'
         $notificaciones = $user->unreadNotifications()
-            ->whereRaw("JSON_EXTRACT(data, '$.tipo') = ?", ['solicitud_pago'])
-            ->get();
+            ->whereRaw("JSON_EXTRACT(data, '$.tipo') = ?", ['solicitud_pago']);
+        $this->aplicarFiltroEmpresa($notificaciones, $request);
+        $notificaciones = $notificaciones->get();
 
         // Contar por subtipo (estatus)
         $counts = [
@@ -330,5 +336,43 @@ class NotificationController extends Controller
             'success' => true,
             'message' => 'Notificación marcada como leída',
         ]);
+    }
+
+    /**
+     * Con la app abierta la bandeja pide proveedor_id: esa empresa, más avisos sin empresa (cuenta).
+     */
+    private function aplicarFiltroEmpresa($query, Request $request): void
+    {
+        $raw = $request->input('proveedor_id');
+        if ($raw === null || $raw === '') {
+            return;
+        }
+
+        $id = (int) $raw;
+        $query->where(function ($q) use ($id) {
+            $q->where(function ($match) use ($id) {
+                $match->where('data->proveedor_id', $id)
+                    ->orWhere('data->proveedor_id', (string) $id)
+                    ->orWhere('data->proveedorId', $id)
+                    ->orWhere('data->proveedorId', (string) $id)
+                    ->orWhere('data->proveedor_emisor_id', $id)
+                    ->orWhere('data->proveedor_emisor_id', (string) $id)
+                    ->orWhere('data->data->proveedor_id', $id)
+                    ->orWhere('data->data->proveedor_id', (string) $id);
+            })->orWhere(function ($sinEmpresa) {
+                $sinEmpresa->whereNull('data->proveedor_id')
+                    ->whereNull('data->proveedorId')
+                    ->whereNull('data->proveedor_emisor_id')
+                    ->whereNull('data->data->proveedor_id');
+            });
+        });
+    }
+
+    private function contarNoLeidasDeEmpresa($user, Request $request): int
+    {
+        $query = $user->unreadNotifications();
+        $this->aplicarFiltroEmpresa($query, $request);
+
+        return $query->count();
     }
 }

@@ -21,6 +21,7 @@ class UserProveedor extends Pivot
         'user_id',
         'proveedor_id',
         'tipo_relacion',
+        'role_id',
         'activo',
         'fecha_asignacion',
         'fecha_desasignacion',
@@ -52,6 +53,11 @@ class UserProveedor extends Pivot
     public function proveedor(): BelongsTo
     {
         return $this->belongsTo(Proveedor::class);
+    }
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Role::class);
     }
 
     /**
