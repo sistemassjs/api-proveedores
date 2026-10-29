@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Notifications;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\PushNotification;
+use App\Services\Auth\EmpresaActivaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -262,6 +263,13 @@ class NotificationController extends Controller
     public function countsSPByStatus(Request $request, $userId)
     {
         $user = User::findOrFail($userId);
+
+        if (! $request->filled('proveedor_id')) {
+            $activa = app(EmpresaActivaService::class)->resolver($user);
+            if ($activa) {
+                $request->merge(['proveedor_id' => $activa->id]);
+            }
+        }
 
         // Obtener todas las notificaciones no leídas del tipo 'solicitud_pago'
         $notificaciones = $user->unreadNotifications()
