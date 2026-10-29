@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Models\Proveedor;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -181,7 +182,9 @@ class UserResource extends JsonResource
                     'razon_social' => $prov->razon_social,
                     'nombre_comercial' => $prov->nombre_comercial,
                     'rfc' => $prov->rfc,
+                    'logo' => PublicStorageUrl::make($prov->logo),
                     'tipo_relacion' => $pivot->tipo_relacion,
+                    'role_id' => $pivot->role_id ? (int) $pivot->role_id : ($this->role?->id),
                     'rol' => $pivot->role_id ? ($roles[$pivot->role_id] ?? null) : ($this->role?->nombre),
                 ];
             })
