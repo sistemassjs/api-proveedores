@@ -26,10 +26,15 @@ class ProveedorMarcaController extends Controller
     public function index(Request $request, Proveedor $proveedor)
     {
         $filters = $request->only(Marca::getFilters());
+        $sortBy = $request->input('sort_by', 'nombre');
+        $order = $request->input('order', 'asc');
+        $perPage = (int) $request->input('per_page', 15);
+
         $originalPaginator = Marca::filter($filters)
             ->where('proveedor_id', $proveedor->id)
             ->withCount('productos') // 👈 esto agrega la columna productos_count
-            ->paginate();
+            ->orderBy($sortBy, $order)
+            ->paginate($perPage > 0 ? min($perPage, 100) : 15);
 
         $data = MarcaResource::collection($originalPaginator)->resolve();
 
