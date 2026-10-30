@@ -1,3 +1,8 @@
+@php
+    $theme = $mailTheme ?? \App\Support\ClientApp::mailTheme($appKey ?? null);
+    $accent = $theme['header'] ?? '#0066cc';
+    $stripe = $theme['accent'] ?? $accent;
+@endphp
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -32,7 +37,7 @@
             margin-bottom: 12px;
         }
         .header h1 {
-            color: #0066cc;
+            color: {{ $accent }};
             margin: 0;
             font-size: 24px;
         }
@@ -40,7 +45,7 @@
             margin-bottom: 15px;
             padding: 10px;
             background-color: #f9f9f9;
-            border-left: 4px solid #0066cc;
+            border-left: 4px solid {{ $stripe }};
         }
         .info-label {
             font-weight: bold;
@@ -102,7 +107,7 @@
         </div>
         @endif
 
-        <h3 style="color: #0066cc; margin-top: 30px; margin-bottom: 10px;">Mensaje:</h3>
+        <h3 style="color: {{ $accent }}; margin-top: 30px; margin-bottom: 10px;">Mensaje:</h3>
         <div class="mensaje-box">{{ $mensaje }}</div>
 
         <div class="footer">

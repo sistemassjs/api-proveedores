@@ -76,6 +76,7 @@ Route::middleware(['auth:sanctum', 'role:' . UserRoleEnumerate::ADMINISTRADOR->v
             Route::get('{user}/actividad', [AdminProveedorController::class, 'actividadUsuario']);
             Route::get('{user}', [ProveedorUsuarioController::class, 'show']);
             Route::patch('{user}', [ProveedorUsuarioController::class, 'update']);
+            Route::delete('{user}/asignacion', [ProveedorUsuarioController::class, 'desvincular']);
             Route::delete('{user}', [ProveedorUsuarioController::class, 'destroy']);
             Route::post('{user}/logo', [ProveedorUsuarioController::class, 'updateLogo']);
             Route::patch('{user}/relacion', [ProveedorUsuarioController::class, 'updateRelacion']);

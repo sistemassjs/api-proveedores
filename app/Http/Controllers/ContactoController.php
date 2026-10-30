@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ContactoRequest;
 use App\Mail\ContactoMail;
+use App\Support\ClientApp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
@@ -43,7 +44,8 @@ class ContactoController extends Controller
                 $validated['telefono'] ?? '',
                 $validated['empresa'] ?? '',
                 $validated['mensaje'] ?? '',
-                $files // 👈 aquí
+                $files,
+                ClientApp::key()
             );
             
             Mail::to(config('mail.from.address'))->bcc($destinatarios)->send($mail);

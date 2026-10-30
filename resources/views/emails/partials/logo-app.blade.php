@@ -16,13 +16,14 @@
         $logoAppDataUri = \App\Support\EmailLogoHelper::proveedorDataUri($solicitudPago->proveedor);
     }
 
-    $logoAppDataUri = $logoAppDataUri ?? \App\Support\EmailLogoHelper::logoClientAppDataUri();
+    $logoAppDataUri = $logoAppDataUri ?? \App\Support\EmailLogoHelper::logoClientAppDataUri($appKey ?? null);
+    $fallbackColor = $mailTheme['header'] ?? '#1e88e5';
 @endphp
 
 @if(!empty($logoAppDataUri))
 <img src="{{ $logoAppDataUri }}" alt="{{ $logoAlt }}" width="80" style="max-width:80px;height:auto;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;">
 @else
-<div style="width:48px;height:48px;border-radius:8px;background-color:#1e88e5;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:48px;font-weight:700;text-align:center;margin:0 auto 12px auto;">
+<div style="width:48px;height:48px;border-radius:8px;background-color:{{ $fallbackColor }};color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:48px;font-weight:700;text-align:center;margin:0 auto 12px auto;">
 {{ $fallbackInitial !== '' ? $fallbackInitial : 'A' }}
 </div>
 @endif

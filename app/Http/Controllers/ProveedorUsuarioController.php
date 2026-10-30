@@ -230,6 +230,44 @@ class ProveedorUsuarioController extends Controller
         return $this->success(message: 'Usuario eliminado correctamente.');
     }
 
+    /**
+     * Quita solo la membresía. La cuenta del usuario permanece.
+     */
+    public function desvincular(Request $request, Proveedor $proveedor, $user)
+    {
+        $this->authorizeDelete($request->user(), $proveedor);
+
+        $userModel = $this->resolveUserParam($user);
+        $pivotData = $proveedor->users()->find($userModel->id);
+
+        if (! $pivotData) {
+            throw new NotFoundRelationException('Usuario no asociado al proveedor.');
+        }
+
+        DB::transaction(function () use ($proveedor, $userModel) {
+            $proveedor->users()->detach($userModel->id);
+
+            if ((int) $userModel->ultima_empresa_id === (int) $proveedor->id) {
+                $siguiente = $userModel->userProveedores()
+                    ->where('activo', true)
+                    ->orderByRaw("CASE WHEN tipo_relacion = 'PRINCIPAL' THEN 0 ELSE 1 END")
+                    ->value('proveedor_id');
+                $userModel->ultima_empresa_id = $siguiente ?: null;
+                $userModel->save();
+            }
+
+            $restantes = $userModel->userProveedores()->where('activo', true)->get();
+            if ($restantes->count() === 1) {
+                $rol = $restantes->first()->role_id;
+                if ($rol && (int) $userModel->role_id !== (int) $rol) {
+                    $userModel->update(['role_id' => $rol]);
+                }
+            }
+        });
+
+        return $this->success(message: 'Asignación eliminada correctamente.');
+    }
+
     public function updateLogo(ProveedorUsuairoUpdateLogoRequest $request, Proveedor $proveedor, $user)
     {
         $this->authorizeAccess($request->user(), $proveedor);
