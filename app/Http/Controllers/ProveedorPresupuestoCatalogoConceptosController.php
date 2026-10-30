@@ -209,7 +209,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
             }
 
             $concepto = DB::transaction(function () use ($validated, $proveedor, $esCompuesto, $clave, $imagenPath) {
-                $concepto = PresupuestoCatalogoConcepto::create([
+                $concepto = PresupuestoCatalogoConcepto::create(array_merge([
                     'proveedor_id' => $proveedor->id,
                     'descripcion' => $validated['descripcion'],
                     'categoria' => $validated['categoria'],
@@ -218,7 +218,7 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                     'unidad' => $validated['unidad'],
                     'precio_unitario' => $esCompuesto ? 0 : (float) ($validated['precio_unitario'] ?? 0),
                     'imagen_path' => $imagenPath,
-                ]);
+                ], $this->matrizCalculo->columnasIndirectosPropios($validated)));
 
                 if ($esCompuesto) {
                     return $this->matrizCalculo->sincronizarComponentesCatalogo(
@@ -229,6 +229,9 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
 
                 return $concepto->load('componentes');
             });
+
+            $this->matrizCalculo->propagarCostoEnCatalogo((int) $concepto->id, (int) $proveedor->id);
+            $concepto = $concepto->fresh(['componentes']) ?? $concepto;
 
             $this->log('Concepto agregado al catálogo de presupuestos', [
                 'catalogo_concepto_id' => $concepto->id,
@@ -355,6 +358,9 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
             if (! $esCompuesto && array_key_exists('precio_unitario', $validated)) {
                 $payload['precio_unitario'] = (float) $validated['precio_unitario'];
             }
+            if (array_key_exists('indirectos_modo', $validated) || $esCompuesto) {
+                $payload = array_merge($payload, $this->matrizCalculo->columnasIndirectosPropios($validated));
+            }
 
             $concepto = DB::transaction(function () use (
                 $presupuestoCatalogoConcepto,
@@ -391,6 +397,9 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
 
                 return $presupuestoCatalogoConcepto->fresh(['componentes']);
             });
+
+            $this->matrizCalculo->propagarCostoEnCatalogo((int) $concepto->id, (int) $proveedor->id);
+            $concepto = $concepto->fresh(['componentes']) ?? $concepto;
 
             $this->log('Concepto de catálogo actualizado', [
                 'catalogo_concepto_id' => $concepto->id,

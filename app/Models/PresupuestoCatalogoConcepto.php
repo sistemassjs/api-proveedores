@@ -50,12 +50,21 @@ class PresupuestoCatalogoConcepto extends BaseModel
         'precio_unitario',
         'imagen_path',
         'activo',
+        'indirectos_modo',
+        'indirecto_oficina_porcentaje',
+        'indirecto_campo_porcentaje',
+        'indirecto_utilidad_porcentaje',
+        'indirecto_cargos_porcentaje',
     ];
 
     protected $casts = [
         'precio_unitario' => 'decimal:4',
         'activo' => 'boolean',
         'es_compuesto' => 'boolean',
+        'indirecto_oficina_porcentaje' => 'decimal:4',
+        'indirecto_campo_porcentaje' => 'decimal:4',
+        'indirecto_utilidad_porcentaje' => 'decimal:4',
+        'indirecto_cargos_porcentaje' => 'decimal:4',
     ];
 
     /**

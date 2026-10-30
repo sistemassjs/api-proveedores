@@ -747,6 +747,10 @@ class ProveedorPresupuestoController extends Controller
                     'obs_garantia_dias',
                     'config_mostrar_totales',
                     'config_mostrar_matriz_costos',
+                    'indirecto_oficina_porcentaje',
+                    'indirecto_campo_porcentaje',
+                    'indirecto_utilidad_porcentaje',
+                    'indirecto_cargos_porcentaje',
                     'pdf_theme',
                     'ppto_config',
                     'incluir_leyenda_atentamente',
@@ -1684,7 +1688,7 @@ class ProveedorPresupuestoController extends Controller
                     || (is_array($componentes) && count($componentes) > 0)
                 );
 
-            $concepto = new PresupuestoConcepto([
+            $concepto = new PresupuestoConcepto(array_merge([
                 'numero' => $index + 1,
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
@@ -1695,7 +1699,7 @@ class ProveedorPresupuestoController extends Controller
                 'imagen_path' => $imagenPath,
                 'proveedor_nombre' => $proveedorNombre !== '' ? $proveedorNombre : null,
                 'proveedor_logo_url' => $proveedorLogo !== '' ? $proveedorLogo : null,
-            ]);
+            ], $this->matrizCalculo->columnasIndirectosPropios($conceptoData)));
             $concepto->calcularImporte();
             $presupuesto->conceptos()->save($concepto);
 
@@ -1703,7 +1707,8 @@ class ProveedorPresupuestoController extends Controller
                 $this->matrizCalculo->sincronizarComponentesLinea(
                     $concepto,
                     is_array($componentes) ? $componentes : [],
-                    $proveedorId
+                    $proveedorId,
+                    $this->matrizCalculo->resolverPorcentajesLinea($conceptoData, $presupuesto)
                 );
             }
         }

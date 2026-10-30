@@ -23,6 +23,11 @@ class PresupuestoPlantillaConcepto extends BaseModel
         'unidad',
         'precio_unitario',
         'imagen_path',
+        'indirectos_modo',
+        'indirecto_oficina_porcentaje',
+        'indirecto_campo_porcentaje',
+        'indirecto_utilidad_porcentaje',
+        'indirecto_cargos_porcentaje',
     ];
 
     protected $casts = [
@@ -30,6 +35,10 @@ class PresupuestoPlantillaConcepto extends BaseModel
         'precio_unitario' => 'decimal:2',
         'numero' => 'integer',
         'tiene_matriz' => 'boolean',
+        'indirecto_oficina_porcentaje' => 'decimal:4',
+        'indirecto_campo_porcentaje' => 'decimal:4',
+        'indirecto_utilidad_porcentaje' => 'decimal:4',
+        'indirecto_cargos_porcentaje' => 'decimal:4',
     ];
 
     public function plantilla(): BelongsTo

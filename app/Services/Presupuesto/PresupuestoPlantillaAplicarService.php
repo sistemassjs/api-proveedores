@@ -174,7 +174,14 @@ class PresupuestoPlantillaAplicarService
             $tieneMatriz = ! $esParrafo && (bool) ($linea->tiene_matriz ?? false)
                 && $linea->componentes->isNotEmpty();
 
-            $concepto = new PresupuestoConcepto([
+            $indirectosLinea = [
+                'indirectos_modo' => $linea->indirectos_modo,
+                'indirecto_oficina_porcentaje' => $linea->indirecto_oficina_porcentaje,
+                'indirecto_campo_porcentaje' => $linea->indirecto_campo_porcentaje,
+                'indirecto_utilidad_porcentaje' => $linea->indirecto_utilidad_porcentaje,
+                'indirecto_cargos_porcentaje' => $linea->indirecto_cargos_porcentaje,
+            ];
+            $concepto = new PresupuestoConcepto(array_merge([
                 'presupuesto_id' => $presupuesto->id,
                 'numero' => $numero++,
                 'tipo' => $tipo,
@@ -185,7 +192,7 @@ class PresupuestoPlantillaAplicarService
                     ? 'párrafo'
                     : (trim((string) ($linea->unidad ?? '')) !== '' ? (string) $linea->unidad : 'pieza'),
                 'precio_unitario' => $esParrafo || $tieneMatriz ? 0 : (float) $linea->precio_unitario,
-            ]);
+            ], $this->matrizCalculo->columnasIndirectosPropios($indirectosLinea)));
 
             if ($linea->imagen_path) {
                 $concepto->imagen_path = $this->copiarImagenLinea(
@@ -215,7 +222,8 @@ class PresupuestoPlantillaAplicarService
                 $this->matrizCalculo->sincronizarComponentesLinea(
                     $concepto,
                     $componentes,
-                    $proveedorId
+                    $proveedorId,
+                    $this->matrizCalculo->resolverPorcentajesLinea($indirectosLinea, $presupuesto)
                 );
             }
         }
