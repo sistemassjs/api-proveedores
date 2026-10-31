@@ -15,6 +15,8 @@ class PresupuestoPlantillaConceptoComponenteResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $anidados = is_array($this->componentes_anidados) ? $this->componentes_anidados : [];
+
         return [
             'id' => $this->id,
             'orden' => (int) $this->orden,
@@ -26,6 +28,8 @@ class PresupuestoPlantillaConceptoComponenteResource extends JsonResource
             'cantidad' => (float) $this->cantidad,
             'precio_unitario' => (float) $this->precio_unitario,
             'importe' => (float) $this->importe,
+            'es_compuesto_ref' => (bool) ($this->es_compuesto_ref ?? false) || count($anidados) > 0,
+            'componentes_anidados' => $anidados,
         ];
     }
 }

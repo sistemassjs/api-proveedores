@@ -48,8 +48,18 @@ class PresupuestoMatrizCalculoService
      * @param  list<array<string, mixed>>  $componentes
      * @return list<array<string, mixed>>
      */
-    public function normalizarComponentes(array $componentes, int $proveedorId, ?int $padreCatalogoId = null): array
-    {
+    public function normalizarComponentes(
+        array $componentes,
+        int $proveedorId,
+        ?int $padreCatalogoId = null,
+        int $profundidad = 0
+    ): array {
+        if ($profundidad > 12) {
+            throw new InvalidArgumentException(
+                'La matriz anidada supera el máximo de niveles permitido.'
+            );
+        }
+
         $normalizados = [];
 
         foreach (array_values($componentes) as $index => $row) {
@@ -57,12 +67,19 @@ class PresupuestoMatrizCalculoService
                 continue;
             }
 
+            $anidadosRaw = $row['componentes_anidados'] ?? null;
+            $tieneAnidados = is_array($anidadosRaw) && count($anidadosRaw) > 0;
+            $anidados = $tieneAnidados
+                ? $this->normalizarComponentes($anidadosRaw, $proveedorId, null, $profundidad + 1)
+                : [];
+
             $refId = $row['catalogo_concepto_componente_id']
                 ?? $row['catalogo_concepto_id']
                 ?? null;
             $refId = $refId !== null && $refId !== '' ? (int) $refId : null;
 
-            if ($refId !== null && $refId > 0) {
+            // Matriz anidada editada: el PU es el costo directo del hijo; no re-snapshotear catálogo.
+            if ($refId !== null && $refId > 0 && ! $tieneAnidados) {
                 if ($padreCatalogoId !== null) {
                     $this->assertSinCiclo($padreCatalogoId, $refId);
                 }
@@ -80,6 +97,8 @@ class PresupuestoMatrizCalculoService
                     'cantidad' => $cantidad,
                     'precio_unitario' => $precio,
                     'importe' => $this->calcularImporte($cantidad, $precio),
+                    'es_compuesto_ref' => false,
+                    'componentes_anidados' => [],
                 ];
 
                 continue;
@@ -98,7 +117,9 @@ class PresupuestoMatrizCalculoService
             }
 
             $cantidad = (float) ($row['cantidad'] ?? 1);
-            $precio = (float) ($row['precio_unitario'] ?? 0);
+            $precio = $tieneAnidados
+                ? $this->sumarImportes($anidados)
+                : (float) ($row['precio_unitario'] ?? 0);
             if ($cantidad < 0 || $precio < 0) {
                 throw new InvalidArgumentException(
                     'Cantidad y precio unitario del componente no pueden ser negativos.'
@@ -106,6 +127,8 @@ class PresupuestoMatrizCalculoService
             }
 
             $clave = $this->normalizarClave($row['clave_snapshot'] ?? $row['clave'] ?? null);
+            $esCompuesto = $tieneAnidados
+                || filter_var($row['es_compuesto_ref'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             $normalizados[] = [
                 'orden' => (int) ($row['orden'] ?? $index),
@@ -118,6 +141,8 @@ class PresupuestoMatrizCalculoService
                 'cantidad' => $cantidad,
                 'precio_unitario' => $precio,
                 'importe' => $this->calcularImporte($cantidad, $precio),
+                'es_compuesto_ref' => $esCompuesto,
+                'componentes_anidados' => $anidados,
             ];
         }
 
@@ -224,17 +249,7 @@ class PresupuestoMatrizCalculoService
         $concepto->componentes()->delete();
 
         foreach ($normalizados as $row) {
-            $concepto->componentes()->create([
-                'orden' => $row['orden'],
-                'categoria' => $row['categoria'],
-                'catalogo_concepto_id' => $row['catalogo_concepto_id'],
-                'clave_snapshot' => $row['clave_snapshot'],
-                'descripcion' => $row['descripcion'],
-                'unidad' => $row['unidad'],
-                'cantidad' => $row['cantidad'],
-                'precio_unitario' => $row['precio_unitario'],
-                'importe' => $row['importe'],
-            ]);
+            $concepto->componentes()->create($this->atributosComponentePersistible($row));
         }
 
         $costoDirecto = $this->sumarImportes($normalizados);
@@ -269,17 +284,7 @@ class PresupuestoMatrizCalculoService
         $concepto->componentes()->delete();
 
         foreach ($normalizados as $row) {
-            $concepto->componentes()->create([
-                'orden' => $row['orden'],
-                'categoria' => $row['categoria'],
-                'catalogo_concepto_id' => $row['catalogo_concepto_id'],
-                'clave_snapshot' => $row['clave_snapshot'],
-                'descripcion' => $row['descripcion'],
-                'unidad' => $row['unidad'],
-                'cantidad' => $row['cantidad'],
-                'precio_unitario' => $row['precio_unitario'],
-                'importe' => $row['importe'],
-            ]);
+            $concepto->componentes()->create($this->atributosComponentePersistible($row));
         }
 
         $concepto->precio_unitario = round($this->sumarImportes($normalizados), 2);
@@ -528,6 +533,35 @@ class PresupuestoMatrizCalculoService
                 $cola[] = (int) $padre->id;
             }
         }
+    }
+
+    /**
+     * Columnas a persistir en presupuesto_concepto_componentes / plantilla.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function atributosComponentePersistible(array $row): array
+    {
+        $anidados = is_array($row['componentes_anidados'] ?? null)
+            ? array_values($row['componentes_anidados'])
+            : [];
+        $esCompuesto = ! empty($anidados)
+            || filter_var($row['es_compuesto_ref'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        return [
+            'orden' => $row['orden'],
+            'categoria' => $row['categoria'],
+            'catalogo_concepto_id' => $row['catalogo_concepto_id'],
+            'clave_snapshot' => $row['clave_snapshot'],
+            'descripcion' => $row['descripcion'],
+            'unidad' => $row['unidad'],
+            'cantidad' => $row['cantidad'],
+            'precio_unitario' => $row['precio_unitario'],
+            'importe' => $row['importe'],
+            'es_compuesto_ref' => $esCompuesto,
+            'componentes_anidados' => $anidados === [] ? null : $anidados,
+        ];
     }
 
     private function acotarPorcentaje(mixed $value): float

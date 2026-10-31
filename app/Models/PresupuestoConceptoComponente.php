@@ -19,6 +19,8 @@ class PresupuestoConceptoComponente extends BaseModel
         'cantidad',
         'precio_unitario',
         'importe',
+        'es_compuesto_ref',
+        'componentes_anidados',
     ];
 
     protected $casts = [
@@ -26,6 +28,8 @@ class PresupuestoConceptoComponente extends BaseModel
         'cantidad' => 'decimal:4',
         'precio_unitario' => 'decimal:4',
         'importe' => 'decimal:4',
+        'es_compuesto_ref' => 'boolean',
+        'componentes_anidados' => 'array',
     ];
 
     public function concepto(): BelongsTo

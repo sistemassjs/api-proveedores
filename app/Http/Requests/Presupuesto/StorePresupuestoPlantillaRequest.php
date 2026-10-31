@@ -91,6 +91,9 @@ class StorePresupuestoPlantillaRequest extends FormRequest
             'conceptos.*.componentes.*.precio_unitario' => ['nullable', 'numeric', 'min:0'],
             'conceptos.*.componentes.*.clave' => ['nullable', 'string', 'max:40'],
             'conceptos.*.componentes.*.clave_snapshot' => ['nullable', 'string', 'max:40'],
+            'conceptos.*.componentes.*.es_compuesto_ref' => ['nullable', 'boolean'],
+            'conceptos.*.componentes.*.componentes_anidados' => ['nullable', 'array'],
+            'conceptos.*.componentes.*.componentes_anidados.*.componentes_anidados' => ['nullable', 'array'],
         ];
     }
 

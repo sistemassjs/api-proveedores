@@ -219,6 +219,14 @@ class StorePresupuestoRequest extends FormRequest
             'conceptos.*.componentes.*.precio_unitario' => 'nullable|numeric|min:0',
             'conceptos.*.componentes.*.clave' => 'nullable|string|max:40',
             'conceptos.*.componentes.*.clave_snapshot' => 'nullable|string|max:40',
+            'conceptos.*.componentes.*.es_compuesto_ref' => 'nullable|boolean',
+            'conceptos.*.componentes.*.componentes_anidados' => 'nullable|array',
+            'conceptos.*.componentes.*.componentes_anidados.*.descripcion' => 'nullable|string|max:500',
+            'conceptos.*.componentes.*.componentes_anidados.*.unidad' => 'nullable|string|max:50',
+            'conceptos.*.componentes.*.componentes_anidados.*.cantidad' => 'nullable|numeric|min:0',
+            'conceptos.*.componentes.*.componentes_anidados.*.precio_unitario' => 'nullable|numeric|min:0',
+            'conceptos.*.componentes.*.componentes_anidados.*.categoria' => 'nullable|string|in:material,mano_obra,herramienta,equipo,auxiliar,flete,trabajo,producto,servicio',
+            'conceptos.*.componentes.*.componentes_anidados.*.componentes_anidados' => 'nullable|array',
 
 
             'estado' => 'nullable|string|in:borrador,enviado,aceptado,rechazado,rechazado_con_observacion,vencido',
