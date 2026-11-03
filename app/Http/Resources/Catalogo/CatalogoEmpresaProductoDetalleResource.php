@@ -50,6 +50,19 @@ class CatalogoEmpresaProductoDetalleResource extends JsonResource
             'precio_mayoreo' => $this->precio_mayoreo !== null ? (float) $this->precio_mayoreo : null,
             'precio_menudeo' => $this->precio_menudeo !== null ? (float) $this->precio_menudeo : null,
             'mostrar_en_catalogo_publico' => (bool) $this->mostrar_en_catalogo_publico,
+            'especificaciones' => $this->relationLoaded('especificaciones')
+                ? $this->especificaciones
+                    ->map(fn ($spec) => [
+                        'atributo' => (string) $spec->atributo,
+                        'valor' => (string) $spec->valor,
+                        'unidad' => $spec->unidad !== null && $spec->unidad !== ''
+                            ? (string) $spec->unidad
+                            : null,
+                        'orden' => (int) ($spec->orden ?? 0),
+                    ])
+                    ->values()
+                    ->all()
+                : [],
         ];
     }
 }

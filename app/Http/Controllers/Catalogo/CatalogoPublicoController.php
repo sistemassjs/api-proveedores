@@ -152,7 +152,14 @@ class CatalogoPublicoController extends Controller
             return $this->error('El producto no está disponible en el catálogo público.', null, 404);
         }
 
-        $producto->load(['unidad_medida', 'marca', 'familia', 'subfamilia', 'proveedor']);
+        $producto->load([
+            'unidad_medida',
+            'marca',
+            'familia',
+            'subfamilia',
+            'proveedor',
+            'especificaciones' => fn ($q) => $q->orderBy('orden')->orderBy('id'),
+        ]);
 
         return $this->success(
             new CatalogoEmpresaProductoDetalleResource($producto),
