@@ -14,7 +14,8 @@ final class PresupuestoPdfLayout
      * @return array{
      *     salto_pagina_antes: bool,
      *     pagina_atentamente: int,
-     *     reserva_pie_html_mm: float
+     *     reserva_pie_html_mm: float,
+     *     firma_en_flujo: bool
      * }
      */
     public static function calcularCierreAtentamente(array $payload, PresupuestoPdfDocumentConfig $pdf): array
@@ -23,33 +24,42 @@ final class PresupuestoPdfLayout
             'salto_pagina_antes' => false,
             'pagina_atentamente' => 0,
             'reserva_pie_html_mm' => 0.0,
+            'firma_en_flujo' => false,
         ];
 
         if (! PresupuestoPdf::debeMostrarBloqueAtentamenteDesdePayload($payload)) {
             return $vacio;
         }
 
-        $medidas = $pdf->medidasSimulacionPaginaMm();
-        $alturaUtil = $medidas['altura_util_mm'];
-        $gapPie = $medidas['gap_atentamente_footer_mm'];
-
-        $alturaAtentamente = self::estimarAlturaBloqueAtentamenteMm($payload, $medidas);
-        $reservaPieMm = $alturaAtentamente + $gapPie + 2.0;
+        $alturaAtentamente = self::alturaAtentamentePintadaMm($payload, $pdf);
+        // El flujo real empieza en el padding superior y puede bajar hasta
+        // donde arranca la firma. El alto útil anterior restaba márgenes de más
+        // y cortaba la hoja aunque todavía cupieran los términos.
+        $firmaDesdeFondo = $pdf->footerBottomMm()
+            + $pdf->footerHeightMm()
+            + $pdf->gapAtentamenteFooterMm()
+            + $alturaAtentamente;
+        $origenFlujo = $pdf->margenSuperiorContenidoMm();
+        $topeFirma = max(40.0, $pdf->alturaHojaMm() - $firmaDesdeFondo - $origenFlujo - 3.0);
 
         $variant = $pdf->layoutVariantKey();
-        $flujo = self::simularFlujoHastaFinTerminos($payload, $pdf, $variant, $alturaUtil);
+        $flujo = self::simularFlujoHastaFinTerminos($payload, $pdf, $variant, $topeFirma);
         $pageFin = max(1, (int) $flujo['page']);
         $yFin = (float) $flujo['y'];
-        $capFin = self::capacidadPaginaMm($pageFin, $alturaUtil, $pdf);
-        $salto = ($yFin + $reservaPieMm + $pdf->margenSeguridadAtentamenteMm()) > $capFin;
-        $paginaAtentamente = $salto ? $pageFin + 1 : $pageFin;
+        $pageAntes = max(1, (int) ($flujo['page_antes_terminos'] ?? $pageFin));
+        $yAntes = (float) ($flujo['y_antes_terminos'] ?? $yFin);
+        $terminosCruzanFirma = $pageFin > $pageAntes
+            || ($pageFin === 1 && $yFin > $topeFirma && $yAntes <= $topeFirma + 0.5);
+        $salto = $terminosCruzanFirma;
+        $paginaAtentamente = $salto ? $pageAntes + 1 : $pageFin;
+        $reservaPieMm = 0.0;
 
-        // Con page_script el Atte se pinta en el pie; si no cabe, saltar hoja.
-        // La página final real se recalcula en el script con PAGE_COUNT - anexos.
+        // La firma la pinta el page_script al pie de la última hoja del presupuesto.
         return [
             'salto_pagina_antes' => $salto,
             'pagina_atentamente' => $paginaAtentamente,
             'reserva_pie_html_mm' => $salto ? 0.0 : round($reservaPieMm, 2),
+            'firma_en_flujo' => false,
         ];
     }
 
@@ -58,7 +68,7 @@ final class PresupuestoPdfLayout
      * y términos ítem a ítem (sin partir cada enunciado).
      *
      * @param  array<string, mixed>  $payload
-     * @return array{page: int, y: float, altura_total: float}
+     * @return array{page: int, y: float, altura_total: float, page_antes_terminos: int, y_antes_terminos: float}
      */
     private static function simularFlujoHastaFinTerminos(
         array $payload,
@@ -125,12 +135,12 @@ final class PresupuestoPdfLayout
         $consumir((float) ($secciones['encabezado'] ?? 0));
         $consumir((float) ($secciones['receptor'] ?? 0));
         if (($secciones['descripcion_general'] ?? 0) > 0) {
-            $consumir(3.0);
+            $consumir($variant === 'tailwind' ? 1.0 : 3.0);
             $consumir((float) $secciones['descripcion_general']);
         }
         $consumir(4.0);
         $consumir((float) ($secciones['titulo_presupuesto'] ?? 0));
-        $consumir(3.0);
+        $consumir($variant === 'tailwind' ? 8.0 : 3.0);
 
         $conceptos = $payload['conceptos'] ?? [];
         $lineaTabla = $pdf->lineaTablaMm();
@@ -142,18 +152,17 @@ final class PresupuestoPdfLayout
                 if (! is_array($concepto)) {
                     continue;
                 }
-                if (self::esConceptoParrafo($concepto)) {
-                    $consumirFilaTabla(PresupuestoParrafoPdf::alturaFilaDesdeConcepto($concepto));
-                } else {
-                    $consumirFilaTabla($lineaTabla);
-                }
+                $consumirFilaTabla(self::alturaFilaConceptoMm($concepto, $lineaTabla, $payload));
             }
         }
 
-        $consumir(3.0);
+        $consumir($variant === 'tailwind' ? 6.0 : 3.0);
         if (($payload['config_mostrar_totales'] ?? true) && ($secciones['totales'] ?? 0) > 0) {
             $consumir((float) $secciones['totales'], true);
         }
+
+        $pageAntesTerminos = $pageNum;
+        $yAntesTerminos = $y;
 
         foreach (self::fragmentosVerticalesTerminosMm($payload, $variant) as $fragmento) {
             $consumir($fragmento['altura_mm'], $fragmento['evitar_corte']);
@@ -163,6 +172,8 @@ final class PresupuestoPdfLayout
             'page' => $pageNum,
             'y' => $y,
             'altura_total' => $alturaTotal,
+            'page_antes_terminos' => $pageAntesTerminos,
+            'y_antes_terminos' => $yAntesTerminos,
         ];
     }
 
@@ -236,6 +247,71 @@ final class PresupuestoPdfLayout
     }
 
     /**
+     * Alto de una fila de concepto, con imagen (23 mm) y desglose de matriz si el PDF lo muestra.
+     *
+     * @param  array<string, mixed>  $concepto
+     * @param  array<string, mixed>  $payload
+     */
+    private static function alturaFilaConceptoMm(array $concepto, float $lineaTabla, array $payload): float
+    {
+        if (self::esConceptoParrafo($concepto)) {
+            return PresupuestoParrafoPdf::alturaFilaDesdeConcepto($concepto);
+        }
+
+        $altura = $lineaTabla;
+        $imagen = $concepto['imagen_base64'] ?? '';
+        if (is_string($imagen) && $imagen !== '') {
+            $altura = max($altura, 23.0);
+        }
+
+        $mostrarMatriz = (bool) ($payload['config_mostrar_matriz_costos'] ?? false);
+        $componentes = is_array($concepto['componentes'] ?? null) ? $concepto['componentes'] : [];
+        if ($mostrarMatriz && ($concepto['tiene_matriz'] ?? false) && $componentes !== []) {
+            foreach ($componentes as $comp) {
+                if (! is_array($comp)) {
+                    continue;
+                }
+                $unidad = mb_strtolower(trim((string) ($comp['unidad'] ?? '')));
+                if ($unidad === 'párrafo' || $unidad === 'parrafo') {
+                    $altura += self::alturaTextoMm((string) ($comp['descripcion'] ?? ''), 90, 3.6) + 5.0;
+                } else {
+                    $altura += 9.0;
+                }
+            }
+        }
+
+        return $altura;
+    }
+
+    /**
+     * Alto del bloque que pinta el page_script, en mm (mismos interlineados en pt).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private static function alturaAtentamentePintadaMm(array $payload, PresupuestoPdfDocumentConfig $pdf): float
+    {
+        $lineas = PresupuestoPdf::lineasAtentamentePieUltimaPaginaDesdePayload($payload);
+        if (count($lineas) === 0) {
+            return 0.0;
+        }
+
+        $estilos = PresupuestoPdf::estilosAtentamentePiePorRol(
+            $pdf->layoutVariantKey(),
+            $pdf->themeVariablesArray()
+        );
+        $pt = 6.0;
+        foreach ($lineas as $linea) {
+            $role = (string) ($linea['role'] ?? 'info');
+            $pt += (float) ($estilos[$role]['lh'] ?? 9.0);
+        }
+        if (count($lineas) > 1) {
+            $pt += $pdf->espacioTrasTituloAtentamenteMm() * 2.834645669;
+        }
+
+        return $pt / 2.834645669;
+    }
+
+    /**
      * @deprecated Use {@see PresupuestoPdfDocumentConfig::medidasSimulacionPaginaMm()}
      *
      * @return array{
@@ -271,11 +347,7 @@ final class PresupuestoPdfLayout
             if (! is_array($concepto)) {
                 continue;
             }
-            if (self::esConceptoParrafo($concepto)) {
-                $tablaMm += PresupuestoParrafoPdf::alturaFilaDesdeConcepto($concepto);
-            } else {
-                $tablaMm += $lineaTabla;
-            }
+            $tablaMm += self::alturaFilaConceptoMm($concepto, $lineaTabla, $payload);
         }
         if (count($conceptos) === 0) {
             $tablaMm += 10.0;
@@ -311,14 +383,16 @@ final class PresupuestoPdfLayout
 
         $totalesMm = 0.0;
         if ($payload['config_mostrar_totales'] ?? true) {
-            $totalesMm = 32.0;
+            $filasIndirectos = count(app(\App\Services\Presupuesto\PresupuestoMatrizCalculoService::class)
+                ->filasIndirectosDocumento($payload));
+            $totalesMm = 32.0 + ($filasIndirectos * 5.0) + ($filasIndirectos > 0 ? 2.0 : 0.0);
         }
 
         return [
-            'encabezado' => $variant === 'tailwind' ? 36.0 : 38.0,
+            'encabezado' => $variant === 'tailwind' ? 37.0 : 38.0,
             'receptor' => $receptorMm,
             'descripcion_general' => $descripcionMm,
-            'titulo_presupuesto' => 11.0,
+            'titulo_presupuesto' => $variant === 'tailwind' ? 4.0 : 11.0,
             'tabla_conceptos' => $tablaMm,
             'totales' => $totalesMm,
             'terminos_y_observaciones' => $terminosMm,

@@ -392,6 +392,17 @@ class PresupuestoMatrizCalculoService
      */
     public function precioConIndirectos(float|string $costoDirecto, array $porcentajes): float
     {
+        return $this->desgloseIndirectos($costoDirecto, $porcentajes)['precio_venta'];
+    }
+
+    /**
+     * Cadena Opus de una base (costo directo ya extendido por la cantidad de la línea).
+     *
+     * @param  array{oficina?: float|int|string, campo?: float|int|string, utilidad?: float|int|string, cargos?: float|int|string}  $porcentajes
+     * @return array{costo_directo: float, oficina: float, campo: float, utilidad: float, cargos: float, precio_venta: float, pct: array{oficina: float, campo: float, utilidad: float, cargos: float}}
+     */
+    public function desgloseIndirectos(float|string $costoDirecto, array $porcentajes): array
+    {
         $pct = $this->normalizarPorcentajesIndirectos($porcentajes);
         $cd = round((float) $costoDirecto, 2);
         $oficina = round($cd * ($pct['oficina'] / 100), 2);
@@ -401,7 +412,174 @@ class PresupuestoMatrizCalculoService
         $base2 = round($base + $utilidad, 2);
         $cargos = round($base2 * ($pct['cargos'] / 100), 2);
 
-        return round($base2 + $cargos, 2);
+        return [
+            'costo_directo' => $cd,
+            'oficina' => $oficina,
+            'campo' => $campo,
+            'utilidad' => $utilidad,
+            'cargos' => $cargos,
+            'precio_venta' => round($base2 + $cargos, 2),
+            'pct' => $pct,
+        ];
+    }
+
+    /**
+     * Indirectos del documento, una sola vez, para pintarlos antes de los totales.
+     * Los importes cierran con el precio de venta de cada línea.
+     *
+     * @param  array<string, mixed>  $presupuesto
+     * @return list<array{etiqueta: string, importe: float, porcentaje: ?float}>
+     */
+    public function filasIndirectosDocumento(array $presupuesto): array
+    {
+        $generales = $this->normalizarPorcentajesIndirectos([
+            'indirecto_oficina_porcentaje' => $presupuesto['indirecto_oficina_porcentaje'] ?? 0,
+            'indirecto_campo_porcentaje' => $presupuesto['indirecto_campo_porcentaje'] ?? 0,
+            'indirecto_utilidad_porcentaje' => $presupuesto['indirecto_utilidad_porcentaje'] ?? 0,
+            'indirecto_cargos_porcentaje' => $presupuesto['indirecto_cargos_porcentaje'] ?? 0,
+        ]);
+        $costoDirecto = 0.0;
+        $oficina = 0.0;
+        $campo = 0.0;
+        $utilidad = 0.0;
+        $cargos = 0.0;
+        $firmas = [];
+
+        foreach (array_values($presupuesto['conceptos'] ?? []) as $linea) {
+            if (! is_array($linea) || \App\Support\PresupuestoParrafoPdf::esLineaParrafo($linea)) {
+                continue;
+            }
+            $cantidad = (float) ($linea['cantidad'] ?? 0);
+            $venta = round(((float) ($linea['precio_unitario'] ?? 0)) * $cantidad, 2);
+            $componentes = is_array($linea['componentes'] ?? null) ? $linea['componentes'] : [];
+            $tieneMatriz = (bool) ($linea['tiene_matriz'] ?? false) && $componentes !== [];
+            if (! $tieneMatriz) {
+                $costoDirecto += $venta;
+                continue;
+            }
+
+            $cdLinea = round($this->costoDirectoComponentes($componentes) * $cantidad, 2);
+            $propio = ($linea['indirectos_modo'] ?? 'general') === 'propio';
+            $pct = $propio
+                ? $this->normalizarPorcentajesIndirectos($linea)
+                : $generales;
+            $desglose = $this->desgloseIndirectos($cdLinea, $pct);
+            $delta = round($venta - $desglose['precio_venta'], 2);
+            if (abs($delta) >= 0.01) {
+                $desglose = $this->cuadrarDesgloseConVenta($desglose, $delta);
+            }
+            $costoDirecto += $desglose['costo_directo'];
+            $oficina += $desglose['oficina'];
+            $campo += $desglose['campo'];
+            $utilidad += $desglose['utilidad'];
+            $cargos += $desglose['cargos'];
+            if (($desglose['oficina'] + $desglose['campo'] + $desglose['utilidad'] + $desglose['cargos']) > 0.004) {
+                $firmas[] = $pct['oficina'].'|'.$pct['campo'].'|'.$pct['utilidad'].'|'.$pct['cargos'];
+            }
+        }
+
+        $oficina = round($oficina, 2);
+        $campo = round($campo, 2);
+        $utilidad = round($utilidad, 2);
+        $cargos = round($cargos, 2);
+        $hayPorcentajeGeneral = ($generales['oficina'] + $generales['campo'] + $generales['utilidad'] + $generales['cargos']) >= 0.01;
+        if (($oficina + $campo + $utilidad + $cargos) < 0.01 && ! $hayPorcentajeGeneral) {
+            return [];
+        }
+        if (($oficina + $campo + $utilidad + $cargos) < 0.01 && $hayPorcentajeGeneral) {
+            $filasCero = [$this->filaIndirectoDocumento('Costo directo', round($costoDirecto, 2), null)];
+            foreach ([
+                'Oficina' => 'oficina',
+                'Campo' => 'campo',
+                'Utilidad' => 'utilidad',
+                'Cargos' => 'cargos',
+            ] as $nombre => $clave) {
+                if ($generales[$clave] >= 0.01) {
+                    $filasCero[] = $this->filaIndirectoDocumento($nombre, 0.0, $generales[$clave]);
+                }
+            }
+
+            return $filasCero;
+        }
+
+        $pctUnico = count($firmas) > 0 && count(array_unique($firmas)) === 1
+            ? $this->normalizarPorcentajesIndirectos([
+                'oficina' => (float) explode('|', $firmas[0])[0],
+                'campo' => (float) explode('|', $firmas[0])[1],
+                'utilidad' => (float) explode('|', $firmas[0])[2],
+                'cargos' => (float) explode('|', $firmas[0])[3],
+            ])
+            : null;
+        if ($pctUnico === null && $firmas === [] && $hayPorcentajeGeneral) {
+            $pctUnico = $generales;
+        }
+
+        $filas = [$this->filaIndirectoDocumento('Costo directo', round($costoDirecto, 2), null)];
+        foreach ([
+            ['Oficina', 'oficina', $oficina],
+            ['Campo', 'campo', $campo],
+            ['Utilidad', 'utilidad', $utilidad],
+            ['Cargos', 'cargos', $cargos],
+        ] as [$nombre, $clave, $importe]) {
+            $pct = $pctUnico === null ? null : $pctUnico[$clave];
+            if ($importe < 0.01 && ($pct === null || $pct < 0.01)) {
+                continue;
+            }
+            $filas[] = $this->filaIndirectoDocumento($nombre, $importe, $pct);
+        }
+
+        return $filas;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $componentes
+     */
+    private function costoDirectoComponentes(array $componentes): float
+    {
+        $total = 0.0;
+        foreach ($componentes as $comp) {
+            if (! is_array($comp)) {
+                continue;
+            }
+            $unidad = mb_strtolower(trim((string) ($comp['unidad'] ?? '')));
+            if ($unidad === 'párrafo' || $unidad === 'parrafo') {
+                continue;
+            }
+            $total += isset($comp['importe']) && is_numeric($comp['importe'])
+                ? (float) $comp['importe']
+                : ((float) ($comp['cantidad'] ?? 0)) * ((float) ($comp['precio_unitario'] ?? 0));
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * @param  array{costo_directo: float, oficina: float, campo: float, utilidad: float, cargos: float, precio_venta: float, pct: array{oficina: float, campo: float, utilidad: float, cargos: float}}  $desglose
+     * @return array{costo_directo: float, oficina: float, campo: float, utilidad: float, cargos: float, precio_venta: float, pct: array{oficina: float, campo: float, utilidad: float, cargos: float}}
+     */
+    private function cuadrarDesgloseConVenta(array $desglose, float $delta): array
+    {
+        foreach (['cargos', 'utilidad', 'campo', 'oficina', 'costo_directo'] as $clave) {
+            if (abs($desglose[$clave]) >= 0.01 || $clave === 'costo_directo') {
+                $desglose[$clave] = round($desglose[$clave] + $delta, 2);
+                break;
+            }
+        }
+        $desglose['precio_venta'] = round($desglose['precio_venta'] + $delta, 2);
+
+        return $desglose;
+    }
+
+    /**
+     * @return array{etiqueta: string, importe: float, porcentaje: ?float}
+     */
+    private function filaIndirectoDocumento(string $etiqueta, float $importe, ?float $porcentaje): array
+    {
+        return [
+            'etiqueta' => $etiqueta,
+            'importe' => round($importe, 2),
+            'porcentaje' => ($porcentaje !== null && $porcentaje > 0) ? $porcentaje : null,
+        ];
     }
 
     /**

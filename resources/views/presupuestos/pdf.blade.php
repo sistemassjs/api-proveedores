@@ -88,8 +88,6 @@
                     display: block;
                     width: 100%;
                     box-sizing: border-box;
-                    page-break-inside: avoid;
-                    page-break-after: avoid;
                     margin: 0;
                     padding: 0;
                     min-height: 0;
@@ -158,6 +156,10 @@
                 .terms-block--after-presupuesto .observaciones-list li {
                     page-break-inside: avoid;
                     break-inside: avoid;
+                }
+
+                .atentamente-en-flujo {
+                    margin-top: 8mm;
                 }
 
                 .atentamente-plain {
@@ -779,6 +781,22 @@
                     break-inside: avoid;
                 }
 
+                .indirectos-documento {
+                    margin-bottom: 2mm;
+                }
+
+                .totales-table.indirectos-documento td:first-child {
+                    width: 40%;
+                }
+
+                .totales-table.indirectos-documento td.indirectos-pct {
+                    width: 18%;
+                    text-align: right;
+                    color: #5f6f89;
+                    font-variant-numeric: tabular-nums;
+                    padding-right: 1mm;
+                }
+
                 .importe-con-letra {
                     margin-top: 2mm;
                     width: 100%;
@@ -1358,6 +1376,11 @@
                                 }
                                 $monedaPrefijo = $monedaCodigo === 'EUR' ? '€' : '$';
                             @endphp
+                            @include('presupuestos.partials.presupuesto-pdf-indirectos', [
+                                'presupuesto' => $presupuesto,
+                                'variant' => 'default',
+                                'monedaPrefijo' => $monedaPrefijo,
+                            ])
                             <table class="totales-table">
                                 <tr>
                                     <td>Subtotal:</td>
@@ -1395,7 +1418,10 @@
                         @endif
 
                     @if ($tieneBloqueTerminos || $mostrarAtentamente)
-                        <div class="presupuesto-cierre-terminos-atentamente">
+                        <div
+                            class="presupuesto-cierre-terminos-atentamente"
+                            @if ($mostrarAtentamente && ($cierreAtentamente['salto_pagina_antes'] ?? false)) style="page-break-before: always; page-break-inside: avoid;" @endif
+                        >
                     @if ($tieneBloqueTerminos)
                         <div class="terms-block terms-block--after-presupuesto">
                             @include('presupuestos.partials.presupuesto-pdf-terminos', [
@@ -1407,9 +1433,15 @@
                         </div>
                     @endif
 
-                    @if ($mostrarAtentamente && ($cierreAtentamente['salto_pagina_antes'] ?? false))
-                        <div class="page-break"></div>
+                    @if ($mostrarAtentamente && ($cierreAtentamente['firma_en_flujo'] ?? false))
+                        <div class="atentamente-en-flujo">
+                            @include('presupuestos.partials.presupuesto-pdf-atentamente', [
+                                'presupuesto' => $presupuesto,
+                                'variant' => 'default',
+                            ])
+                        </div>
                     @endif
+
                     @if ($mostrarAtentamente && (float) ($cierreAtentamente['reserva_pie_html_mm'] ?? 0) > 0)
                         <div
                             class="presupuesto-reserva-atentamente-pie"
@@ -1438,6 +1470,7 @@
                 'presupuesto' => $presupuesto,
                 'paginaAtentamente' => (int) ($cierreAtentamente['pagina_atentamente'] ?? 0),
                 'paginasTrasSeccionPresupuesto' => $paginasTrasSeccionPresupuesto,
+                'firmaEnFlujo' => (bool) ($cierreAtentamente['firma_en_flujo'] ?? false),
             ])
         </body>
 

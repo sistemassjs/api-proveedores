@@ -99,8 +99,6 @@
         display: block;
         width: 100%;
         box-sizing: border-box;
-        page-break-inside: avoid;
-        page-break-after: avoid;
         margin: 0;
         padding: 0;
         min-height: 0;
@@ -162,6 +160,10 @@
 
     .terms-block--after-presupuesto .tw-terms {
         page-break-inside: auto;
+    }
+
+    .atentamente-en-flujo {
+        margin-top: 8mm;
     }
 
     .atentamente-plain {
@@ -445,8 +447,28 @@
         break-inside: avoid;
     }
 
+    .indirectos-documento {
+        margin-bottom: 2mm;
+    }
+
+    .tw-totals-table.indirectos-documento td:first-child {
+        width: 40%;
+    }
+
+    .tw-totals-table.indirectos-documento td.indirectos-pct {
+        width: 18%;
+        text-align: right;
+        color: var(--text-secondary);
+        background: var(--color-slate-50);
+        font-variant-numeric: tabular-nums;
+        padding-right: 1mm;
+    }
+
     .tw-page-break {
+        display: block;
+        height: 0;
         page-break-before: always;
+        break-before: page;
     }
 
     .tw-table thead {
@@ -1297,6 +1319,11 @@
                     $monedaPrefijo = $monedaCodigo === 'EUR' ? '€' : '$';
                 @endphp
                 <div class="tw-totals-inner">
+                    @include('presupuestos.partials.presupuesto-pdf-indirectos', [
+                        'presupuesto' => $presupuesto,
+                        'variant' => 'tailwind',
+                        'monedaPrefijo' => $monedaPrefijo,
+                    ])
                     <table class="tw-totals-table">
                         <tr>
                             <td>Subtotal</td>
@@ -1335,7 +1362,10 @@
             @endif
 
             @if ($tieneBloqueTerminos || $mostrarAtentamente)
-                <div class="presupuesto-cierre-terminos-atentamente">
+                <div
+                    class="presupuesto-cierre-terminos-atentamente"
+                    @if ($mostrarAtentamente && ($cierreAtentamente['salto_pagina_antes'] ?? false)) style="page-break-before: always; page-break-inside: avoid;" @endif
+                >
             @if ($tieneBloqueTerminos)
                 <div class="terms-block terms-block--after-presupuesto">
                     @include('presupuestos.partials.presupuesto-pdf-terminos', [
@@ -1347,9 +1377,15 @@
                 </div>
             @endif
 
-            @if ($mostrarAtentamente && ($cierreAtentamente['salto_pagina_antes'] ?? false))
-                <div class="tw-page-break"></div>
+            @if ($mostrarAtentamente && ($cierreAtentamente['firma_en_flujo'] ?? false))
+                <div class="atentamente-en-flujo">
+                    @include('presupuestos.partials.presupuesto-pdf-atentamente', [
+                        'presupuesto' => $presupuesto,
+                        'variant' => 'tailwind',
+                    ])
+                </div>
             @endif
+
             @if ($mostrarAtentamente && (float) ($cierreAtentamente['reserva_pie_html_mm'] ?? 0) > 0)
                 <div
                     class="presupuesto-reserva-atentamente-pie"
@@ -1378,6 +1414,7 @@
         'presupuesto' => $presupuesto,
         'paginaAtentamente' => (int) ($cierreAtentamente['pagina_atentamente'] ?? 0),
         'paginasTrasSeccionPresupuesto' => $paginasTrasSeccionPresupuesto,
+        'firmaEnFlujo' => (bool) ($cierreAtentamente['firma_en_flujo'] ?? false),
     ])
 </body>
 

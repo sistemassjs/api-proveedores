@@ -93,6 +93,10 @@ class PresupuestoPublicResource extends JsonResource
             'total' => (float) $this->total,
             'config_mostrar_totales' => (bool) ($this->config_mostrar_totales ?? true),
             'config_mostrar_matriz_costos' => (bool) ($this->config_mostrar_matriz_costos ?? false),
+            'indirecto_oficina_porcentaje' => (float) ($this->indirecto_oficina_porcentaje ?? 0),
+            'indirecto_campo_porcentaje' => (float) ($this->indirecto_campo_porcentaje ?? 0),
+            'indirecto_utilidad_porcentaje' => (float) ($this->indirecto_utilidad_porcentaje ?? 0),
+            'indirecto_cargos_porcentaje' => (float) ($this->indirecto_cargos_porcentaje ?? 0),
 
             // Compatibilidad temporal con front público legacy
             'condiciones' => $condiciones,

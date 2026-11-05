@@ -314,6 +314,11 @@ final class PresupuestoPdfDocumentConfig
      *     espacio_tras_titulo_atentamente_mm: float
      * }
      */
+    public function alturaHojaMm(): float
+    {
+        return self::ALTURA_HOJA_LETRA_MM;
+    }
+
     public function medidasSimulacionPaginaMm(): array
     {
         $margenSuperiorMm = $this->margenSuperiorContenidoMm();
