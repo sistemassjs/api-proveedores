@@ -542,6 +542,9 @@
         line-height: 1.45;
         white-space: normal;
         word-wrap: break-word;
+        overflow: visible;
+        height: auto;
+        text-transform: none;
         box-sizing: border-box;
         vertical-align: top;
         background: var(--paragraph-row-bg);
@@ -615,6 +618,17 @@
         font-weight: 400 !important;
         color: #64748b !important;
         text-transform: none !important;
+    }
+
+    .concepto-matriz-desglose__parrafo {
+        text-align: left !important;
+        font-weight: 400 !important;
+        color: #334155 !important;
+        white-space: normal !important;
+        word-wrap: break-word;
+        line-height: 1.45 !important;
+        text-transform: none !important;
+        padding: 1.4mm 0.8mm !important;
     }
 
     .concepto-matriz-desglose__desc {

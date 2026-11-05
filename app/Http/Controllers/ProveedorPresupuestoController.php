@@ -1708,7 +1708,13 @@ class ProveedorPresupuestoController extends Controller
                     $concepto,
                     is_array($componentes) ? $componentes : [],
                     $proveedorId,
-                    $this->matrizCalculo->resolverPorcentajesLinea($conceptoData, $presupuesto)
+                    $this->matrizCalculo->resolverPorcentajesLinea($conceptoData, $presupuesto),
+                    $this->matrizCalculo->normalizarPorcentajesIndirectos([
+                        'indirecto_oficina_porcentaje' => $presupuesto->indirecto_oficina_porcentaje,
+                        'indirecto_campo_porcentaje' => $presupuesto->indirecto_campo_porcentaje,
+                        'indirecto_utilidad_porcentaje' => $presupuesto->indirecto_utilidad_porcentaje,
+                        'indirecto_cargos_porcentaje' => $presupuesto->indirecto_cargos_porcentaje,
+                    ])
                 );
             }
         }

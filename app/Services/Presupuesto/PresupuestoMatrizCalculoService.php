@@ -52,7 +52,8 @@ class PresupuestoMatrizCalculoService
         array $componentes,
         int $proveedorId,
         ?int $padreCatalogoId = null,
-        int $profundidad = 0
+        int $profundidad = 0,
+        ?array $indirectosGenerales = null
     ): array {
         if ($profundidad > 12) {
             throw new InvalidArgumentException(
@@ -70,7 +71,13 @@ class PresupuestoMatrizCalculoService
             $anidadosRaw = $row['componentes_anidados'] ?? null;
             $tieneAnidados = is_array($anidadosRaw) && count($anidadosRaw) > 0;
             $anidados = $tieneAnidados
-                ? $this->normalizarComponentes($anidadosRaw, $proveedorId, null, $profundidad + 1)
+                ? $this->normalizarComponentes(
+                    $anidadosRaw,
+                    $proveedorId,
+                    null,
+                    $profundidad + 1,
+                    $indirectosGenerales
+                )
                 : [];
 
             $refId = $row['catalogo_concepto_componente_id']
@@ -78,7 +85,7 @@ class PresupuestoMatrizCalculoService
                 ?? null;
             $refId = $refId !== null && $refId !== '' ? (int) $refId : null;
 
-            // Matriz anidada editada: el PU es el costo directo del hijo; no re-snapshotear catálogo.
+            // Matriz anidada editada: el PU incluye los indirectos del subcompuesto.
             if ($refId !== null && $refId > 0 && ! $tieneAnidados) {
                 if ($padreCatalogoId !== null) {
                     $this->assertSinCiclo($padreCatalogoId, $refId);
@@ -117,9 +124,12 @@ class PresupuestoMatrizCalculoService
             }
 
             $cantidad = (float) ($row['cantidad'] ?? 1);
-            $precio = $tieneAnidados
+            $costoDirecto = $tieneAnidados
                 ? $this->sumarImportes($anidados)
                 : (float) ($row['precio_unitario'] ?? 0);
+            $precio = $tieneAnidados
+                ? $this->precioDeCompuestoAnidado($costoDirecto, $row, $indirectosGenerales)
+                : $costoDirecto;
             if ($cantidad < 0 || $precio < 0) {
                 throw new InvalidArgumentException(
                     'Cantidad y precio unitario del componente no pueden ser negativos.'
@@ -130,7 +140,7 @@ class PresupuestoMatrizCalculoService
             $esCompuesto = $tieneAnidados
                 || filter_var($row['es_compuesto_ref'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-            $normalizados[] = [
+            $normalizados[] = array_merge([
                 'orden' => (int) ($row['orden'] ?? $index),
                 'categoria' => $categoria,
                 'catalogo_concepto_componente_id' => null,
@@ -143,7 +153,7 @@ class PresupuestoMatrizCalculoService
                 'importe' => $this->calcularImporte($cantidad, $precio),
                 'es_compuesto_ref' => $esCompuesto,
                 'componentes_anidados' => $anidados,
-            ];
+            ], $this->indirectosPersistibles($row) ?? []);
         }
 
         return $normalizados;
@@ -236,9 +246,16 @@ class PresupuestoMatrizCalculoService
         PresupuestoConcepto $concepto,
         array $componentes,
         int $proveedorId,
-        ?array $indirectos = null
+        ?array $indirectos = null,
+        ?array $indirectosGenerales = null
     ): PresupuestoConcepto {
-        $normalizados = $this->normalizarComponentes($componentes, $proveedorId, null);
+        $normalizados = $this->normalizarComponentes(
+            $componentes,
+            $proveedorId,
+            null,
+            0,
+            $indirectosGenerales
+        );
 
         if ($normalizados === []) {
             throw new InvalidArgumentException(
@@ -561,7 +578,75 @@ class PresupuestoMatrizCalculoService
             'importe' => $row['importe'],
             'es_compuesto_ref' => $esCompuesto,
             'componentes_anidados' => $anidados === [] ? null : $anidados,
+            'indirectos' => $this->indirectosPersistibles($row),
         ];
+    }
+
+    /**
+     * Márgenes propios de un compuesto anidado. Null conserva el costo directo (datos viejos).
+     *
+     * @param  array<string, mixed>  $row
+     * @return array{indirectos_modo: string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float}|null
+     */
+    public function indirectosPersistibles(array $row): ?array
+    {
+        $modo = $row['indirectos_modo'] ?? null;
+        if ($modo !== 'propio' && $modo !== 'general') {
+            return null;
+        }
+        if ($modo === 'general') {
+            return [
+                'indirectos_modo' => 'general',
+                'indirecto_oficina_porcentaje' => null,
+                'indirecto_campo_porcentaje' => null,
+                'indirecto_utilidad_porcentaje' => null,
+                'indirecto_cargos_porcentaje' => null,
+            ];
+        }
+
+        $pct = $this->normalizarPorcentajesIndirectos($row);
+
+        return [
+            'indirectos_modo' => 'propio',
+            'indirecto_oficina_porcentaje' => $pct['oficina'],
+            'indirecto_campo_porcentaje' => $pct['campo'],
+            'indirecto_utilidad_porcentaje' => $pct['utilidad'],
+            'indirecto_cargos_porcentaje' => $pct['cargos'],
+        ];
+    }
+
+    /**
+     * @return array{indirectos_modo: ?string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float}
+     */
+    public function indirectosComponenteParaRecurso(mixed $indirectos): array
+    {
+        $data = is_array($indirectos) ? $indirectos : [];
+        $guardados = $this->indirectosPersistibles($data);
+
+        return $guardados ?? [
+            'indirectos_modo' => null,
+            'indirecto_oficina_porcentaje' => null,
+            'indirecto_campo_porcentaje' => null,
+            'indirecto_utilidad_porcentaje' => null,
+            'indirecto_cargos_porcentaje' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array{oficina: float, campo: float, utilidad: float, cargos: float}|null  $generales
+     */
+    private function precioDeCompuestoAnidado(float $costoDirecto, array $row, ?array $generales): float
+    {
+        $modo = $row['indirectos_modo'] ?? null;
+        if ($modo === 'propio') {
+            return $this->precioConIndirectos($costoDirecto, $this->normalizarPorcentajesIndirectos($row));
+        }
+        if ($modo === 'general' && is_array($generales)) {
+            return $this->precioConIndirectos($costoDirecto, $generales);
+        }
+
+        return round($costoDirecto, 2);
     }
 
     private function acotarPorcentaje(mixed $value): float

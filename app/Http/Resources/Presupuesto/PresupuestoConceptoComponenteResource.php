@@ -4,6 +4,7 @@ namespace App\Http\Resources\Presupuesto;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Services\Presupuesto\PresupuestoMatrizCalculoService;
 
 class PresupuestoConceptoComponenteResource extends JsonResource
 {
@@ -29,6 +30,7 @@ class PresupuestoConceptoComponenteResource extends JsonResource
             'importe' => (float) $this->importe,
             'es_compuesto_ref' => (bool) ($this->es_compuesto_ref ?? false) || count($anidados) > 0,
             'componentes_anidados' => $anidados,
+            ...app(PresupuestoMatrizCalculoService::class)->indirectosComponenteParaRecurso($this->indirectos),
         ];
     }
 }

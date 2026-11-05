@@ -21,6 +21,7 @@ class PresupuestoConceptoComponente extends BaseModel
         'importe',
         'es_compuesto_ref',
         'componentes_anidados',
+        'indirectos',
     ];
 
     protected $casts = [
@@ -30,6 +31,7 @@ class PresupuestoConceptoComponente extends BaseModel
         'importe' => 'decimal:4',
         'es_compuesto_ref' => 'boolean',
         'componentes_anidados' => 'array',
+        'indirectos' => 'array',
     ];
 
     public function concepto(): BelongsTo

@@ -22,7 +22,7 @@
 @if ($esParrafo)
     <tr class="{{ $claseParrafo }}{{ $esFilaCebraPar ? ' concepto-row-pair--even' : '' }}">
         <td style="{{ $styleBg }}">{{ $numeroFila }}</td>
-        <td colspan="5" style="{{ $styleBg }}">{{ \App\Support\PresupuestoParrafoPdf::descripcionParaPdf($concepto) }}</td>
+        <td class="linea-parrafo__texto" colspan="5" style="{{ $styleBg }}">{{ \App\Support\PresupuestoParrafoPdf::descripcionParaPdf($concepto) }}</td>
     </tr>
 @else
     @php
@@ -60,12 +60,19 @@
                     <table class="concepto-matriz-desglose-inner">
                         @foreach ($componentesMatriz as $comp)
                             @php
+                                $compUnidad = mb_strtolower(trim((string) ($comp['unidad'] ?? '')));
+                                $compEsParrafo = $compUnidad === 'párrafo' || $compUnidad === 'parrafo';
                                 $compCant = (float) ($comp['cantidad'] ?? 0);
                                 $compPu = (float) ($comp['precio_unitario'] ?? 0);
                                 $compImp = isset($comp['importe'])
                                     ? (float) $comp['importe']
                                     : $compCant * $compPu;
                             @endphp
+                            @if ($compEsParrafo)
+                            <tr>
+                                <td class="concepto-matriz-desglose__parrafo" colspan="5">{{ $comp['descripcion'] ?? '—' }}</td>
+                            </tr>
+                            @else
                             <tr>
                                 <td class="concepto-matriz-desglose__desc">{{ $comp['descripcion'] ?? '—' }}</td>
                                 <td class="concepto-matriz-desglose__cant">{{ rtrim(rtrim(number_format($compCant, 4, '.', ','), '0'), '.') }}</td>
@@ -87,6 +94,7 @@
                                     </table>
                                 </td>
                             </tr>
+                            @endif
                         @endforeach
                     </table>
                 </div>
