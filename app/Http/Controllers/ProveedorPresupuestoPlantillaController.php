@@ -367,9 +367,11 @@ class ProveedorPresupuestoPlantillaController extends Controller
                     || (is_array($componentes) && count($componentes) > 0)
                 );
 
+            $numeroFila = $numero++;
             $concepto = PresupuestoPlantillaConcepto::create(array_merge([
                 'presupuesto_plantilla_id' => $plantilla->id,
-                'numero' => $numero++,
+                'numero' => $numeroFila,
+                'clave' => $this->matrizCalculo->clavePartida($fila['clave'] ?? null, $numeroFila, $esParrafo),
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
                 'descripcion' => (string) ($fila['descripcion'] ?? ''),

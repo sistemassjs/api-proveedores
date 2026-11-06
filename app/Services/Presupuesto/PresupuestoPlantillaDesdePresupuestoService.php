@@ -142,9 +142,11 @@ class PresupuestoPlantillaDesdePresupuestoService
                 );
             }
 
+            $numeroFila = $numero++;
             $concepto = PresupuestoPlantillaConcepto::create(array_merge([
                 'presupuesto_plantilla_id' => $plantilla->id,
-                'numero' => $numero++,
+                'numero' => $numeroFila,
+                'clave' => $this->matrizCalculo->clavePartida($linea->clave, $numeroFila, $esParrafo),
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
                 'descripcion' => $linea->descripcion,

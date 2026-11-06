@@ -19,6 +19,9 @@ class PresupuestoPlantillaConceptoResource extends JsonResource
         return [
             'id' => $this->id,
             'numero' => (int) $this->numero,
+            'clave' => $this->clave !== null && trim((string) $this->clave) !== ''
+                ? (string) $this->clave
+                : null,
             'tipo' => $this->tipo ?? 'concepto',
             'tiene_matriz' => (bool) ($this->tiene_matriz ?? false),
             'indirectos_modo' => ($this->indirectos_modo ?? 'general') === 'propio' ? 'propio' : 'general',

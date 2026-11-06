@@ -163,7 +163,7 @@ Campo `term_cond_moneda`: solo **MXN** \| **USD** \| **EUR** (default MXN). Pref
 
 ### PDF / preview — numeración
 
-- Filas de concepto y párrafo: primera columna (`#`) centrada en preview (`presupuesto-proveedor-preview.page.scss`) y en blades PDF (`pdf.blade.php` / `pdf-tailwind.blade.php`).
+- Filas de concepto y párrafo: primera columna (`#`) centrada en preview (`presupuesto-proveedor-preview.page.scss`) y en blades PDF (`pdf.blade.php` / `pdf-tailwind.blade.php`). El número de renglón es la posición. Concepto y compuesto muestran además su clave debajo. Si el usuario no la escribe, se asigna ese número (`1`, `2`, `3`). Si escribe una (ej. `2.3a`), se conserva. Al tomar un concepto del catálogo se propone su clave y se puede borrar.
 
 ## Folio en UI
 

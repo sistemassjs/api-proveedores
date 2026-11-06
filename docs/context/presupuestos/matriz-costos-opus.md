@@ -29,6 +29,7 @@ Referencia Opus (comportamiento, no clone 1:1):
 | Select tipo con buscador (`app-matriz-insumo-tipo-select`) | **Hecho** |
 | Filtro listado `matriz_tipo` (segmento 1 fila) | **Hecho** |
 | Doble clic en P.U. → convertir a matriz | **Hecho** |
+| Clave de partida en concepto y compuesto; vacía = número de renglón | **Hecho** |
 | Capítulos / niveles | **Roadmap** Fase 2 |
 | Totales por tipo en PDF / % sobre MO / explosión | **Roadmap** Fase 3 |
 

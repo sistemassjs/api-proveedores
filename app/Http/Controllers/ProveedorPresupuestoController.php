@@ -812,6 +812,7 @@ class ProveedorPresupuestoController extends Controller
                     $c->loadMissing('componentes');
                     $fila = [
                         'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                        'clave' => $c->clave,
                         'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
                         'descripcion' => $c->descripcion,
                         'cantidad' => (float) $c->cantidad,
@@ -1690,6 +1691,11 @@ class ProveedorPresupuestoController extends Controller
 
             $concepto = new PresupuestoConcepto(array_merge([
                 'numero' => $index + 1,
+                'clave' => $this->matrizCalculo->clavePartida(
+                    $conceptoData['clave'] ?? null,
+                    $index + 1,
+                    $tipo === PresupuestoConcepto::TIPO_PARRAFO,
+                ),
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
                 'descripcion' => $conceptoData['descripcion'],
@@ -2250,6 +2256,7 @@ class ProveedorPresupuestoController extends Controller
             'conceptos' => $presupuesto->conceptos->map(static function ($concepto) {
                 $fila = [
                     'tipo' => $concepto->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                    'clave' => $concepto->clave,
                     'tiene_matriz' => (bool) ($concepto->tiene_matriz ?? false),
                     'descripcion' => $concepto->descripcion,
                     'cantidad' => $concepto->cantidad,

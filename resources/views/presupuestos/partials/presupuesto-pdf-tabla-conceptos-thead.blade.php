@@ -1,7 +1,7 @@
 @if (($variant ?? 'default') === 'tailwind')
     <tr>
-        <th scope="col" style="width:5%;{{ $thCellStyle ?? '' }}">#</th>
-        <th scope="col" style="width:36%;{{ $thCellStyle ?? '' }}">Descripción</th>
+        <th scope="col" style="width:11%;{{ $thCellStyle ?? '' }}">#</th>
+        <th scope="col" style="width:30%;{{ $thCellStyle ?? '' }}">Descripción</th>
         <th scope="col" style="width:10%;{{ $thCellStyle ?? '' }}">Cantidad</th>
         <th scope="col" style="width:10%;{{ $thCellStyle ?? '' }}">Unidad</th>
         <th scope="col" style="width:19%;{{ $thCellStyle ?? '' }}">Precio unitario</th>

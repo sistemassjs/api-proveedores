@@ -154,6 +154,7 @@ class UpdatePresupuestoRequest extends FormRequest
             'conceptos.*.indirecto_campo_porcentaje' => 'nullable|numeric|min:0|max:100',
             'conceptos.*.indirecto_utilidad_porcentaje' => 'nullable|numeric|min:0|max:100',
             'conceptos.*.indirecto_cargos_porcentaje' => 'nullable|numeric|min:0|max:100',
+            'conceptos.*.clave' => 'nullable|string|max:40',
             'conceptos.*.descripcion' => 'required|string|max:5000',
             'conceptos.*.cantidad' => 'required|numeric|min:0.0001',
             'conceptos.*.unidad' => 'required|string|max:50',

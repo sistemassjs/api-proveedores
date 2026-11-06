@@ -25,6 +25,7 @@ class PresupuestoConcepto extends BaseModel
     protected $fillable = [
         'presupuesto_id',
         'numero',
+        'clave',
         'tipo',
         'tiene_matriz',
         'descripcion',

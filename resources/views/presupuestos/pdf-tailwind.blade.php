@@ -521,6 +521,19 @@
         font-weight: 600;
     }
 
+    .tw-table tbody td.concepto-num {
+        overflow: visible;
+        width: 11%;
+    }
+
+    .concepto-clave {
+        display: block;
+        margin-top: 0.3mm;
+        font-size: 5.5pt;
+        font-weight: 500;
+        line-height: 1.15;
+    }
+
     .tw-table tbody td:nth-child(2) {
         text-align: left;
         color: #111827;

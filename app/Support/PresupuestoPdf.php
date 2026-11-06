@@ -123,6 +123,7 @@ final class PresupuestoPdf
             'conceptos' => $presupuesto->conceptos->map(function ($c) {
                 $fila = [
                     'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                    'clave' => $c->clave,
                     'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
                     'descripcion' => $c->descripcion,
                     'cantidad' => $c->cantidad,

@@ -55,6 +55,8 @@ Campo típico `term_cond_moneda`: valores admitidos **MXN** | **USD** | **EUR** 
 
 Tipos: `concepto` | `parrafo`. Campos libres: descripción, cantidad, unidad, precios, imagen. **Sin `producto_id`.** El picker puede rellenar la línea desde productos publicados (snapshot: nombre→descripcion, unidad, precio_base, imagen).
 
+`presupuesto_conceptos.clave` y `presupuesto_plantilla_conceptos.clave` (máx. 40): clave de la **partida**. Concepto y compuesto siempre la llevan. Si el usuario no la escribe, al guardar se asigna el número de renglón (`"1"`, `"2"`, …). Si la escribe (ej. `2.3a`), se respeta. No es `clave_snapshot` del insumo. Al elegir un concepto del catálogo se propone su `clave` y se puede borrar; si queda vacía, entra el número de renglón. Los párrafos quedan en null. Cada componente de la matriz, incluido el anidado, guarda su clave en `clave_snapshot`; si no se escribe, se asigna su número dentro de esa matriz. No interviene en importes.
+
 ### Matriz de P.U. (línea)
 
 - `presupuesto_conceptos.tiene_matriz` (bool): si true, el `precio_unitario` se **calcula** desde `presupuesto_concepto_componentes`.

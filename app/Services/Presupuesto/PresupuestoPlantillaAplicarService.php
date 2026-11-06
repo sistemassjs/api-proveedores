@@ -181,9 +181,11 @@ class PresupuestoPlantillaAplicarService
                 'indirecto_utilidad_porcentaje' => $linea->indirecto_utilidad_porcentaje,
                 'indirecto_cargos_porcentaje' => $linea->indirecto_cargos_porcentaje,
             ];
+            $numeroFila = $numero++;
             $concepto = new PresupuestoConcepto(array_merge([
                 'presupuesto_id' => $presupuesto->id,
-                'numero' => $numero++,
+                'numero' => $numeroFila,
+                'clave' => $this->matrizCalculo->clavePartida($linea->clave, $numeroFila, $esParrafo),
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
                 'descripcion' => $linea->descripcion,

@@ -1,5 +1,6 @@
 @php
     $numeroFila = (int) ($numeroFila ?? 1);
+    $claveLinea = trim((string) ($concepto['clave'] ?? ''));
     $esParrafo = \App\Support\PresupuestoParrafoPdf::esLineaParrafo($concepto);
     $cantidad = $concepto['cantidad'] ?? 1;
     $precioUnitario = $concepto['precio_unitario'] ?? 0;
@@ -21,7 +22,7 @@
 @endphp
 @if ($esParrafo)
     <tr class="{{ $claseParrafo }}{{ $esFilaCebraPar ? ' concepto-row-pair--even' : '' }}">
-        <td style="{{ $styleBg }}">{{ $numeroFila }}</td>
+        <td class="concepto-num" style="{{ $styleBg }}">{{ $numeroFila }}</td>
         <td class="linea-parrafo__texto" colspan="5" style="{{ $styleBg }}">{{ \App\Support\PresupuestoParrafoPdf::descripcionParaPdf($concepto) }}</td>
     </tr>
 @else
@@ -38,7 +39,12 @@
         }
     @endphp
     <tr @if (count($clasesFila) > 0) class="{{ implode(' ', $clasesFila) }}" @endif>
-        <td style="{{ $styleBg }}">{{ $numeroFila }}</td>
+        <td class="concepto-num" style="{{ $styleBg }}">
+            <div>{{ $numeroFila }}</div>
+            @if ($claveLinea !== '')
+                <div class="concepto-clave">{{ $claveLinea }}</div>
+            @endif
+        </td>
         <td style="{{ $styleBg }}">
             {{ $concepto['descripcion'] ?? 'Sin descripción' }}
             @if ($tieneImagen)

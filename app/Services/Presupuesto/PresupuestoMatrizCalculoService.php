@@ -62,6 +62,7 @@ class PresupuestoMatrizCalculoService
         }
 
         $normalizados = [];
+        $numeroClave = 0;
 
         foreach (array_values($componentes) as $index => $row) {
             if (! is_array($row)) {
@@ -93,12 +94,16 @@ class PresupuestoMatrizCalculoService
                 $snapshot = $this->snapshotDesdeCatalogo($refId, $proveedorId);
                 $cantidad = (float) ($row['cantidad'] ?? 1);
                 $precio = (float) $snapshot['precio_unitario'];
+                $numeroClave++;
+                $claveCapturada = $this->normalizarClave($row['clave_snapshot'] ?? null);
                 $normalizados[] = [
                     'orden' => (int) ($row['orden'] ?? $index),
                     'categoria' => $snapshot['categoria'],
                     'catalogo_concepto_componente_id' => $refId,
                     'catalogo_concepto_id' => $refId,
-                    'clave_snapshot' => $snapshot['clave'],
+                    'clave_snapshot' => $claveCapturada
+                        ?? $this->normalizarClave($snapshot['clave'])
+                        ?? (string) $numeroClave,
                     'descripcion' => $snapshot['descripcion'],
                     'unidad' => $snapshot['unidad'],
                     'cantidad' => $cantidad,
@@ -136,7 +141,14 @@ class PresupuestoMatrizCalculoService
                 );
             }
 
-            $clave = $this->normalizarClave($row['clave_snapshot'] ?? $row['clave'] ?? null);
+            $esParrafo = in_array(mb_strtolower($unidad), ['párrafo', 'parrafo'], true);
+            if ($esParrafo) {
+                $clave = null;
+            } else {
+                $numeroClave++;
+                $clave = $this->normalizarClave($row['clave_snapshot'] ?? $row['clave'] ?? null)
+                    ?? (string) $numeroClave;
+            }
             $esCompuesto = $tieneAnidados
                 || filter_var($row['es_compuesto_ref'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
@@ -383,6 +395,20 @@ class PresupuestoMatrizCalculoService
         $clave = trim((string) $clave);
 
         return $clave === '' ? null : mb_substr($clave, 0, 40);
+    }
+
+    /**
+     * Concepto y compuesto siempre llevan clave de partida.
+     * Si el usuario no escribió una, se usa el número de renglón.
+     * El párrafo no lleva clave.
+     */
+    public function clavePartida(mixed $clave, int $numero, bool $esParrafo): ?string
+    {
+        if ($esParrafo) {
+            return null;
+        }
+
+        return $this->normalizarClave($clave) ?? (string) max(1, $numero);
     }
 
     /**

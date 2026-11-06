@@ -22,6 +22,9 @@ class PresupuestoConceptoResource extends JsonResource
         return [
             'id' => $this->id,
             'numero' => (int) $this->numero,
+            'clave' => $this->clave !== null && trim((string) $this->clave) !== ''
+                ? (string) $this->clave
+                : null,
             'tipo' => $this->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
             'descripcion' => $this->descripcion,
             'cantidad' => (float) $this->cantidad,

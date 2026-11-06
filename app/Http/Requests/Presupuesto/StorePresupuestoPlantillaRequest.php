@@ -69,6 +69,7 @@ class StorePresupuestoPlantillaRequest extends FormRequest
                 PresupuestoConcepto::TIPO_CONCEPTO,
                 PresupuestoConcepto::TIPO_PARRAFO,
             ])],
+            'conceptos.*.clave' => ['nullable', 'string', 'max:40'],
             'conceptos.*.descripcion' => ['required_with:conceptos', 'string'],
             'conceptos.*.cantidad' => ['nullable', 'numeric', 'min:0'],
             'conceptos.*.unidad' => ['nullable', 'string', 'max:50'],
