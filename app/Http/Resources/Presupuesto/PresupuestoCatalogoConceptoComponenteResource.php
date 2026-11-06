@@ -25,6 +25,8 @@ class PresupuestoCatalogoConceptoComponenteResource extends JsonResource
             'cantidad' => (float) $this->cantidad,
             'precio_unitario' => (float) $this->precio_unitario,
             'importe' => (float) $this->importe,
+            'calculo' => $this->calculo ?: 'cantidad',
+            'porcentaje' => $this->porcentaje !== null ? (float) $this->porcentaje : null,
         ];
     }
 }

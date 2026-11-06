@@ -77,17 +77,31 @@
                                 <td class="concepto-matriz-desglose__parrafo" colspan="5">{{ $comp['descripcion'] ?? '—' }}</td>
                             </tr>
                             @else
+                            @php
+                                $compCalculo = (string) ($comp['calculo'] ?? 'cantidad');
+                                $compEsPorcentaje = $compCalculo === 'porcentaje_mo';
+                                $compPct = (float) ($comp['porcentaje'] ?? 0);
+                            @endphp
                             <tr>
                                 <td class="concepto-matriz-desglose__desc">{{ $comp['descripcion'] ?? '—' }}</td>
-                                <td class="concepto-matriz-desglose__cant">{{ rtrim(rtrim(number_format($compCant, 4, '.', ','), '0'), '.') }}</td>
-                                <td class="concepto-matriz-desglose__unidad">{{ strtoupper($comp['unidad'] ?? 'PZA') }}</td>
+                                <td class="concepto-matriz-desglose__cant">{{ $compEsPorcentaje ? rtrim(rtrim(number_format($compPct, 2, '.', ','), '0'), '.').'%' : rtrim(rtrim(number_format($compCant, 4, '.', ','), '0'), '.') }}</td>
+                                <td class="concepto-matriz-desglose__unidad">{{ $compEsPorcentaje ? '%' : strtoupper($comp['unidad'] ?? 'PZA') }}</td>
                                 <td class="concepto-matriz-desglose__money">
+                                    @if ($compEsPorcentaje)
+                                    <table class="concepto-matriz-desglose__money-inner">
+                                        <tr>
+                                            <td class="concepto-matriz-desglose__sym"></td>
+                                            <td class="concepto-matriz-desglose__amt">—</td>
+                                        </tr>
+                                    </table>
+                                    @else
                                     <table class="concepto-matriz-desglose__money-inner">
                                         <tr>
                                             <td class="concepto-matriz-desglose__sym">{{ $monedaPrefijo }}</td>
                                             <td class="concepto-matriz-desglose__amt">{{ number_format($compPu, 2, '.', ',') }}</td>
                                         </tr>
                                     </table>
+                                    @endif
                                 </td>
                                 <td class="concepto-matriz-desglose__money concepto-matriz-desglose__imp">
                                     <table class="concepto-matriz-desglose__money-inner">

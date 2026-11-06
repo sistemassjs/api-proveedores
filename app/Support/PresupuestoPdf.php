@@ -150,6 +150,8 @@ final class PresupuestoPdf
                             'cantidad' => (float) $comp->cantidad,
                             'precio_unitario' => (float) $comp->precio_unitario,
                             'importe' => (float) ($comp->importe ?? ((float) $comp->cantidad * (float) $comp->precio_unitario)),
+                            'calculo' => $comp->calculo ?? 'cantidad',
+                            'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
                         ];
                     })->values()->all();
                 }

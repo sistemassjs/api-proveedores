@@ -87,6 +87,8 @@ class ProveedorUpdatePresupuestoCatalogoConceptoRequest extends FormRequest
             'componentes.*.precio_unitario' => ['nullable', 'numeric', 'min:0'],
             'componentes.*.clave' => ['nullable', 'string', 'max:40'],
             'componentes.*.clave_snapshot' => ['nullable', 'string', 'max:40'],
+            'componentes.*.calculo' => ['nullable', 'string', 'in:cantidad,porcentaje_mo'],
+            'componentes.*.porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
     }
 

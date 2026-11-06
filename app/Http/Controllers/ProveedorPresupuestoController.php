@@ -824,7 +824,7 @@ class ProveedorPresupuestoController extends Controller
 
                     if ($c->tiene_matriz && $c->componentes->isNotEmpty()) {
                         $fila['componentes'] = $c->componentes->map(static function ($comp) {
-                            return [
+                            return array_merge([
                                 'orden' => (int) $comp->orden,
                                 'categoria' => $comp->categoria,
                                 'catalogo_concepto_id' => $comp->catalogo_concepto_id,
@@ -833,7 +833,11 @@ class ProveedorPresupuestoController extends Controller
                                 'unidad' => $comp->unidad,
                                 'cantidad' => (float) $comp->cantidad,
                                 'precio_unitario' => (float) $comp->precio_unitario,
-                            ];
+                                'calculo' => $comp->calculo ?? 'cantidad',
+                                'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
+                                'es_compuesto_ref' => (bool) ($comp->es_compuesto_ref ?? false),
+                                'componentes_anidados' => is_array($comp->componentes_anidados) ? $comp->componentes_anidados : [],
+                            ], is_array($comp->indirectos) ? $comp->indirectos : []);
                         })->values()->all();
                     }
 
@@ -2275,6 +2279,8 @@ class ProveedorPresupuestoController extends Controller
                             'cantidad' => (float) $comp->cantidad,
                             'precio_unitario' => (float) $comp->precio_unitario,
                             'importe' => (float) ($comp->importe ?? ((float) $comp->cantidad * (float) $comp->precio_unitario)),
+                            'calculo' => $comp->calculo ?? 'cantidad',
+                            'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
                         ];
                     })->values()->all();
                 }

@@ -19,6 +19,8 @@ class PresupuestoCatalogoConceptoComponente extends BaseModel
         'cantidad',
         'precio_unitario',
         'importe',
+        'calculo',
+        'porcentaje',
     ];
 
     protected $casts = [
@@ -26,6 +28,7 @@ class PresupuestoCatalogoConceptoComponente extends BaseModel
         'cantidad' => 'decimal:4',
         'precio_unitario' => 'decimal:4',
         'importe' => 'decimal:4',
+        'porcentaje' => 'decimal:4',
     ];
 
     public function padre(): BelongsTo

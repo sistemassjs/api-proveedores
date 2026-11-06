@@ -29,6 +29,8 @@ class PresupuestoPlantillaConceptoComponenteResource extends JsonResource
             'cantidad' => (float) $this->cantidad,
             'precio_unitario' => (float) $this->precio_unitario,
             'importe' => (float) $this->importe,
+            'calculo' => $this->calculo ?: 'cantidad',
+            'porcentaje' => $this->porcentaje !== null ? (float) $this->porcentaje : null,
             'es_compuesto_ref' => (bool) ($this->es_compuesto_ref ?? false) || count($anidados) > 0,
             'componentes_anidados' => $anidados,
             ...app(PresupuestoMatrizCalculoService::class)->indirectosComponenteParaRecurso($this->indirectos),

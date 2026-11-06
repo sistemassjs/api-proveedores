@@ -384,6 +384,8 @@ class ProveedorPresupuestoCatalogoConceptosController extends Controller
                                 'unidad' => $c->unidad,
                                 'cantidad' => $c->cantidad,
                                 'precio_unitario' => $c->precio_unitario,
+                                'calculo' => $c->calculo ?? 'cantidad',
+                                'porcentaje' => $c->porcentaje,
                             ])
                             ->all();
 

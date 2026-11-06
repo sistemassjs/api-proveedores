@@ -209,7 +209,7 @@ class PresupuestoPlantillaAplicarService
 
             if ($tieneMatriz) {
                 $componentes = $linea->componentes->map(static function ($comp) {
-                    return [
+                    return array_merge([
                         'orden' => (int) $comp->orden,
                         'categoria' => $comp->categoria,
                         'catalogo_concepto_id' => $comp->catalogo_concepto_id,
@@ -218,7 +218,11 @@ class PresupuestoPlantillaAplicarService
                         'unidad' => $comp->unidad,
                         'cantidad' => (float) $comp->cantidad,
                         'precio_unitario' => (float) $comp->precio_unitario,
-                    ];
+                        'calculo' => $comp->calculo ?? 'cantidad',
+                        'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
+                        'es_compuesto_ref' => (bool) ($comp->es_compuesto_ref ?? false),
+                        'componentes_anidados' => is_array($comp->componentes_anidados) ? $comp->componentes_anidados : [],
+                    ], is_array($comp->indirectos) ? $comp->indirectos : []);
                 })->values()->all();
 
                 $this->matrizCalculo->sincronizarComponentesLinea(

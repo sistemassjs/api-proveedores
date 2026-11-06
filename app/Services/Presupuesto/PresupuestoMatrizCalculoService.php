@@ -11,11 +11,15 @@ use App\Models\PresupuestoPlantillaConcepto;
 use InvalidArgumentException;
 
 /**
- * Motor único de matriz de P.U.: importe = cantidad × precio_unitario; P.U. padre = Σ importes.
+ * Motor único de matriz de P.U.: importe = cantidad × precio_unitario, o porcentaje de la mano de obra del mismo nivel. P.U. padre = Σ importes.
  * Tipos de insumo: material|mano_obra|herramienta|equipo|auxiliar|producto|servicio.
  */
 class PresupuestoMatrizCalculoService
 {
+    public const CALCULO_CANTIDAD = 'cantidad';
+
+    public const CALCULO_PORCENTAJE_MO = 'porcentaje_mo';
+
     public function calcularImporte(float|string $cantidad, float|string $precioUnitario): float
     {
         return round((float) $cantidad * (float) $precioUnitario, 4);
@@ -109,6 +113,8 @@ class PresupuestoMatrizCalculoService
                     'cantidad' => $cantidad,
                     'precio_unitario' => $precio,
                     'importe' => $this->calcularImporte($cantidad, $precio),
+                    'calculo' => $row['calculo'] ?? self::CALCULO_CANTIDAD,
+                    'porcentaje' => $row['porcentaje'] ?? null,
                     'es_compuesto_ref' => false,
                     'componentes_anidados' => [],
                 ];
@@ -163,12 +169,14 @@ class PresupuestoMatrizCalculoService
                 'cantidad' => $cantidad,
                 'precio_unitario' => $precio,
                 'importe' => $this->calcularImporte($cantidad, $precio),
+                'calculo' => $row['calculo'] ?? self::CALCULO_CANTIDAD,
+                'porcentaje' => $row['porcentaje'] ?? null,
                 'es_compuesto_ref' => $esCompuesto,
                 'componentes_anidados' => $anidados,
             ], $this->indirectosPersistibles($row) ?? []);
         }
 
-        return $normalizados;
+        return $this->aplicarPorcentajesManoObra($normalizados);
     }
 
     /**
@@ -211,6 +219,8 @@ class PresupuestoMatrizCalculoService
                 'cantidad' => $row['cantidad'],
                 'precio_unitario' => $row['precio_unitario'],
                 'importe' => $row['importe'],
+                'calculo' => $row['calculo'] ?? self::CALCULO_CANTIDAD,
+                'porcentaje' => $row['porcentaje'] ?? null,
             ]);
         }
 
@@ -230,17 +240,34 @@ class PresupuestoMatrizCalculoService
         }
 
         $concepto->loadMissing('componentes');
-        $rows = $concepto->componentes->map(function (PresupuestoCatalogoConceptoComponente $c) {
-            $importe = $this->calcularImporte((float) $c->cantidad, (float) $c->precio_unitario);
-            if ((float) $c->importe !== $importe) {
-                $c->importe = $importe;
-                $c->save();
-            }
+        $filas = [];
+        foreach ($concepto->componentes as $c) {
+            $cantidad = (float) $c->cantidad;
+            $precio = (float) $c->precio_unitario;
+            $filas[] = [
+                'categoria' => (string) $c->categoria,
+                'unidad' => (string) $c->unidad,
+                'cantidad' => $cantidad,
+                'precio_unitario' => $precio,
+                'importe' => $this->calcularImporte($cantidad, $precio),
+                'calculo' => $c->calculo ?? self::CALCULO_CANTIDAD,
+                'porcentaje' => $c->porcentaje,
+                'es_compuesto_ref' => false,
+                'componentes_anidados' => [],
+            ];
+        }
+        $filas = $this->aplicarPorcentajesManoObra($filas);
+        foreach ($concepto->componentes->values() as $i => $c) {
+            $fila = $filas[$i];
+            $c->calculo = $fila['calculo'];
+            $c->porcentaje = $fila['porcentaje'];
+            $c->cantidad = $fila['cantidad'];
+            $c->precio_unitario = $fila['precio_unitario'];
+            $c->importe = $fila['importe'];
+            $c->save();
+        }
 
-            return ['importe' => $importe];
-        })->all();
-
-        $concepto->precio_unitario = $this->sumarImportes($rows);
+        $concepto->precio_unitario = $this->sumarImportes($filas);
         $concepto->save();
 
         return $concepto->fresh(['componentes']) ?? $concepto;
@@ -747,9 +774,32 @@ class PresupuestoMatrizCalculoService
                     $componente->save();
                 }
 
-                $padre->precio_unitario = $this->sumarImportes(
-                    $padre->componentes->map(fn ($c) => ['importe' => $c->importe])->all()
-                );
+                $filas = [];
+                foreach ($padre->componentes as $componente) {
+                    $filas[] = [
+                        'categoria' => (string) $componente->categoria,
+                        'unidad' => (string) $componente->unidad,
+                        'cantidad' => (float) $componente->cantidad,
+                        'precio_unitario' => (float) $componente->precio_unitario,
+                        'importe' => (float) $componente->importe,
+                        'calculo' => $componente->calculo ?? self::CALCULO_CANTIDAD,
+                        'porcentaje' => $componente->porcentaje,
+                        'es_compuesto_ref' => false,
+                        'componentes_anidados' => [],
+                    ];
+                }
+                $filas = $this->aplicarPorcentajesManoObra($filas);
+                foreach ($padre->componentes->values() as $i => $componente) {
+                    $fila = $filas[$i];
+                    $componente->calculo = $fila['calculo'];
+                    $componente->porcentaje = $fila['porcentaje'];
+                    $componente->cantidad = $fila['cantidad'];
+                    $componente->precio_unitario = $fila['precio_unitario'];
+                    $componente->importe = $fila['importe'];
+                    $componente->save();
+                }
+
+                $padre->precio_unitario = $this->sumarImportes($filas);
                 $padre->save();
                 $cola[] = (int) $padre->id;
             }
@@ -780,6 +830,10 @@ class PresupuestoMatrizCalculoService
             'cantidad' => $row['cantidad'],
             'precio_unitario' => $row['precio_unitario'],
             'importe' => $row['importe'],
+            'calculo' => $row['calculo'] ?? self::CALCULO_CANTIDAD,
+            'porcentaje' => ($row['calculo'] ?? self::CALCULO_CANTIDAD) === self::CALCULO_PORCENTAJE_MO
+                ? ($row['porcentaje'] ?? null)
+                : null,
             'es_compuesto_ref' => $esCompuesto,
             'componentes_anidados' => $anidados === [] ? null : $anidados,
             'indirectos' => $this->indirectosPersistibles($row),
@@ -851,6 +905,72 @@ class PresupuestoMatrizCalculoService
         }
 
         return round($costoDirecto, 2);
+    }
+
+    /**
+     * Segunda vuelta: los renglones porcentaje_mo valen un % de la mano de obra de este nivel.
+     * Mano de obra, párrafo y compuesto anidado se quedan en cantidad × precio.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function aplicarPorcentajesManoObra(array $rows): array
+    {
+        $base = 0.0;
+        foreach ($rows as $row) {
+            if (($row['categoria'] ?? '') !== 'mano_obra') {
+                continue;
+            }
+            if (($row['calculo'] ?? self::CALCULO_CANTIDAD) === self::CALCULO_PORCENTAJE_MO) {
+                continue;
+            }
+            $base += (float) ($row['importe'] ?? 0);
+        }
+        $base = round($base, 4);
+
+        foreach ($rows as $i => $row) {
+            $porcentaje = $this->porcentajeManoObraAplicable($row);
+            if ($porcentaje === null) {
+                $rows[$i]['calculo'] = self::CALCULO_CANTIDAD;
+                $rows[$i]['porcentaje'] = null;
+
+                continue;
+            }
+            $importe = round($base * $porcentaje / 100, 4);
+            $rows[$i]['calculo'] = self::CALCULO_PORCENTAJE_MO;
+            $rows[$i]['porcentaje'] = $porcentaje;
+            $rows[$i]['cantidad'] = 1;
+            $rows[$i]['precio_unitario'] = $importe;
+            $rows[$i]['importe'] = $importe;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function porcentajeManoObraAplicable(array $row): ?float
+    {
+        if (($row['calculo'] ?? self::CALCULO_CANTIDAD) !== self::CALCULO_PORCENTAJE_MO) {
+            return null;
+        }
+        $unidad = mb_strtolower(trim((string) ($row['unidad'] ?? '')));
+        if ($unidad === 'párrafo' || $unidad === 'parrafo') {
+            return null;
+        }
+        if (($row['categoria'] ?? '') === 'mano_obra') {
+            return null;
+        }
+        $anidados = $row['componentes_anidados'] ?? [];
+        if (is_array($anidados) && count($anidados) > 0) {
+            return null;
+        }
+        if (filter_var($row['es_compuesto_ref'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return null;
+        }
+
+        return $this->acotarPorcentaje($row['porcentaje'] ?? 0);
     }
 
     private function acotarPorcentaje(mixed $value): float
