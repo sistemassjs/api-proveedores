@@ -909,7 +909,9 @@ class PresupuestoMatrizCalculoService
 
     /**
      * Segunda vuelta: los renglones porcentaje_mo valen un % de la mano de obra de este nivel.
-     * Mano de obra, párrafo y compuesto anidado se quedan en cantidad × precio.
+     * La base es la mano de obra en cantidad (la cuadrilla). Un renglón de mano de obra
+     * marcado como porcentaje (mando intermedio) queda fuera de esa base.
+     * Párrafo y compuesto anidado se quedan en cantidad × precio.
      *
      * @param  list<array<string, mixed>>  $rows
      * @return list<array<string, mixed>>
@@ -957,9 +959,6 @@ class PresupuestoMatrizCalculoService
         }
         $unidad = mb_strtolower(trim((string) ($row['unidad'] ?? '')));
         if ($unidad === 'párrafo' || $unidad === 'parrafo') {
-            return null;
-        }
-        if (($row['categoria'] ?? '') === 'mano_obra') {
             return null;
         }
         $anidados = $row['componentes_anidados'] ?? [];
