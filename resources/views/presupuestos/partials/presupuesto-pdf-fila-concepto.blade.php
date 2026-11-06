@@ -23,6 +23,7 @@
 @if ($esParrafo)
     <tr class="{{ $claseParrafo }}{{ $esFilaCebraPar ? ' concepto-row-pair--even' : '' }}">
         <td class="concepto-num" style="{{ $styleBg }}">{{ $numeroFila }}</td>
+        <td class="concepto-clave" style="{{ $styleBg }}">{{ $claveLinea }}</td>
         <td class="linea-parrafo__texto" colspan="5" style="{{ $styleBg }}">{{ \App\Support\PresupuestoParrafoPdf::descripcionParaPdf($concepto) }}</td>
     </tr>
 @else
@@ -39,12 +40,8 @@
         }
     @endphp
     <tr @if (count($clasesFila) > 0) class="{{ implode(' ', $clasesFila) }}" @endif>
-        <td class="concepto-num" style="{{ $styleBg }}">
-            <div>{{ $numeroFila }}</div>
-            @if ($claveLinea !== '')
-                <div class="concepto-clave">{{ $claveLinea }}</div>
-            @endif
-        </td>
+        <td class="concepto-num" style="{{ $styleBg }}">{{ $numeroFila }}</td>
+        <td class="concepto-clave" style="{{ $styleBg }}">{{ $claveLinea }}</td>
         <td style="{{ $styleBg }}">
             {{ $concepto['descripcion'] ?? 'Sin descripción' }}
             @if ($tieneImagen)
@@ -61,6 +58,7 @@
     @if ($tieneDesgloseMatriz)
         <tr class="concepto-matriz-desglose-tr{{ $esFilaCebraPar ? ' concepto-row-pair--even' : '' }}">
             <td class="concepto-matriz-desglose-tr__num" aria-hidden="true" style="{{ $styleBg }}"></td>
+            <td class="concepto-clave" aria-hidden="true" style="{{ $styleBg }}"></td>
             <td colspan="5" class="concepto-matriz-desglose-tr__cell" style="{{ $styleBg }}">
                 <div class="concepto-matriz-desglose">
                     <table class="concepto-matriz-desglose-inner">

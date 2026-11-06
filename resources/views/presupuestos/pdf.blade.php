@@ -498,22 +498,26 @@
                 }
 
                 .presupuesto-table thead th:nth-child(2) {
-                    width: 38%;
+                    width: 12%;
+                }
+
+                .presupuesto-table thead th:nth-child(3) {
+                    width: 31%;
                     text-align: left;
                     padding-left: 1.5mm;
                 }
 
-                .presupuesto-table thead th:nth-child(3) {
-                    width: 10%;
-                }
-
                 .presupuesto-table thead th:nth-child(4) {
-                    width: 10%;
+                    width: 9%;
                 }
 
-                .presupuesto-table thead th:nth-child(5),
-                .presupuesto-table thead th:nth-child(6) {
-                    width: 18%;
+                .presupuesto-table thead th:nth-child(5) {
+                    width: 9%;
+                }
+
+                .presupuesto-table thead th:nth-child(6),
+                .presupuesto-table thead th:nth-child(7) {
+                    width: 17%;
                     text-align: right;
                     padding-right: 1mm;
                 }
@@ -536,39 +540,41 @@
 
                 .presupuesto-table tbody td.concepto-num {
                     overflow: visible;
-                    width: 11%;
+                    width: 5%;
                 }
 
-                .concepto-clave {
-                    display: block;
-                    margin-top: 0.3mm;
+                .presupuesto-table tbody td.concepto-clave {
+                    width: 12%;
+                    text-align: center;
                     font-size: 5.5pt;
-                    font-weight: 500;
+                    font-weight: 600;
                     line-height: 1.15;
+                    word-wrap: break-word;
+                    color: #5f6f89;
                 }
 
-                .presupuesto-table tbody td:nth-child(2) {
+                .presupuesto-table tbody td:nth-child(3) {
                     text-align: left;
                     color: #2c3e50;
                     padding-left: 1.5mm;
                     word-wrap: break-word;
                 }
 
-                .presupuesto-table tbody td:nth-child(3),
-                .presupuesto-table tbody td:nth-child(4) {
+                .presupuesto-table tbody td:nth-child(4),
+                .presupuesto-table tbody td:nth-child(5) {
                     text-align: center;
                     color: #5f6f89;
                     text-transform: uppercase;
                 }
 
-                .presupuesto-table tbody td:nth-child(5),
-                .presupuesto-table tbody td:nth-child(6) {
+                .presupuesto-table tbody td:nth-child(6),
+                .presupuesto-table tbody td:nth-child(7) {
                     text-align: right;
                     color: #2c3e50;
                     padding-right: 1mm;
                 }
 
-                .presupuesto-table tbody td:nth-child(6) {
+                .presupuesto-table tbody td:nth-child(7) {
                     font-weight: 600;
                 }
 
@@ -616,6 +622,13 @@
                     font-weight: 600;
                 }
 
+                .presupuesto-table tbody tr.linea-parrafo td.concepto-clave {
+                    text-align: center;
+                    font-weight: 600;
+                    width: 12%;
+                    color: #5f6f89;
+                }
+
                 .presupuesto-table tbody tr.linea-con-imagen {
                     height: 18mm;
                 }
@@ -635,7 +648,8 @@
                     vertical-align: top;
                 }
 
-                .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num {
+                .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num,
+                .presupuesto-table tbody tr.concepto-matriz-desglose-tr > td.concepto-clave {
                     border-right: 1px solid #e9ecef;
                 }
 
@@ -1354,7 +1368,7 @@
                                     @endforeach
                                 @else
                                     <tr>
-                                        <td colspan="6" class="no-conceptos">No hay conceptos registrados
+                                        <td colspan="7" class="no-conceptos">No hay conceptos registrados
                                         </td>
                                     </tr>
                                 @endif

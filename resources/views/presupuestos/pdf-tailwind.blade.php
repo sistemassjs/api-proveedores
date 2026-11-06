@@ -491,13 +491,13 @@
         vertical-align: middle;
     }
 
-    .tw-table thead th:nth-child(2) {
+    .tw-table thead th:nth-child(3) {
         text-align: left;
         padding-left: 1.5mm;
     }
 
-    .tw-table thead th:nth-child(5),
-    .tw-table thead th:nth-child(6) {
+    .tw-table thead th:nth-child(6),
+    .tw-table thead th:nth-child(7) {
         text-align: right;
         padding-right: 1mm;
     }
@@ -523,37 +523,39 @@
 
     .tw-table tbody td.concepto-num {
         overflow: visible;
-        width: 11%;
+        width: 5%;
     }
 
-    .concepto-clave {
-        display: block;
-        margin-top: 0.3mm;
+    .tw-table tbody td.concepto-clave {
+        width: 12%;
+        text-align: center;
         font-size: 5.5pt;
-        font-weight: 500;
+        font-weight: 600;
         line-height: 1.15;
+        word-wrap: break-word;
+        color: var(--text-secondary);
     }
 
-    .tw-table tbody td:nth-child(2) {
+    .tw-table tbody td:nth-child(3) {
         text-align: left;
         color: #111827;
         padding-left: 1.2mm;
     }
 
-    .tw-table tbody td:nth-child(3),
-    .tw-table tbody td:nth-child(4) {
+    .tw-table tbody td:nth-child(4),
+    .tw-table tbody td:nth-child(5) {
         text-align: center;
         color: var(--text-secondary);
         text-transform: uppercase;
     }
 
-    .tw-table tbody td:nth-child(5),
-    .tw-table tbody td:nth-child(6) {
+    .tw-table tbody td:nth-child(6),
+    .tw-table tbody td:nth-child(7) {
         text-align: right;
         color: var(--text-primary);
     }
 
-    .tw-table tbody td:nth-child(6) {
+    .tw-table tbody td:nth-child(7) {
         font-weight: 600;
     }
 
@@ -591,6 +593,12 @@
         font-weight: 600;
     }
 
+    .tw-table tbody tr.tw-linea-parrafo td.concepto-clave {
+        text-align: center;
+        font-weight: 600;
+        width: 12%;
+    }
+
     .tw-table tbody tr.tw-linea-parrafo td[colspan] {
         text-align: left;
         font-weight: 400;
@@ -615,7 +623,8 @@
         vertical-align: top;
     }
 
-    .tw-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num {
+    .tw-table tbody tr.concepto-matriz-desglose-tr > td.concepto-matriz-desglose-tr__num,
+    .tw-table tbody tr.concepto-matriz-desglose-tr > td.concepto-clave {
         border-right: 1px solid var(--border-default);
     }
 
@@ -1298,7 +1307,7 @@
                         @endforeach
                     @else
                         <tr>
-                            <td colspan="6" class="tw-no-rows">No hay conceptos registrados</td>
+                            <td colspan="7" class="tw-no-rows">No hay conceptos registrados</td>
                         </tr>
                     @endif
                 </tbody>    
