@@ -13,6 +13,7 @@ class PresupuestoPlantillaConceptoComponente extends BaseModel
         'orden',
         'categoria',
         'catalogo_concepto_id',
+        'presupuesto_cuadrilla_id',
         'clave_snapshot',
         'descripcion',
         'unidad',

@@ -23,6 +23,9 @@ class PresupuestoPlantillaConceptoComponenteResource extends JsonResource
             'orden' => (int) $this->orden,
             'categoria' => $this->categoria,
             'catalogo_concepto_id' => $this->catalogo_concepto_id,
+            'presupuesto_cuadrilla_id' => $this->presupuesto_cuadrilla_id !== null
+                ? (int) $this->presupuesto_cuadrilla_id
+                : null,
             'clave_snapshot' => $this->clave_snapshot,
             'descripcion' => $this->descripcion,
             'unidad' => $this->unidad,

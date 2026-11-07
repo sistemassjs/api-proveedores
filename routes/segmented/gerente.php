@@ -343,6 +343,15 @@ Route::prefix('proveedores')
                 Route::get('/', [ProveedorPresupuestoController::class, 'index']);
                 Route::post('/', [ProveedorPresupuestoController::class, 'store']);
                 Route::post('/generar-pdf', [ProveedorPresupuestoController::class, 'generarPdfDesdeFormulario']);
+                Route::prefix('{presupuesto}/cuadrillas')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\ProveedorPresupuestoCuadrillaController::class, 'index']);
+                    Route::post('/', [\App\Http\Controllers\ProveedorPresupuestoCuadrillaController::class, 'store']);
+                    Route::get('/{cuadrilla}', [\App\Http\Controllers\ProveedorPresupuestoCuadrillaController::class, 'show']);
+                    Route::put('/{cuadrilla}', [\App\Http\Controllers\ProveedorPresupuestoCuadrillaController::class, 'update']);
+                    Route::patch('/{cuadrilla}', [\App\Http\Controllers\ProveedorPresupuestoCuadrillaController::class, 'update']);
+                    Route::delete('/{cuadrilla}', [\App\Http\Controllers\ProveedorPresupuestoCuadrillaController::class, 'destroy']);
+                });
+
                 Route::prefix('{presupuesto}/anexos')->group(function () {
                     Route::get('/', [ProveedorPresupuestoAnexoController::class, 'index']);
                     Route::post('/bulk', [ProveedorPresupuestoAnexoController::class, 'storeBulk']);

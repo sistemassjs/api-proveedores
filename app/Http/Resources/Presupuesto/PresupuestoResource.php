@@ -209,6 +209,7 @@ class PresupuestoResource extends JsonResource
             'incluir_leyenda_atentamente' => (bool) ($this->incluir_leyenda_atentamente ?? true),
             'empresa_emisora_nombre_comercial' => $this->empresa_emisora_nombre_comercial,
             'conceptos' => PresupuestoConceptoResource::collection($this->whenLoaded('conceptos')),
+            'cuadrillas' => PresupuestoCuadrillaResource::collection($this->whenLoaded('cuadrillas')),
             'anexos' => PresupuestoAnexoResource::collection($this->whenLoaded('anexos')),
             'anexos_pdf' => PresupuestoAnexoPdfResource::collection($this->whenLoaded('anexosPdf')),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),

@@ -7,6 +7,7 @@ use App\Models\PresupuestoCatalogoConcepto;
 use App\Models\PresupuestoCatalogoConceptoComponente;
 use App\Models\PresupuestoConcepto;
 use App\Models\PresupuestoConceptoComponente;
+use App\Models\PresupuestoCuadrilla;
 use App\Models\PresupuestoPlantillaConcepto;
 use InvalidArgumentException;
 
@@ -57,12 +58,18 @@ class PresupuestoMatrizCalculoService
         int $proveedorId,
         ?int $padreCatalogoId = null,
         int $profundidad = 0,
-        ?array $indirectosGenerales = null
+        ?array $indirectosGenerales = null,
+        ?int $presupuestoId = null,
+        ?array $cuadrillasPorId = null
     ): array {
         if ($profundidad > 12) {
             throw new InvalidArgumentException(
                 'La matriz anidada supera el máximo de niveles permitido.'
             );
+        }
+
+        if ($cuadrillasPorId === null && $presupuestoId !== null && $presupuestoId > 0) {
+            $cuadrillasPorId = $this->mapaCuadrillasPresupuesto($presupuestoId);
         }
 
         $normalizados = [];
@@ -81,9 +88,53 @@ class PresupuestoMatrizCalculoService
                     $proveedorId,
                     null,
                     $profundidad + 1,
-                    $indirectosGenerales
+                    $indirectosGenerales,
+                    $presupuestoId,
+                    $cuadrillasPorId
                 )
                 : [];
+
+            $cuadrillaId = isset($row['presupuesto_cuadrilla_id']) && $row['presupuesto_cuadrilla_id'] !== ''
+                ? (int) $row['presupuesto_cuadrilla_id']
+                : 0;
+            if ($cuadrillaId > 0 && ! $tieneAnidados && is_array($cuadrillasPorId)) {
+                $cuadrilla = $cuadrillasPorId[$cuadrillaId] ?? null;
+                if (! $cuadrilla instanceof PresupuestoCuadrilla) {
+                    throw new InvalidArgumentException(
+                        'La cuadrilla indicada no pertenece a este presupuesto.'
+                    );
+                }
+                $cantidad = (float) ($row['cantidad'] ?? 1);
+                if ($cantidad < 0) {
+                    throw new InvalidArgumentException(
+                        'La cantidad del componente no puede ser negativa.'
+                    );
+                }
+                $precio = (float) $cuadrilla->costo_unitario;
+                $numeroClave++;
+                $claveCapturada = $this->normalizarClave($row['clave_snapshot'] ?? $row['clave'] ?? null);
+                $normalizados[] = [
+                    'orden' => (int) ($row['orden'] ?? $index),
+                    'categoria' => PresupuestoCatalogoConcepto::INSUMO_MANO_OBRA,
+                    'catalogo_concepto_componente_id' => null,
+                    'catalogo_concepto_id' => null,
+                    'presupuesto_cuadrilla_id' => (int) $cuadrilla->id,
+                    'clave_snapshot' => $claveCapturada
+                        ?? $this->normalizarClave($cuadrilla->clave)
+                        ?? (string) $numeroClave,
+                    'descripcion' => $cuadrilla->descripcionParaMatriz(),
+                    'unidad' => mb_substr(trim((string) $cuadrilla->unidad) ?: 'jor', 0, 50),
+                    'cantidad' => $cantidad,
+                    'precio_unitario' => $precio,
+                    'importe' => $this->calcularImporte($cantidad, $precio),
+                    'calculo' => self::CALCULO_CANTIDAD,
+                    'porcentaje' => null,
+                    'es_compuesto_ref' => false,
+                    'componentes_anidados' => [],
+                ];
+
+                continue;
+            }
 
             $refId = $row['catalogo_concepto_componente_id']
                 ?? $row['catalogo_concepto_id']
@@ -105,6 +156,7 @@ class PresupuestoMatrizCalculoService
                     'categoria' => $snapshot['categoria'],
                     'catalogo_concepto_componente_id' => $refId,
                     'catalogo_concepto_id' => $refId,
+                    'presupuesto_cuadrilla_id' => null,
                     'clave_snapshot' => $claveCapturada
                         ?? $this->normalizarClave($snapshot['clave'])
                         ?? (string) $numeroClave,
@@ -163,6 +215,7 @@ class PresupuestoMatrizCalculoService
                 'categoria' => $categoria,
                 'catalogo_concepto_componente_id' => null,
                 'catalogo_concepto_id' => null,
+                'presupuesto_cuadrilla_id' => null,
                 'clave_snapshot' => $clave,
                 'descripcion' => mb_substr($descripcion, 0, 500),
                 'unidad' => mb_substr($unidad, 0, 50),
@@ -177,6 +230,113 @@ class PresupuestoMatrizCalculoService
         }
 
         return $this->aplicarPorcentajesManoObra($normalizados);
+    }
+
+    /**
+     * @return array<int, PresupuestoCuadrilla>
+     */
+    public function mapaCuadrillasPresupuesto(int $presupuestoId): array
+    {
+        if ($presupuestoId <= 0) {
+            return [];
+        }
+
+        $mapa = [];
+        foreach (
+            PresupuestoCuadrilla::query()
+                ->where('presupuesto_id', $presupuestoId)
+                ->get() as $cuadrilla
+        ) {
+            $mapa[(int) $cuadrilla->id] = $cuadrilla;
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Si cambia el costo de una cuadrilla, las líneas de matriz que la usan vuelven a calcular el P.U.
+     */
+    public function propagarCostoCuadrillaEnPresupuesto(Presupuesto $presupuesto, int $cuadrillaId): void
+    {
+        $presupuesto->loadMissing(['conceptos.componentes']);
+        $generales = $this->normalizarPorcentajesIndirectos([
+            'indirecto_oficina_porcentaje' => $presupuesto->indirecto_oficina_porcentaje,
+            'indirecto_campo_porcentaje' => $presupuesto->indirecto_campo_porcentaje,
+            'indirecto_financiamiento_porcentaje' => $presupuesto->indirecto_financiamiento_porcentaje,
+            'indirecto_utilidad_porcentaje' => $presupuesto->indirecto_utilidad_porcentaje,
+            'indirecto_cargos_porcentaje' => $presupuesto->indirecto_cargos_porcentaje,
+            'indirecto_otros_porcentaje' => $presupuesto->indirecto_otros_porcentaje,
+        ]);
+
+        foreach ($presupuesto->conceptos as $concepto) {
+            if (! $concepto->tiene_matriz || $concepto->componentes->isEmpty()) {
+                continue;
+            }
+            $usaCuadrilla = $concepto->componentes->contains(
+                fn ($comp) => (int) ($comp->presupuesto_cuadrilla_id ?? 0) === $cuadrillaId
+                    || $this->anidadosUsanCuadrilla($comp->componentes_anidados, $cuadrillaId)
+            );
+            if (! $usaCuadrilla) {
+                continue;
+            }
+
+            $filas = $concepto->componentes->map(function ($comp) {
+                return array_merge([
+                    'orden' => (int) $comp->orden,
+                    'categoria' => $comp->categoria,
+                    'catalogo_concepto_id' => $comp->catalogo_concepto_id,
+                    'presupuesto_cuadrilla_id' => $comp->presupuesto_cuadrilla_id,
+                    'clave_snapshot' => $comp->clave_snapshot,
+                    'descripcion' => $comp->descripcion,
+                    'unidad' => $comp->unidad,
+                    'cantidad' => (float) $comp->cantidad,
+                    'precio_unitario' => (float) $comp->precio_unitario,
+                    'calculo' => $comp->calculo ?? self::CALCULO_CANTIDAD,
+                    'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
+                    'es_compuesto_ref' => (bool) ($comp->es_compuesto_ref ?? false),
+                    'componentes_anidados' => is_array($comp->componentes_anidados) ? $comp->componentes_anidados : [],
+                ], is_array($comp->indirectos) ? $comp->indirectos : []);
+            })->values()->all();
+
+            $this->sincronizarComponentesLinea(
+                $concepto,
+                $filas,
+                (int) $presupuesto->proveedor_id,
+                $this->resolverPorcentajesLinea([
+                    'indirectos_modo' => $concepto->indirectos_modo,
+                    'indirecto_oficina_porcentaje' => $concepto->indirecto_oficina_porcentaje,
+                    'indirecto_campo_porcentaje' => $concepto->indirecto_campo_porcentaje,
+                    'indirecto_financiamiento_porcentaje' => $concepto->indirecto_financiamiento_porcentaje,
+                    'indirecto_utilidad_porcentaje' => $concepto->indirecto_utilidad_porcentaje,
+                    'indirecto_cargos_porcentaje' => $concepto->indirecto_cargos_porcentaje,
+                    'indirecto_otros_porcentaje' => $concepto->indirecto_otros_porcentaje,
+                ], $presupuesto),
+                $generales
+            );
+        }
+
+        $presupuesto->recalcularDesdeConceptos();
+        $presupuesto->save();
+    }
+
+    private function anidadosUsanCuadrilla(mixed $anidados, int $cuadrillaId): bool
+    {
+        if (! is_array($anidados) || $anidados === []) {
+            return false;
+        }
+        foreach ($anidados as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if ((int) ($row['presupuesto_cuadrilla_id'] ?? 0) === $cuadrillaId) {
+                return true;
+            }
+            if ($this->anidadosUsanCuadrilla($row['componentes_anidados'] ?? null, $cuadrillaId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -293,7 +453,8 @@ class PresupuestoMatrizCalculoService
             $proveedorId,
             null,
             0,
-            $indirectosGenerales
+            $indirectosGenerales,
+            (int) $concepto->presupuesto_id
         );
 
         if ($normalizados === []) {
@@ -483,6 +644,198 @@ class PresupuestoMatrizCalculoService
             'precio_venta' => round($baseOtros + $otros, 2),
             'pct' => $pct,
         ];
+    }
+
+    /**
+     * Hojas de análisis opt-in (una por compuesto con flag), para anexar al PDF.
+     *
+     * @param  array<string, mixed>  $presupuesto
+     * @return list<array<string, mixed>>
+     */
+    public function hojasAnalisisPresupuesto(array $presupuesto): array
+    {
+        $hojas = [];
+        foreach (array_values($presupuesto['conceptos'] ?? []) as $index => $linea) {
+            if (! is_array($linea)) {
+                continue;
+            }
+            $hoja = $this->armarHojaAnalisisLinea($linea, $presupuesto, $index + 1);
+            if ($hoja !== null) {
+                $hojas[] = $hoja;
+            }
+        }
+
+        return $hojas;
+    }
+
+    /**
+     * Desglose tipo Opus/Charay de un compuesto: grupos, CD, sobrecostos, P.U., IVA y total.
+     *
+     * @param  array<string, mixed>  $linea
+     * @param  array<string, mixed>  $presupuesto
+     * @return array<string, mixed>|null
+     */
+    public function armarHojaAnalisisLinea(array $linea, array $presupuesto, int $numeroFallback = 1): ?array
+    {
+        if (! filter_var($linea['mostrar_hoja_analisis'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return null;
+        }
+        if (\App\Support\PresupuestoParrafoPdf::esLineaParrafo($linea)) {
+            return null;
+        }
+        $componentes = is_array($linea['componentes'] ?? null) ? $linea['componentes'] : [];
+        $tieneMatriz = filter_var($linea['tiene_matriz'] ?? false, FILTER_VALIDATE_BOOLEAN) && $componentes !== [];
+        if (! $tieneMatriz) {
+            return null;
+        }
+
+        $generales = $this->normalizarPorcentajesIndirectos([
+            'indirecto_oficina_porcentaje' => $presupuesto['indirecto_oficina_porcentaje'] ?? 0,
+            'indirecto_campo_porcentaje' => $presupuesto['indirecto_campo_porcentaje'] ?? 0,
+            'indirecto_financiamiento_porcentaje' => $presupuesto['indirecto_financiamiento_porcentaje'] ?? 0,
+            'indirecto_utilidad_porcentaje' => $presupuesto['indirecto_utilidad_porcentaje'] ?? 0,
+            'indirecto_cargos_porcentaje' => $presupuesto['indirecto_cargos_porcentaje'] ?? 0,
+            'indirecto_otros_porcentaje' => $presupuesto['indirecto_otros_porcentaje'] ?? 0,
+        ]);
+        $propio = ($linea['indirectos_modo'] ?? 'general') === 'propio';
+        $pct = $propio ? $this->normalizarPorcentajesIndirectos($linea) : $generales;
+
+        $gruposMap = [];
+        $ordenGrupos = [
+            'material',
+            'mano_obra',
+            'herramienta',
+            'equipo',
+            'auxiliar',
+            'flete',
+            'trabajo',
+            'producto',
+            'servicio',
+        ];
+        foreach ($componentes as $comp) {
+            if (! is_array($comp)) {
+                continue;
+            }
+            $unidad = mb_strtolower(trim((string) ($comp['unidad'] ?? '')));
+            if ($unidad === 'párrafo' || $unidad === 'parrafo') {
+                continue;
+            }
+            $categoria = strtolower(trim((string) ($comp['categoria'] ?? 'material')));
+            if ($categoria === '') {
+                $categoria = 'material';
+            }
+            if (! isset($gruposMap[$categoria])) {
+                $gruposMap[$categoria] = [
+                    'categoria' => $categoria,
+                    'etiqueta' => $this->etiquetaCategoriaHojaAnalisis($categoria),
+                    'filas' => [],
+                    'subtotal' => 0.0,
+                ];
+            }
+            $cantidad = (float) ($comp['cantidad'] ?? 0);
+            $precio = (float) ($comp['precio_unitario'] ?? 0);
+            $importe = isset($comp['importe']) && is_numeric($comp['importe'])
+                ? round((float) $comp['importe'], 4)
+                : round($cantidad * $precio, 4);
+            $esPorcentaje = ($comp['calculo'] ?? self::CALCULO_CANTIDAD) === self::CALCULO_PORCENTAJE_MO;
+            $gruposMap[$categoria]['filas'][] = [
+                'clave' => $comp['clave_snapshot'] ?? $comp['clave'] ?? null,
+                'descripcion' => (string) ($comp['descripcion'] ?? ''),
+                'unidad' => (string) ($comp['unidad'] ?? ''),
+                'cantidad' => $cantidad,
+                'precio_unitario' => $precio,
+                'importe' => $importe,
+                'calculo' => $esPorcentaje ? self::CALCULO_PORCENTAJE_MO : self::CALCULO_CANTIDAD,
+                'porcentaje' => $esPorcentaje && isset($comp['porcentaje'])
+                    ? (float) $comp['porcentaje']
+                    : null,
+            ];
+            $gruposMap[$categoria]['subtotal'] = round(
+                $gruposMap[$categoria]['subtotal'] + $importe,
+                2
+            );
+        }
+
+        $grupos = [];
+        foreach ($ordenGrupos as $cat) {
+            if (isset($gruposMap[$cat])) {
+                $grupos[] = $gruposMap[$cat];
+                unset($gruposMap[$cat]);
+            }
+        }
+        foreach ($gruposMap as $resto) {
+            $grupos[] = $resto;
+        }
+
+        $costoDirecto = $this->costoDirectoComponentes($componentes);
+        $desglose = $this->desgloseIndirectos($costoDirecto, $pct);
+        $precioUnitarioGuardado = round((float) ($linea['precio_unitario'] ?? 0), 2);
+        $delta = round($precioUnitarioGuardado - $desglose['precio_venta'], 2);
+        if (abs($delta) >= 0.01 && $precioUnitarioGuardado > 0) {
+            $desglose = $this->cuadrarDesgloseConVenta($desglose, $delta);
+        }
+
+        $cantidadLinea = (float) ($linea['cantidad'] ?? 1);
+        if ($cantidadLinea <= 0) {
+            $cantidadLinea = 1;
+        }
+        $precioUnitario = round((float) $desglose['precio_venta'], 2);
+        $importeLinea = round($precioUnitario * $cantidadLinea, 2);
+        $conIva = filter_var($presupuesto['con_iva'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $ivaPct = $conIva ? $this->acotarPorcentaje($presupuesto['iva_porcentaje'] ?? 0) : 0.0;
+        $ivaImporte = $conIva ? round($importeLinea * ($ivaPct / 100), 2) : 0.0;
+        $total = round($importeLinea + $ivaImporte, 2);
+        $sobrecostos = round(
+            $desglose['oficina'] + $desglose['campo'] + $desglose['financiamiento']
+            + $desglose['utilidad'] + $desglose['cargos'] + $desglose['otros'],
+            2
+        );
+
+        $clave = trim((string) ($linea['clave'] ?? ''));
+        if ($clave === '') {
+            $clave = (string) $numeroFallback;
+        }
+
+        return [
+            'clave' => $clave,
+            'descripcion' => (string) ($linea['descripcion'] ?? ''),
+            'unidad' => (string) ($linea['unidad'] ?? ''),
+            'cantidad' => $cantidadLinea,
+            'grupos' => $grupos,
+            'costo_directo' => $desglose['costo_directo'],
+            'sobrecostos' => [
+                'total' => $sobrecostos,
+                'oficina' => $desglose['oficina'],
+                'campo' => $desglose['campo'],
+                'financiamiento' => $desglose['financiamiento'],
+                'utilidad' => $desglose['utilidad'],
+                'cargos' => $desglose['cargos'],
+                'otros' => $desglose['otros'],
+                'pct' => $desglose['pct'],
+            ],
+            'precio_unitario' => $precioUnitario,
+            'importe' => $importeLinea,
+            'con_iva' => $conIva,
+            'iva_porcentaje' => $ivaPct,
+            'iva_importe' => $ivaImporte,
+            'total' => $total,
+        ];
+    }
+
+    private function etiquetaCategoriaHojaAnalisis(string $categoria): string
+    {
+        return match ($categoria) {
+            'material' => 'Materiales',
+            'mano_obra' => 'Mano de obra',
+            'herramienta' => 'Herramienta',
+            'equipo' => 'Equipo',
+            'auxiliar' => 'Auxiliares',
+            'flete' => 'Fletes',
+            'trabajo' => 'Trabajos',
+            'producto' => 'Productos',
+            'servicio' => 'Servicios',
+            default => ucfirst(str_replace('_', ' ', $categoria)),
+        };
     }
 
     /**
@@ -870,6 +1223,7 @@ class PresupuestoMatrizCalculoService
             'orden' => $row['orden'],
             'categoria' => $row['categoria'],
             'catalogo_concepto_id' => $row['catalogo_concepto_id'],
+            'presupuesto_cuadrilla_id' => $row['presupuesto_cuadrilla_id'] ?? null,
             'clave_snapshot' => $row['clave_snapshot'],
             'descripcion' => $row['descripcion'],
             'unidad' => $row['unidad'],

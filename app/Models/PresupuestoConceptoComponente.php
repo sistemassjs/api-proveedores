@@ -13,6 +13,7 @@ class PresupuestoConceptoComponente extends BaseModel
         'orden',
         'categoria',
         'catalogo_concepto_id',
+        'presupuesto_cuadrilla_id',
         'clave_snapshot',
         'descripcion',
         'unidad',
@@ -45,5 +46,10 @@ class PresupuestoConceptoComponente extends BaseModel
     public function catalogoConcepto(): BelongsTo
     {
         return $this->belongsTo(PresupuestoCatalogoConcepto::class, 'catalogo_concepto_id');
+    }
+
+    public function cuadrilla(): BelongsTo
+    {
+        return $this->belongsTo(PresupuestoCuadrilla::class, 'presupuesto_cuadrilla_id');
     }
 }

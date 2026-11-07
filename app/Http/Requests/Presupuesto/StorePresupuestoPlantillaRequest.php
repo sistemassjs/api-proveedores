@@ -77,6 +77,7 @@ class StorePresupuestoPlantillaRequest extends FormRequest
             'conceptos.*.imagen_base64' => ['nullable', 'string'],
             'conceptos.*.imagen_path' => ['nullable', 'string', 'max:255'],
             'conceptos.*.tiene_matriz' => ['nullable', 'boolean'],
+            'conceptos.*.mostrar_hoja_analisis' => ['nullable', 'boolean'],
             'conceptos.*.indirectos_modo' => ['nullable', 'string', 'in:general,propio'],
             'conceptos.*.indirecto_oficina_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'conceptos.*.indirecto_campo_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],

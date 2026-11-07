@@ -388,6 +388,9 @@ final class PresupuestoPdfDocumentConfig
         $observacionesLista = $presupuestoPayload['observaciones_enunciados'] ?? [];
         $anexosLista = $presupuestoPayload['anexos'] ?? [];
         $documentacionLista = $presupuestoPayload['documentacion_adjuntos'] ?? [];
+        $hojasAnalisis = is_array($presupuestoPayload['hojas_analisis'] ?? null)
+            ? $presupuestoPayload['hojas_analisis']
+            : [];
         $tituloAnexos = trim((string) ($presupuestoPayload['titulo_anexos'] ?? ''));
         if ($tituloAnexos === '') {
             $tituloAnexos = 'Anexos';
@@ -398,6 +401,7 @@ final class PresupuestoPdfDocumentConfig
             ? (int) ceil(count($anexosLista) / max(1, $this->anexosImagenesPorPagina()))
             : 0;
         $paginasDocumentacionPdf = $haySeccionDocumentacion ? count($documentacionLista) : 0;
+        $paginasHojasAnalisisPdf = count($hojasAnalisis);
 
         return [
             'margenMm' => $this->margenContenidoLateralMm(),
@@ -422,12 +426,14 @@ final class PresupuestoPdfDocumentConfig
             'anexosLista' => $anexosLista,
             'tituloAnexos' => $tituloAnexos,
             'documentacionLista' => $documentacionLista,
+            'hojasAnalisis' => $hojasAnalisis,
             'haySeccionAnexos' => $haySeccionAnexos,
             'haySeccionDocumentacion' => $haySeccionDocumentacion,
             'mostrarAtentamente' => PresupuestoPdf::debeMostrarBloqueAtentamenteDesdePayload($presupuestoPayload),
             'paginasAnexosPdf' => $paginasAnexosPdf,
             'paginasDocumentacionPdf' => $paginasDocumentacionPdf,
-            'paginasTrasSeccionPresupuesto' => $paginasAnexosPdf + $paginasDocumentacionPdf,
+            'paginasHojasAnalisisPdf' => $paginasHojasAnalisisPdf,
+            'paginasTrasSeccionPresupuesto' => $paginasAnexosPdf + $paginasDocumentacionPdf + $paginasHojasAnalisisPdf,
             'cierreAtentamente' => PresupuestoPdfLayout::calcularCierreAtentamente($presupuestoPayload, $this),
             'conceptosListaPdf' => array_values($presupuestoPayload['conceptos'] ?? []),
             'colorRowEven' => (string) ($this->themeService->getTheme($this->themeKey)['variables']['color-row-even'] ?? '#eff6ff'),

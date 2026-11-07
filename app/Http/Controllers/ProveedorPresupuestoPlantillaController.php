@@ -368,12 +368,16 @@ class ProveedorPresupuestoPlantillaController extends Controller
                 );
 
             $numeroFila = $numero++;
+            $mostrarHojaAnalisis = $tieneMatriz
+                && filter_var($fila['mostrar_hoja_analisis'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
             $concepto = PresupuestoPlantillaConcepto::create(array_merge([
                 'presupuesto_plantilla_id' => $plantilla->id,
                 'numero' => $numeroFila,
                 'clave' => $this->matrizCalculo->clavePartida($fila['clave'] ?? null, $numeroFila, $esParrafo),
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
+                'mostrar_hoja_analisis' => $mostrarHojaAnalisis,
                 'descripcion' => (string) ($fila['descripcion'] ?? ''),
                 'cantidad' => $esParrafo ? 0 : (float) ($fila['cantidad'] ?? 1),
                 'unidad' => $esParrafo ? '' : (string) ($fila['unidad'] ?? 'pieza'),

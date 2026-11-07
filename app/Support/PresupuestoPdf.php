@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Presupuesto;
 use App\Models\PresupuestoConcepto;
 use App\Models\Proveedor;
+use App\Services\Presupuesto\PresupuestoMatrizCalculoService;
 use App\Services\Presupuesto\PresupuestoThemeService;
 use BaconQrCode\Renderer\GDLibRenderer;
 use BaconQrCode\Writer;
@@ -127,6 +128,7 @@ final class PresupuestoPdf
                     'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
                     'clave' => $c->clave,
                     'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
+                    'mostrar_hoja_analisis' => (bool) ($c->mostrar_hoja_analisis ?? false),
                     'descripcion' => $c->descripcion,
                     'cantidad' => $c->cantidad,
                     'unidad' => $c->unidad,
@@ -149,6 +151,8 @@ final class PresupuestoPdf
                 } elseif ($c->tiene_matriz && $c->relationLoaded('componentes') && $c->componentes->isNotEmpty()) {
                     $fila['componentes'] = $c->componentes->map(static function ($comp) {
                         return [
+                            'categoria' => $comp->categoria,
+                            'clave_snapshot' => $comp->clave_snapshot,
                             'descripcion' => $comp->descripcion,
                             'unidad' => $comp->unidad,
                             'cantidad' => (float) $comp->cantidad,
@@ -171,6 +175,9 @@ final class PresupuestoPdf
             'qr_url' => $qrUrl,
             'pdf_theme' => $presupuesto->pdf_theme,
         ];
+
+        $datosPresupuesto['hojas_analisis'] = app(PresupuestoMatrizCalculoService::class)
+            ->hojasAnalisisPresupuesto($datosPresupuesto);
 
         $pdfDocument = PresupuestoPdfDocumentConfig::fromPresupuestoPayload($datosPresupuesto);
 

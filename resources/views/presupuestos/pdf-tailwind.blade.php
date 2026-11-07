@@ -899,6 +899,93 @@
         width: 100%;
     }
 
+    .tw-hoja-analisis {
+        width: 100%;
+        font-size: 8.5pt;
+        color: var(--text-body, #1e293b);
+    }
+
+    .tw-hoja-analisis__header {
+        margin-bottom: 2mm;
+        padding-bottom: 1.5mm;
+        border-bottom: 1.2px solid var(--border-strong, #334155);
+    }
+
+    .tw-hoja-analisis__title {
+        font-size: 11pt;
+        font-weight: 700;
+        margin: 0 0 1mm;
+        color: var(--text-heading, #0f172a);
+    }
+
+    .tw-hoja-analisis__meta {
+        font-size: 8pt;
+        color: var(--text-muted, #475569);
+    }
+
+    .tw-hoja-analisis__desc {
+        margin: 0 0 3mm;
+        font-size: 8pt;
+        line-height: 1.35;
+    }
+
+    .tw-hoja-analisis__table,
+    .tw-hoja-analisis__totales {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 3mm;
+        table-layout: fixed;
+    }
+
+    .tw-hoja-analisis__table th,
+    .tw-hoja-analisis__table td,
+    .tw-hoja-analisis__totales td {
+        padding: 1.1mm 1.2mm;
+        border-bottom: 0.4px solid var(--border-default, #e2e8f0);
+        vertical-align: top;
+    }
+
+    .tw-hoja-analisis__group {
+        text-align: left;
+        background: var(--surface-muted, #f1f5f9);
+        font-weight: 700;
+        font-size: 8pt;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .tw-hoja-analisis__table .col-clave { width: 14%; }
+    .tw-hoja-analisis__table .col-desc { width: 38%; }
+    .tw-hoja-analisis__table .col-cant { width: 12%; text-align: right; }
+    .tw-hoja-analisis__table .col-unidad { width: 10%; text-align: center; }
+    .tw-hoja-analisis__table .col-money,
+    .tw-hoja-analisis__totales .col-money {
+        width: 13%;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .tw-hoja-analisis__subtotal td {
+        font-weight: 700;
+        background: var(--surface-soft, #f8fafc);
+    }
+
+    .tw-hoja-analisis__totales td:first-child {
+        text-align: right;
+        padding-right: 4mm;
+    }
+
+    .tw-hoja-analisis__totales .pct {
+        color: var(--text-muted, #64748b);
+        font-size: 7.5pt;
+    }
+
+    .tw-hoja-analisis__pu td,
+    .tw-hoja-analisis__total td {
+        font-weight: 700;
+        border-top: 1px solid var(--border-strong, #94a3b8);
+    }
+
     .tw-anexos-header {
         margin-bottom: 2.5mm;
         padding-bottom: 1.5mm;
@@ -1418,6 +1505,16 @@
             @endif
         </div>
         </div>
+
+        @php
+            $monedaCodigoHojas = strtoupper((string) ($presupuesto['term_cond_moneda'] ?? 'MXN'));
+            $monedaPrefijoHojas = $monedaCodigoHojas === 'EUR' ? '€' : '$';
+        @endphp
+        @include('presupuestos.partials.presupuesto-pdf-hojas-analisis', [
+            'hojasAnalisis' => $hojasAnalisis ?? [],
+            'variant' => 'tailwind',
+            'monedaPrefijo' => $monedaPrefijoHojas,
+        ])
 
         @include('presupuestos.partials.presupuesto-pdf-seccion-anexos', [
             'anexosLista' => $anexosLista,

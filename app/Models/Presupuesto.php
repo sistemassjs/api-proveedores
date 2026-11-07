@@ -669,6 +669,7 @@ class Presupuesto extends BaseModel
             'proveedorReceptor',
             'user',
             'conceptos.componentes',
+            'cuadrillas',
             'anexos',
             'anexosPdf',
         ];
@@ -832,6 +833,14 @@ class Presupuesto extends BaseModel
     public function conceptos(): HasMany
     {
         return $this->hasMany(PresupuestoConcepto::class);
+    }
+
+    /**
+     * Cuadrillas de esta obra (mano de obra del proyecto).
+     */
+    public function cuadrillas(): HasMany
+    {
+        return $this->hasMany(PresupuestoCuadrilla::class)->orderBy('orden')->orderBy('id');
     }
 
     /**

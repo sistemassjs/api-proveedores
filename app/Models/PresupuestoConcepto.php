@@ -28,6 +28,7 @@ class PresupuestoConcepto extends BaseModel
         'clave',
         'tipo',
         'tiene_matriz',
+        'mostrar_hoja_analisis',
         'descripcion',
         'cantidad',
         'unidad',
@@ -47,6 +48,7 @@ class PresupuestoConcepto extends BaseModel
 
     protected $casts = [
         'tiene_matriz' => 'boolean',
+        'mostrar_hoja_analisis' => 'boolean',
         'cantidad' => 'decimal:4',
         'precio_unitario' => 'decimal:2',
         'precio_total' => 'decimal:2',

@@ -707,7 +707,7 @@ class ProveedorPresupuestoController extends Controller
                 return $this->error('El usuario autenticado no tiene acceso a la empresa en GestionPlus.', null, 403);
             }
 
-            $presupuesto->load(['conceptos.componentes', 'anexos', 'anexosPdf']);
+            $presupuesto->load(['conceptos.componentes', 'cuadrillas', 'anexos', 'anexosPdf']);
 
             $mantenerCliente = $this->boolFromRequest($request, 'mantener_cliente', true);
             $mantenerAnexosImagen = $this->boolFromRequest($request, 'mantener_anexos_imagen', true);
@@ -810,12 +810,49 @@ class ProveedorPresupuestoController extends Controller
                 $nuevo = Presupuesto::create($payload);
                 $nuevo->asegurarTokenPublico();
 
-                $conceptos = $presupuesto->conceptos->map(function (PresupuestoConcepto $c) {
+                $mapaCuadrillas = [];
+                foreach ($presupuesto->cuadrillas as $cuaOrigen) {
+                    $copia = $nuevo->cuadrillas()->create([
+                        'orden' => (int) $cuaOrigen->orden,
+                        'clave' => $cuaOrigen->clave,
+                        'nombre' => $cuaOrigen->nombre,
+                        'integrantes' => $cuaOrigen->integrantes,
+                        'unidad' => $cuaOrigen->unidad,
+                        'costo_unitario' => $cuaOrigen->costo_unitario,
+                    ]);
+                    $mapaCuadrillas[(int) $cuaOrigen->id] = (int) $copia->id;
+                }
+
+                $remapCuadrilla = static function (mixed $id) use ($mapaCuadrillas): ?int {
+                    $old = $id !== null && $id !== '' ? (int) $id : 0;
+                    if ($old <= 0) {
+                        return null;
+                    }
+
+                    return $mapaCuadrillas[$old] ?? null;
+                };
+                $remapAnidados = null;
+                $remapAnidados = static function (array $anidados) use (&$remapAnidados, $remapCuadrilla): array {
+                    return array_map(static function ($row) use (&$remapAnidados, $remapCuadrilla) {
+                        if (! is_array($row)) {
+                            return $row;
+                        }
+                        $row['presupuesto_cuadrilla_id'] = $remapCuadrilla($row['presupuesto_cuadrilla_id'] ?? null);
+                        if (is_array($row['componentes_anidados'] ?? null)) {
+                            $row['componentes_anidados'] = $remapAnidados($row['componentes_anidados']);
+                        }
+
+                        return $row;
+                    }, $anidados);
+                };
+
+                $conceptos = $presupuesto->conceptos->map(function (PresupuestoConcepto $c) use ($remapCuadrilla, $remapAnidados) {
                     $c->loadMissing('componentes');
                     $fila = [
                         'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
                         'clave' => $c->clave,
                         'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
+                        'mostrar_hoja_analisis' => (bool) ($c->mostrar_hoja_analisis ?? false),
                         'descripcion' => $c->descripcion,
                         'cantidad' => (float) $c->cantidad,
                         'unidad' => $c->unidad,
@@ -825,11 +862,14 @@ class ProveedorPresupuestoController extends Controller
                     ];
 
                     if ($c->tiene_matriz && $c->componentes->isNotEmpty()) {
-                        $fila['componentes'] = $c->componentes->map(static function ($comp) {
+                        $fila['componentes'] = $c->componentes->map(static function ($comp) use ($remapCuadrilla, $remapAnidados) {
+                            $anidados = is_array($comp->componentes_anidados) ? $comp->componentes_anidados : [];
+
                             return array_merge([
                                 'orden' => (int) $comp->orden,
                                 'categoria' => $comp->categoria,
                                 'catalogo_concepto_id' => $comp->catalogo_concepto_id,
+                                'presupuesto_cuadrilla_id' => $remapCuadrilla($comp->presupuesto_cuadrilla_id),
                                 'clave_snapshot' => $comp->clave_snapshot,
                                 'descripcion' => $comp->descripcion,
                                 'unidad' => $comp->unidad,
@@ -838,7 +878,7 @@ class ProveedorPresupuestoController extends Controller
                                 'calculo' => $comp->calculo ?? 'cantidad',
                                 'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
                                 'es_compuesto_ref' => (bool) ($comp->es_compuesto_ref ?? false),
-                                'componentes_anidados' => is_array($comp->componentes_anidados) ? $comp->componentes_anidados : [],
+                                'componentes_anidados' => $remapAnidados($anidados),
                             ], is_array($comp->indirectos) ? $comp->indirectos : []);
                         })->values()->all();
                     }
@@ -1695,6 +1735,9 @@ class ProveedorPresupuestoController extends Controller
                     || (is_array($componentes) && count($componentes) > 0)
                 );
 
+            $mostrarHojaAnalisis = $tieneMatriz
+                && filter_var($conceptoData['mostrar_hoja_analisis'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
             $concepto = new PresupuestoConcepto(array_merge([
                 'numero' => $index + 1,
                 'clave' => $this->matrizCalculo->clavePartida(
@@ -1704,6 +1747,7 @@ class ProveedorPresupuestoController extends Controller
                 ),
                 'tipo' => $tipo,
                 'tiene_matriz' => $tieneMatriz,
+                'mostrar_hoja_analisis' => $mostrarHojaAnalisis,
                 'descripcion' => $conceptoData['descripcion'],
                 'cantidad' => $conceptoData['cantidad'],
                 'unidad' => $conceptoData['unidad'],
@@ -2266,11 +2310,31 @@ class ProveedorPresupuestoController extends Controller
                     'tipo' => $concepto->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
                     'clave' => $concepto->clave,
                     'tiene_matriz' => (bool) ($concepto->tiene_matriz ?? false),
+                    'mostrar_hoja_analisis' => (bool) ($concepto->mostrar_hoja_analisis ?? false),
                     'descripcion' => $concepto->descripcion,
                     'cantidad' => $concepto->cantidad,
                     'unidad' => $concepto->unidad,
                     'precio_unitario' => $concepto->precio_unitario,
                     'precio_total' => $concepto->precio_total,
+                    'indirectos_modo' => ($concepto->indirectos_modo ?? 'general') === 'propio' ? 'propio' : 'general',
+                    'indirecto_oficina_porcentaje' => $concepto->indirecto_oficina_porcentaje !== null
+                        ? (float) $concepto->indirecto_oficina_porcentaje
+                        : null,
+                    'indirecto_campo_porcentaje' => $concepto->indirecto_campo_porcentaje !== null
+                        ? (float) $concepto->indirecto_campo_porcentaje
+                        : null,
+                    'indirecto_financiamiento_porcentaje' => $concepto->indirecto_financiamiento_porcentaje !== null
+                        ? (float) $concepto->indirecto_financiamiento_porcentaje
+                        : null,
+                    'indirecto_utilidad_porcentaje' => $concepto->indirecto_utilidad_porcentaje !== null
+                        ? (float) $concepto->indirecto_utilidad_porcentaje
+                        : null,
+                    'indirecto_cargos_porcentaje' => $concepto->indirecto_cargos_porcentaje !== null
+                        ? (float) $concepto->indirecto_cargos_porcentaje
+                        : null,
+                    'indirecto_otros_porcentaje' => $concepto->indirecto_otros_porcentaje !== null
+                        ? (float) $concepto->indirecto_otros_porcentaje
+                        : null,
                     'proveedor_nombre' => $concepto->proveedor_nombre,
                     'proveedor_logo_url' => $concepto->proveedor_logo_url,
                     'componentes' => [],
@@ -2278,6 +2342,8 @@ class ProveedorPresupuestoController extends Controller
                 if ($concepto->tiene_matriz && $concepto->relationLoaded('componentes') && $concepto->componentes->isNotEmpty()) {
                     $fila['componentes'] = $concepto->componentes->map(static function ($comp) {
                         return [
+                            'categoria' => $comp->categoria,
+                            'clave_snapshot' => $comp->clave_snapshot,
                             'descripcion' => $comp->descripcion,
                             'unidad' => $comp->unidad,
                             'cantidad' => (float) $comp->cantidad,
