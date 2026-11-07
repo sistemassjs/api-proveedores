@@ -179,7 +179,9 @@ class PresupuestoPlantillaAplicarService
                 'indirecto_oficina_porcentaje' => $linea->indirecto_oficina_porcentaje,
                 'indirecto_campo_porcentaje' => $linea->indirecto_campo_porcentaje,
                 'indirecto_utilidad_porcentaje' => $linea->indirecto_utilidad_porcentaje,
+                'indirecto_financiamiento_porcentaje' => $linea->indirecto_financiamiento_porcentaje,
                 'indirecto_cargos_porcentaje' => $linea->indirecto_cargos_porcentaje,
+                'indirecto_otros_porcentaje' => $linea->indirecto_otros_porcentaje,
             ];
             $numeroFila = $numero++;
             $concepto = new PresupuestoConcepto(array_merge([

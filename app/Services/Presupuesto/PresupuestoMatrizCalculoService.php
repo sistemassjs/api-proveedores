@@ -279,7 +279,7 @@ class PresupuestoMatrizCalculoService
      * @param  list<array<string, mixed>>  $componentes
      */
     /**
-     * @param  array{oficina: float, campo: float, utilidad: float, cargos: float}|null  $indirectos
+     * @param  array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}|null  $indirectos
      */
     public function sincronizarComponentesLinea(
         PresupuestoConcepto $concepto,
@@ -441,7 +441,7 @@ class PresupuestoMatrizCalculoService
     /**
      * Pie de precio. Cada importe se redondea a 2 decimales (hoja P1.6).
      *
-     * @param  array{oficina?: float|int|string, campo?: float|int|string, utilidad?: float|int|string, cargos?: float|int|string}  $porcentajes
+     * @param  array{oficina?: float|int|string, campo?: float|int|string, financiamiento?: float|int|string, utilidad?: float|int|string, cargos?: float|int|string, otros?: float|int|string}  $porcentajes
      */
     public function precioConIndirectos(float|string $costoDirecto, array $porcentajes): float
     {
@@ -450,9 +450,12 @@ class PresupuestoMatrizCalculoService
 
     /**
      * Cadena Opus de una base (costo directo ya extendido por la cantidad de la línea).
+     * Oficina y campo salen del costo directo. Financiamiento, de esa suma.
+     * Utilidad, de la suma ya con financiamiento. Cargos, del precio con utilidad.
+     * Otros, del precio ya con cargos.
      *
-     * @param  array{oficina?: float|int|string, campo?: float|int|string, utilidad?: float|int|string, cargos?: float|int|string}  $porcentajes
-     * @return array{costo_directo: float, oficina: float, campo: float, utilidad: float, cargos: float, precio_venta: float, pct: array{oficina: float, campo: float, utilidad: float, cargos: float}}
+     * @param  array{oficina?: float|int|string, campo?: float|int|string, financiamiento?: float|int|string, utilidad?: float|int|string, cargos?: float|int|string, otros?: float|int|string}  $porcentajes
+     * @return array{costo_directo: float, oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float, precio_venta: float, pct: array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}}
      */
     public function desgloseIndirectos(float|string $costoDirecto, array $porcentajes): array
     {
@@ -460,18 +463,24 @@ class PresupuestoMatrizCalculoService
         $cd = round((float) $costoDirecto, 2);
         $oficina = round($cd * ($pct['oficina'] / 100), 2);
         $campo = round($cd * ($pct['campo'] / 100), 2);
-        $base = round($cd + $oficina + $campo, 2);
-        $utilidad = round($base * ($pct['utilidad'] / 100), 2);
-        $base2 = round($base + $utilidad, 2);
-        $cargos = round($base2 * ($pct['cargos'] / 100), 2);
+        $baseIndirectos = round($cd + $oficina + $campo, 2);
+        $financiamiento = round($baseIndirectos * ($pct['financiamiento'] / 100), 2);
+        $baseUtilidad = round($baseIndirectos + $financiamiento, 2);
+        $utilidad = round($baseUtilidad * ($pct['utilidad'] / 100), 2);
+        $baseCargos = round($baseUtilidad + $utilidad, 2);
+        $cargos = round($baseCargos * ($pct['cargos'] / 100), 2);
+        $baseOtros = round($baseCargos + $cargos, 2);
+        $otros = round($baseOtros * ($pct['otros'] / 100), 2);
 
         return [
             'costo_directo' => $cd,
             'oficina' => $oficina,
             'campo' => $campo,
+            'financiamiento' => $financiamiento,
             'utilidad' => $utilidad,
             'cargos' => $cargos,
-            'precio_venta' => round($base2 + $cargos, 2),
+            'otros' => $otros,
+            'precio_venta' => round($baseOtros + $otros, 2),
             'pct' => $pct,
         ];
     }
@@ -488,14 +497,18 @@ class PresupuestoMatrizCalculoService
         $generales = $this->normalizarPorcentajesIndirectos([
             'indirecto_oficina_porcentaje' => $presupuesto['indirecto_oficina_porcentaje'] ?? 0,
             'indirecto_campo_porcentaje' => $presupuesto['indirecto_campo_porcentaje'] ?? 0,
+            'indirecto_financiamiento_porcentaje' => $presupuesto['indirecto_financiamiento_porcentaje'] ?? 0,
             'indirecto_utilidad_porcentaje' => $presupuesto['indirecto_utilidad_porcentaje'] ?? 0,
             'indirecto_cargos_porcentaje' => $presupuesto['indirecto_cargos_porcentaje'] ?? 0,
+            'indirecto_otros_porcentaje' => $presupuesto['indirecto_otros_porcentaje'] ?? 0,
         ]);
         $costoDirecto = 0.0;
         $oficina = 0.0;
         $campo = 0.0;
+        $financiamiento = 0.0;
         $utilidad = 0.0;
         $cargos = 0.0;
+        $otros = 0.0;
         $firmas = [];
 
         foreach (array_values($presupuesto['conceptos'] ?? []) as $linea) {
@@ -524,28 +537,40 @@ class PresupuestoMatrizCalculoService
             $costoDirecto += $desglose['costo_directo'];
             $oficina += $desglose['oficina'];
             $campo += $desglose['campo'];
+            $financiamiento += $desglose['financiamiento'];
             $utilidad += $desglose['utilidad'];
             $cargos += $desglose['cargos'];
-            if (($desglose['oficina'] + $desglose['campo'] + $desglose['utilidad'] + $desglose['cargos']) > 0.004) {
-                $firmas[] = $pct['oficina'].'|'.$pct['campo'].'|'.$pct['utilidad'].'|'.$pct['cargos'];
+            $otros += $desglose['otros'];
+            $sumaPie = $desglose['oficina'] + $desglose['campo'] + $desglose['financiamiento']
+                + $desglose['utilidad'] + $desglose['cargos'] + $desglose['otros'];
+            if ($sumaPie > 0.004) {
+                $firmas[] = $pct['oficina'].'|'.$pct['campo'].'|'.$pct['financiamiento'].'|'
+                    .$pct['utilidad'].'|'.$pct['cargos'].'|'.$pct['otros'];
             }
         }
 
         $oficina = round($oficina, 2);
         $campo = round($campo, 2);
+        $financiamiento = round($financiamiento, 2);
         $utilidad = round($utilidad, 2);
         $cargos = round($cargos, 2);
-        $hayPorcentajeGeneral = ($generales['oficina'] + $generales['campo'] + $generales['utilidad'] + $generales['cargos']) >= 0.01;
-        if (($oficina + $campo + $utilidad + $cargos) < 0.01 && ! $hayPorcentajeGeneral) {
+        $otros = round($otros, 2);
+        $sumaImportes = $oficina + $campo + $financiamiento + $utilidad + $cargos + $otros;
+        $sumaGenerales = $generales['oficina'] + $generales['campo'] + $generales['financiamiento']
+            + $generales['utilidad'] + $generales['cargos'] + $generales['otros'];
+        $hayPorcentajeGeneral = $sumaGenerales >= 0.01;
+        if ($sumaImportes < 0.01 && ! $hayPorcentajeGeneral) {
             return [];
         }
-        if (($oficina + $campo + $utilidad + $cargos) < 0.01 && $hayPorcentajeGeneral) {
+        if ($sumaImportes < 0.01 && $hayPorcentajeGeneral) {
             $filasCero = [$this->filaIndirectoDocumento('Costo directo', round($costoDirecto, 2), null)];
             foreach ([
                 'Oficina' => 'oficina',
                 'Campo' => 'campo',
+                'Financiamiento' => 'financiamiento',
                 'Utilidad' => 'utilidad',
                 'Cargos' => 'cargos',
+                'Otros' => 'otros',
             ] as $nombre => $clave) {
                 if ($generales[$clave] >= 0.01) {
                     $filasCero[] = $this->filaIndirectoDocumento($nombre, 0.0, $generales[$clave]);
@@ -555,12 +580,17 @@ class PresupuestoMatrizCalculoService
             return $filasCero;
         }
 
-        $pctUnico = count($firmas) > 0 && count(array_unique($firmas)) === 1
+        $partesFirma = count($firmas) > 0 && count(array_unique($firmas)) === 1
+            ? explode('|', $firmas[0])
+            : null;
+        $pctUnico = is_array($partesFirma) && count($partesFirma) === 6
             ? $this->normalizarPorcentajesIndirectos([
-                'oficina' => (float) explode('|', $firmas[0])[0],
-                'campo' => (float) explode('|', $firmas[0])[1],
-                'utilidad' => (float) explode('|', $firmas[0])[2],
-                'cargos' => (float) explode('|', $firmas[0])[3],
+                'oficina' => (float) $partesFirma[0],
+                'campo' => (float) $partesFirma[1],
+                'financiamiento' => (float) $partesFirma[2],
+                'utilidad' => (float) $partesFirma[3],
+                'cargos' => (float) $partesFirma[4],
+                'otros' => (float) $partesFirma[5],
             ])
             : null;
         if ($pctUnico === null && $firmas === [] && $hayPorcentajeGeneral) {
@@ -571,8 +601,10 @@ class PresupuestoMatrizCalculoService
         foreach ([
             ['Oficina', 'oficina', $oficina],
             ['Campo', 'campo', $campo],
+            ['Financiamiento', 'financiamiento', $financiamiento],
             ['Utilidad', 'utilidad', $utilidad],
             ['Cargos', 'cargos', $cargos],
+            ['Otros', 'otros', $otros],
         ] as [$nombre, $clave, $importe]) {
             $pct = $pctUnico === null ? null : $pctUnico[$clave];
             if ($importe < 0.01 && ($pct === null || $pct < 0.01)) {
@@ -607,12 +639,12 @@ class PresupuestoMatrizCalculoService
     }
 
     /**
-     * @param  array{costo_directo: float, oficina: float, campo: float, utilidad: float, cargos: float, precio_venta: float, pct: array{oficina: float, campo: float, utilidad: float, cargos: float}}  $desglose
-     * @return array{costo_directo: float, oficina: float, campo: float, utilidad: float, cargos: float, precio_venta: float, pct: array{oficina: float, campo: float, utilidad: float, cargos: float}}
+     * @param  array{costo_directo: float, oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float, precio_venta: float, pct: array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}}  $desglose
+     * @return array{costo_directo: float, oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float, precio_venta: float, pct: array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}}
      */
     private function cuadrarDesgloseConVenta(array $desglose, float $delta): array
     {
-        foreach (['cargos', 'utilidad', 'campo', 'oficina', 'costo_directo'] as $clave) {
+        foreach (['otros', 'cargos', 'utilidad', 'financiamiento', 'campo', 'oficina', 'costo_directo'] as $clave) {
             if (abs($desglose[$clave]) >= 0.01 || $clave === 'costo_directo') {
                 $desglose[$clave] = round($desglose[$clave] + $delta, 2);
                 break;
@@ -637,15 +669,17 @@ class PresupuestoMatrizCalculoService
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{oficina: float, campo: float, utilidad: float, cargos: float}
+     * @return array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}
      */
     public function normalizarPorcentajesIndirectos(array $data): array
     {
         return [
             'oficina' => $this->acotarPorcentaje($data['oficina'] ?? $data['indirecto_oficina_porcentaje'] ?? 0),
             'campo' => $this->acotarPorcentaje($data['campo'] ?? $data['indirecto_campo_porcentaje'] ?? 0),
+            'financiamiento' => $this->acotarPorcentaje($data['financiamiento'] ?? $data['indirecto_financiamiento_porcentaje'] ?? 0),
             'utilidad' => $this->acotarPorcentaje($data['utilidad'] ?? $data['indirecto_utilidad_porcentaje'] ?? 0),
             'cargos' => $this->acotarPorcentaje($data['cargos'] ?? $data['indirecto_cargos_porcentaje'] ?? 0),
+            'otros' => $this->acotarPorcentaje($data['otros'] ?? $data['indirecto_otros_porcentaje'] ?? 0),
         ];
     }
 
@@ -653,7 +687,7 @@ class PresupuestoMatrizCalculoService
      * Columnas de override. Modo general deja los porcentajes en null.
      *
      * @param  array<string, mixed>  $data
-     * @return array{indirectos_modo: string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float}
+     * @return array{indirectos_modo: string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_financiamiento_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float, indirecto_otros_porcentaje: ?float}
      */
     public function columnasIndirectosPropios(array $data): array
     {
@@ -663,8 +697,10 @@ class PresupuestoMatrizCalculoService
                 'indirectos_modo' => 'general',
                 'indirecto_oficina_porcentaje' => null,
                 'indirecto_campo_porcentaje' => null,
+                'indirecto_financiamiento_porcentaje' => null,
                 'indirecto_utilidad_porcentaje' => null,
                 'indirecto_cargos_porcentaje' => null,
+                'indirecto_otros_porcentaje' => null,
             ];
         }
 
@@ -674,8 +710,10 @@ class PresupuestoMatrizCalculoService
             'indirectos_modo' => 'propio',
             'indirecto_oficina_porcentaje' => $pct['oficina'],
             'indirecto_campo_porcentaje' => $pct['campo'],
+            'indirecto_financiamiento_porcentaje' => $pct['financiamiento'],
             'indirecto_utilidad_porcentaje' => $pct['utilidad'],
             'indirecto_cargos_porcentaje' => $pct['cargos'],
+            'indirecto_otros_porcentaje' => $pct['otros'],
         ];
     }
 
@@ -683,7 +721,7 @@ class PresupuestoMatrizCalculoService
      * Porcentajes que aplican a una línea: los propios, o los generales del presupuesto.
      *
      * @param  array<string, mixed>  $data
-     * @return array{oficina: float, campo: float, utilidad: float, cargos: float}
+     * @return array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}
      */
     public function resolverPorcentajesLinea(array $data, Presupuesto $presupuesto): array
     {
@@ -695,8 +733,10 @@ class PresupuestoMatrizCalculoService
         return $this->normalizarPorcentajesIndirectos([
             'indirecto_oficina_porcentaje' => $presupuesto->indirecto_oficina_porcentaje,
             'indirecto_campo_porcentaje' => $presupuesto->indirecto_campo_porcentaje,
+            'indirecto_financiamiento_porcentaje' => $presupuesto->indirecto_financiamiento_porcentaje,
             'indirecto_utilidad_porcentaje' => $presupuesto->indirecto_utilidad_porcentaje,
             'indirecto_cargos_porcentaje' => $presupuesto->indirecto_cargos_porcentaje,
+            'indirecto_otros_porcentaje' => $presupuesto->indirecto_otros_porcentaje,
         ]);
     }
 
@@ -715,11 +755,17 @@ class PresupuestoMatrizCalculoService
             'indirecto_campo_porcentaje' => $model->indirecto_campo_porcentaje !== null
                 ? (float) $model->indirecto_campo_porcentaje
                 : null,
+            'indirecto_financiamiento_porcentaje' => $model->indirecto_financiamiento_porcentaje !== null
+                ? (float) $model->indirecto_financiamiento_porcentaje
+                : null,
             'indirecto_utilidad_porcentaje' => $model->indirecto_utilidad_porcentaje !== null
                 ? (float) $model->indirecto_utilidad_porcentaje
                 : null,
             'indirecto_cargos_porcentaje' => $model->indirecto_cargos_porcentaje !== null
                 ? (float) $model->indirecto_cargos_porcentaje
+                : null,
+            'indirecto_otros_porcentaje' => $model->indirecto_otros_porcentaje !== null
+                ? (float) $model->indirecto_otros_porcentaje
                 : null,
         ];
     }
@@ -844,7 +890,7 @@ class PresupuestoMatrizCalculoService
      * Márgenes propios de un compuesto anidado. Null conserva el costo directo (datos viejos).
      *
      * @param  array<string, mixed>  $row
-     * @return array{indirectos_modo: string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float}|null
+     * @return array{indirectos_modo: string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_financiamiento_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float, indirecto_otros_porcentaje: ?float}|null
      */
     public function indirectosPersistibles(array $row): ?array
     {
@@ -857,8 +903,10 @@ class PresupuestoMatrizCalculoService
                 'indirectos_modo' => 'general',
                 'indirecto_oficina_porcentaje' => null,
                 'indirecto_campo_porcentaje' => null,
+                'indirecto_financiamiento_porcentaje' => null,
                 'indirecto_utilidad_porcentaje' => null,
                 'indirecto_cargos_porcentaje' => null,
+                'indirecto_otros_porcentaje' => null,
             ];
         }
 
@@ -868,13 +916,15 @@ class PresupuestoMatrizCalculoService
             'indirectos_modo' => 'propio',
             'indirecto_oficina_porcentaje' => $pct['oficina'],
             'indirecto_campo_porcentaje' => $pct['campo'],
+            'indirecto_financiamiento_porcentaje' => $pct['financiamiento'],
             'indirecto_utilidad_porcentaje' => $pct['utilidad'],
             'indirecto_cargos_porcentaje' => $pct['cargos'],
+            'indirecto_otros_porcentaje' => $pct['otros'],
         ];
     }
 
     /**
-     * @return array{indirectos_modo: ?string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float}
+     * @return array{indirectos_modo: ?string, indirecto_oficina_porcentaje: ?float, indirecto_campo_porcentaje: ?float, indirecto_financiamiento_porcentaje: ?float, indirecto_utilidad_porcentaje: ?float, indirecto_cargos_porcentaje: ?float, indirecto_otros_porcentaje: ?float}
      */
     public function indirectosComponenteParaRecurso(mixed $indirectos): array
     {
@@ -885,14 +935,16 @@ class PresupuestoMatrizCalculoService
             'indirectos_modo' => null,
             'indirecto_oficina_porcentaje' => null,
             'indirecto_campo_porcentaje' => null,
+            'indirecto_financiamiento_porcentaje' => null,
             'indirecto_utilidad_porcentaje' => null,
             'indirecto_cargos_porcentaje' => null,
+            'indirecto_otros_porcentaje' => null,
         ];
     }
 
     /**
      * @param  array<string, mixed>  $row
-     * @param  array{oficina: float, campo: float, utilidad: float, cargos: float}|null  $generales
+     * @param  array{oficina: float, campo: float, financiamiento: float, utilidad: float, cargos: float, otros: float}|null  $generales
      */
     private function precioDeCompuestoAnidado(float $costoDirecto, array $row, ?array $generales): float
     {

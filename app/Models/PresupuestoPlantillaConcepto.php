@@ -29,6 +29,8 @@ class PresupuestoPlantillaConcepto extends BaseModel
         'indirecto_campo_porcentaje',
         'indirecto_utilidad_porcentaje',
         'indirecto_cargos_porcentaje',
+        'indirecto_financiamiento_porcentaje',
+        'indirecto_otros_porcentaje',
     ];
 
     protected $casts = [
@@ -40,6 +42,8 @@ class PresupuestoPlantillaConcepto extends BaseModel
         'indirecto_campo_porcentaje' => 'decimal:4',
         'indirecto_utilidad_porcentaje' => 'decimal:4',
         'indirecto_cargos_porcentaje' => 'decimal:4',
+        'indirecto_financiamiento_porcentaje' => 'decimal:4',
+        'indirecto_otros_porcentaje' => 'decimal:4',
     ];
 
     public function plantilla(): BelongsTo

@@ -79,7 +79,9 @@ class PresupuestoResource extends JsonResource
             'indirecto_oficina_porcentaje' => (float) ($this->indirecto_oficina_porcentaje ?? 0),
             'indirecto_campo_porcentaje' => (float) ($this->indirecto_campo_porcentaje ?? 0),
             'indirecto_utilidad_porcentaje' => (float) ($this->indirecto_utilidad_porcentaje ?? 0),
+            'indirecto_financiamiento_porcentaje' => (float) ($this->indirecto_financiamiento_porcentaje ?? 0),
             'indirecto_cargos_porcentaje' => (float) ($this->indirecto_cargos_porcentaje ?? 0),
+            'indirecto_otros_porcentaje' => (float) ($this->indirecto_otros_porcentaje ?? 0),
 
             // terminos y condiciones 
             'term_cond_dias_vigencia' => $this->term_cond_dias_vigencia,

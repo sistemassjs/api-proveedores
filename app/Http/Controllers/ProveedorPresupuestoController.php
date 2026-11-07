@@ -750,7 +750,9 @@ class ProveedorPresupuestoController extends Controller
                     'indirecto_oficina_porcentaje',
                     'indirecto_campo_porcentaje',
                     'indirecto_utilidad_porcentaje',
+                    'indirecto_financiamiento_porcentaje',
                     'indirecto_cargos_porcentaje',
+                    'indirecto_otros_porcentaje',
                     'pdf_theme',
                     'ppto_config',
                     'incluir_leyenda_atentamente',
@@ -1723,7 +1725,9 @@ class ProveedorPresupuestoController extends Controller
                         'indirecto_oficina_porcentaje' => $presupuesto->indirecto_oficina_porcentaje,
                         'indirecto_campo_porcentaje' => $presupuesto->indirecto_campo_porcentaje,
                         'indirecto_utilidad_porcentaje' => $presupuesto->indirecto_utilidad_porcentaje,
+                        'indirecto_financiamiento_porcentaje' => $presupuesto->indirecto_financiamiento_porcentaje,
                         'indirecto_cargos_porcentaje' => $presupuesto->indirecto_cargos_porcentaje,
+                        'indirecto_otros_porcentaje' => $presupuesto->indirecto_otros_porcentaje,
                     ])
                 );
             }

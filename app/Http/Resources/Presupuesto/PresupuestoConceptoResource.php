@@ -36,7 +36,9 @@ class PresupuestoConceptoResource extends JsonResource
             'indirecto_oficina_porcentaje' => $this->indirecto_oficina_porcentaje !== null ? (float) $this->indirecto_oficina_porcentaje : null,
             'indirecto_campo_porcentaje' => $this->indirecto_campo_porcentaje !== null ? (float) $this->indirecto_campo_porcentaje : null,
             'indirecto_utilidad_porcentaje' => $this->indirecto_utilidad_porcentaje !== null ? (float) $this->indirecto_utilidad_porcentaje : null,
+            'indirecto_financiamiento_porcentaje' => $this->indirecto_financiamiento_porcentaje !== null ? (float) $this->indirecto_financiamiento_porcentaje : null,
             'indirecto_cargos_porcentaje' => $this->indirecto_cargos_porcentaje !== null ? (float) $this->indirecto_cargos_porcentaje : null,
+            'indirecto_otros_porcentaje' => $this->indirecto_otros_porcentaje !== null ? (float) $this->indirecto_otros_porcentaje : null,
             'componentes' => PresupuestoConceptoComponenteResource::collection(
                 $this->whenLoaded('componentes')
             ),

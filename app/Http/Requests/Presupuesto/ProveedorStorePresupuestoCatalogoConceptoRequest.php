@@ -38,7 +38,9 @@ class ProveedorStorePresupuestoCatalogoConceptoRequest extends FormRequest
             'indirecto_oficina_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'indirecto_campo_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'indirecto_utilidad_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'indirecto_financiamiento_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'indirecto_cargos_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'indirecto_otros_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'clave' => [
                 'nullable',
                 'string',
