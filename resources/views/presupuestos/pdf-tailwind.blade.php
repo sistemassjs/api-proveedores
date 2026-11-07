@@ -1506,16 +1506,6 @@
         </div>
         </div>
 
-        @php
-            $monedaCodigoHojas = strtoupper((string) ($presupuesto['term_cond_moneda'] ?? 'MXN'));
-            $monedaPrefijoHojas = $monedaCodigoHojas === 'EUR' ? '€' : '$';
-        @endphp
-        @include('presupuestos.partials.presupuesto-pdf-hojas-analisis', [
-            'hojasAnalisis' => $hojasAnalisis ?? [],
-            'variant' => 'tailwind',
-            'monedaPrefijo' => $monedaPrefijoHojas,
-        ])
-
         @include('presupuestos.partials.presupuesto-pdf-seccion-anexos', [
             'anexosLista' => $anexosLista,
             'tituloAnexos' => $tituloAnexos ?? 'Anexos',

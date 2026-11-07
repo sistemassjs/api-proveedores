@@ -401,6 +401,7 @@ final class PresupuestoPdfDocumentConfig
             ? (int) ceil(count($anexosLista) / max(1, $this->anexosImagenesPorPagina()))
             : 0;
         $paginasDocumentacionPdf = $haySeccionDocumentacion ? count($documentacionLista) : 0;
+        // Las hojas de análisis van al final del PDF (tras anexos PDF), fuera del cuerpo DomPDF.
         $paginasHojasAnalisisPdf = count($hojasAnalisis);
 
         return [
@@ -433,7 +434,8 @@ final class PresupuestoPdfDocumentConfig
             'paginasAnexosPdf' => $paginasAnexosPdf,
             'paginasDocumentacionPdf' => $paginasDocumentacionPdf,
             'paginasHojasAnalisisPdf' => $paginasHojasAnalisisPdf,
-            'paginasTrasSeccionPresupuesto' => $paginasAnexosPdf + $paginasDocumentacionPdf + $paginasHojasAnalisisPdf,
+            // Solo anexos imagen + documentación del cuerpo; el análisis no altera la paginación del ppto.
+            'paginasTrasSeccionPresupuesto' => $paginasAnexosPdf + $paginasDocumentacionPdf,
             'cierreAtentamente' => PresupuestoPdfLayout::calcularCierreAtentamente($presupuestoPayload, $this),
             'conceptosListaPdf' => array_values($presupuestoPayload['conceptos'] ?? []),
             'colorRowEven' => (string) ($this->themeService->getTheme($this->themeKey)['variables']['color-row-even'] ?? '#eff6ff'),

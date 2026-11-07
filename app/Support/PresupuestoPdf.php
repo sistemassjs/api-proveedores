@@ -40,12 +40,90 @@ final class PresupuestoPdf
 
     /**
      * Contenido binario del PDF (adjuntos en correo, etc.).
+     * Orden: cuerpo del presupuesto (+ anexos imagen/documentación) → anexos PDF → hojas de análisis.
      */
     public static function renderPdfBinary(Presupuesto $presupuesto): string
     {
         $main = self::buildPdf($presupuesto)->output();
+        $merged = PresupuestoPdfAnexoMerger::unirSiHayAnexos($presupuesto, $main);
+        $hojasBinary = self::renderHojasAnalisisPdfBinary($presupuesto);
+        if ($hojasBinary === null) {
+            return $merged;
+        }
 
-        return PresupuestoPdfAnexoMerger::unirSiHayAnexos($presupuesto, $main);
+        return PresupuestoPdfAnexoMerger::concatenarAlFinal($merged, $hojasBinary);
+    }
+
+    /**
+     * PDF aparte con las hojas de análisis (va al final del documento unificado).
+     */
+    private static function renderHojasAnalisisPdfBinary(Presupuesto $presupuesto): ?string
+    {
+        $presupuesto->loadMissing(['conceptos.componentes']);
+
+        $conceptos = $presupuesto->conceptos->map(static function ($c) {
+            $fila = [
+                'tipo' => $c->tipo ?? PresupuestoConcepto::TIPO_CONCEPTO,
+                'clave' => $c->clave,
+                'tiene_matriz' => (bool) ($c->tiene_matriz ?? false),
+                'mostrar_hoja_analisis' => (bool) ($c->mostrar_hoja_analisis ?? false),
+                'descripcion' => $c->descripcion,
+                'cantidad' => $c->cantidad,
+                'unidad' => $c->unidad,
+                'precio_unitario' => $c->precio_unitario,
+                'indirectos_modo' => ($c->indirectos_modo ?? 'general') === 'propio' ? 'propio' : 'general',
+                'indirecto_oficina_porcentaje' => $c->indirecto_oficina_porcentaje !== null ? (float) $c->indirecto_oficina_porcentaje : null,
+                'indirecto_campo_porcentaje' => $c->indirecto_campo_porcentaje !== null ? (float) $c->indirecto_campo_porcentaje : null,
+                'indirecto_utilidad_porcentaje' => $c->indirecto_utilidad_porcentaje !== null ? (float) $c->indirecto_utilidad_porcentaje : null,
+                'indirecto_financiamiento_porcentaje' => $c->indirecto_financiamiento_porcentaje !== null ? (float) $c->indirecto_financiamiento_porcentaje : null,
+                'indirecto_cargos_porcentaje' => $c->indirecto_cargos_porcentaje !== null ? (float) $c->indirecto_cargos_porcentaje : null,
+                'indirecto_otros_porcentaje' => $c->indirecto_otros_porcentaje !== null ? (float) $c->indirecto_otros_porcentaje : null,
+                'componentes' => [],
+            ];
+            if ($c->tiene_matriz && $c->relationLoaded('componentes') && $c->componentes->isNotEmpty()) {
+                $fila['componentes'] = $c->componentes->map(static function ($comp) {
+                    return [
+                        'categoria' => $comp->categoria,
+                        'clave_snapshot' => $comp->clave_snapshot,
+                        'descripcion' => $comp->descripcion,
+                        'unidad' => $comp->unidad,
+                        'cantidad' => (float) $comp->cantidad,
+                        'precio_unitario' => (float) $comp->precio_unitario,
+                        'importe' => (float) ($comp->importe ?? ((float) $comp->cantidad * (float) $comp->precio_unitario)),
+                        'calculo' => $comp->calculo ?? 'cantidad',
+                        'porcentaje' => $comp->porcentaje !== null ? (float) $comp->porcentaje : null,
+                    ];
+                })->values()->all();
+            }
+
+            return $fila;
+        })->values()->all();
+
+        $payload = [
+            'con_iva' => (bool) ($presupuesto->con_iva ?? false),
+            'iva_porcentaje' => (float) ($presupuesto->iva_porcentaje ?? 0),
+            'term_cond_moneda' => $presupuesto->term_cond_moneda ?? 'MXN',
+            'indirecto_oficina_porcentaje' => (float) ($presupuesto->indirecto_oficina_porcentaje ?? 0),
+            'indirecto_campo_porcentaje' => (float) ($presupuesto->indirecto_campo_porcentaje ?? 0),
+            'indirecto_financiamiento_porcentaje' => (float) ($presupuesto->indirecto_financiamiento_porcentaje ?? 0),
+            'indirecto_utilidad_porcentaje' => (float) ($presupuesto->indirecto_utilidad_porcentaje ?? 0),
+            'indirecto_cargos_porcentaje' => (float) ($presupuesto->indirecto_cargos_porcentaje ?? 0),
+            'indirecto_otros_porcentaje' => (float) ($presupuesto->indirecto_otros_porcentaje ?? 0),
+            'conceptos' => $conceptos,
+        ];
+
+        $hojas = app(PresupuestoMatrizCalculoService::class)->hojasAnalisisPresupuesto($payload);
+        if ($hojas === []) {
+            return null;
+        }
+
+        $moneda = strtoupper((string) ($payload['term_cond_moneda'] ?? 'MXN'));
+        $pdfBuilder = Pdf::loadView('presupuestos.pdf-hojas-analisis', [
+            'hojasAnalisis' => $hojas,
+            'monedaPrefijo' => $moneda === 'EUR' ? '€' : '$',
+        ])->setPaper('letter', 'portrait');
+
+        return $pdfBuilder->output();
     }
 
     private static function buildPdf(Presupuesto $presupuesto)

@@ -22,9 +22,14 @@
         return $texto.'%';
     };
 @endphp
+@php
+    $saltoAntesPrimeraHoja = (bool) ($saltoAntesPrimeraHoja ?? true);
+@endphp
 @if (count($hojasAnalisis) > 0)
     @foreach ($hojasAnalisis as $hojaIndex => $hoja)
-        <div class="{{ $pageBreak }}"></div>
+        @if ($hojaIndex > 0 || $saltoAntesPrimeraHoja)
+            <div class="{{ $pageBreak }}"></div>
+        @endif
         <div class="pdf-seccion pdf-seccion--hoja-analisis {{ $wrapClass }}">
             <div class="{{ $esTailwind ? 'tw-hoja-analisis__header' : 'hoja-analisis__header' }}">
                 <div class="{{ $esTailwind ? 'tw-hoja-analisis__title' : 'hoja-analisis__title' }}">

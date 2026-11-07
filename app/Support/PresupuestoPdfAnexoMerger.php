@@ -45,6 +45,52 @@ final class PresupuestoPdfAnexoMerger
     }
 
     /**
+     * Concatena un PDF al final de otro (p. ej. hojas de análisis tras anexos).
+     */
+    public static function concatenarAlFinal(string $principalBinary, string $anexoBinary): string
+    {
+        if ($anexoBinary === '') {
+            return $principalBinary;
+        }
+
+        $tmpPrincipal = tempnam(sys_get_temp_dir(), 'pres_head_');
+        $tmpAnexo = tempnam(sys_get_temp_dir(), 'pres_tail_');
+        if ($tmpPrincipal === false || $tmpAnexo === false) {
+            return $principalBinary;
+        }
+
+        file_put_contents($tmpPrincipal, $principalBinary);
+        file_put_contents($tmpAnexo, $anexoBinary);
+
+        try {
+            $pdf = new PresupuestoAnexoFpdi();
+            $pdf->SetAutoPageBreak(false);
+
+            foreach ([$tmpPrincipal, $tmpAnexo] as $path) {
+                $pages = $pdf->setSourceFile($path);
+                for ($i = 1; $i <= $pages; $i++) {
+                    self::importarPaginaSinEstampado($pdf, $path, $i);
+                }
+            }
+
+            return $pdf->Output('S');
+        } catch (\Throwable $e) {
+            Log::warning('No fue posible concatenar PDF al final del presupuesto', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $principalBinary;
+        } finally {
+            if (is_file($tmpPrincipal)) {
+                @unlink($tmpPrincipal);
+            }
+            if (is_file($tmpAnexo)) {
+                @unlink($tmpAnexo);
+            }
+        }
+    }
+
+    /**
      * @param  Collection<int, \App\Models\PresupuestoAnexoPdf>  $anexos
      */
     private static function mergeDesdePrincipal(Presupuesto $presupuesto, string $mainAbsPath, Collection $anexos): string
