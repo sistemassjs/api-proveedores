@@ -371,6 +371,7 @@ Route::prefix('proveedores')
                     Route::delete('/{anexoPdf}', [ProveedorPresupuestoAnexoPdfController::class, 'destroy']);
                 });
 
+                Route::get('/por-token/{token}', [ProveedorPresupuestoController::class, 'showByToken']);
                 Route::patch('/{presupuesto}/pdf-theme', [ProveedorPresupuestoController::class, 'updatePdfTheme']);
                 Route::get('/{presupuesto}/pdf', [ProveedorPresupuestoController::class, 'generarPdf']);
                 Route::post('/{presupuesto}/duplicar', [ProveedorPresupuestoController::class, 'duplicar']);
@@ -378,6 +379,8 @@ Route::prefix('proveedores')
                 Route::post('/{presupuesto}/enviar-correo', [ProveedorPresupuestoController::class, 'enviarCorreo']);
                 Route::post('/{presupuesto}/notificar-receptor-app', [ProveedorPresupuestoController::class, 'notificarReceptorApp']);
                 Route::post('/{presupuesto}/reenviar', [ProveedorPresupuestoController::class, 'reenviar']);
+                Route::post('/{presupuesto}/aceptar', [ProveedorPresupuestoController::class, 'aceptar']);
+                Route::post('/{presupuesto}/rechazar', [ProveedorPresupuestoController::class, 'rechazar']);
                 Route::get('/{presupuesto}', [ProveedorPresupuestoController::class, 'show']);
                 Route::put('/{presupuesto}', [ProveedorPresupuestoController::class, 'update']);
                 Route::patch('/{presupuesto}', [ProveedorPresupuestoController::class, 'update']);

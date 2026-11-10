@@ -286,6 +286,20 @@ final class PresupuestoPdfDocumentConfig
         return $this->footerHeightMm() + self::BODY_PADDING_BOTTOM_EXTRA_MM;
     }
 
+    /**
+     * Alto útil del flujo HTML en DomPDF: hoja − márgenes @page − paddings del body.
+     * La firma «Atentamente» se pinta en el padding inferior (page_script), fuera de este alto.
+     */
+    public function alturaUtilContenidoHtmlMm(): float
+    {
+        $util = $this->alturaHojaMm()
+            - (2 * $this->margenHojaMm())
+            - $this->margenSuperiorContenidoMm()
+            - $this->bodyPaddingBottomMm();
+
+        return max(140.0, $util);
+    }
+
     public function margenSeguridadAtentamenteMm(): float
     {
         return self::MARGEN_SEGURIDAD_ATENTAMENTE_MM;

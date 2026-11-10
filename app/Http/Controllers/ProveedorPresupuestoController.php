@@ -13,6 +13,7 @@ use App\Support\PresupuestoAnexoArchivoResponse;
 use App\Support\PresupuestoAnexoImagenOptimizer;
 use App\Support\PresupuestoPdf;
 use App\Support\PresupuestoPdfDocumentConfig;
+use App\Support\PresupuestoRespuestaCliente;
 use App\Models\CarteraCliente;
 use App\Models\ConfigEmisorReceptorPresupuesto;
 use App\Models\Presupuesto;
@@ -404,6 +405,108 @@ class ProveedorPresupuestoController extends Controller
         return $this->success(new PresupuestoResource($presupuesto));
     }
 
+    /**
+     * Resuelve un presupuesto por token para emisor o receptor autenticado (sin exponer el enlace público).
+     */
+    public function showByToken(Proveedor $proveedor, string $token): JsonResponse
+    {
+        Presupuesto::actualizarVencidos();
+
+        $presupuesto = Presupuesto::query()
+            ->where('token_publico', $token)
+            ->with(array_merge(Presupuesto::eagerLodable(), ['estadoLogs.user']))
+            ->first();
+
+        if (! $presupuesto) {
+            return $this->error('Presupuesto no encontrado o enlace inválido.', null, 404);
+        }
+
+        if (! $this->presupuestoAccesiblePorProveedor($proveedor, $presupuesto)) {
+            return $this->error(
+                'Este presupuesto solo puede verse por usuarios de la empresa destinataria o emisora en GestionPlus.',
+                null,
+                403
+            );
+        }
+
+        $user = auth()->user();
+        if ($this->presupuestoEsEmisor($proveedor, $presupuesto)) {
+            $presupuesto->markRead($user);
+        } else {
+            $this->marcarNotificacionesPresupuestoRecibidoLeidas($user, (int) $presupuesto->id);
+        }
+
+        return $this->success(new PresupuestoResource($presupuesto));
+    }
+
+    /**
+     * Acepta el presupuesto como empresa receptora autenticada.
+     */
+    public function aceptar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    {
+        if (! $this->presupuestoEsReceptor($proveedor, $presupuesto)) {
+            return $this->error(
+                'Solo la empresa destinataria puede aceptar este presupuesto en GestionPlus.',
+                null,
+                403
+            );
+        }
+
+        if ($presupuesto->estado !== Presupuesto::ESTADO_ENVIADO) {
+            return $this->error(
+                'Solo se puede aceptar un presupuesto que esté en estado enviado.',
+                ['estado_actual' => $presupuesto->estado],
+                422
+            );
+        }
+
+        $fresh = PresupuestoRespuestaCliente::aceptar($presupuesto, $request->user()?->id);
+        $this->marcarNotificacionesPresupuestoRecibidoLeidas($request->user(), (int) $presupuesto->id);
+
+        return $this->success(
+            new PresupuestoResource($fresh),
+            'Presupuesto aceptado correctamente.'
+        );
+    }
+
+    /**
+     * Rechaza el presupuesto como empresa receptora autenticada.
+     */
+    public function rechazar(Request $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
+    {
+        if (! $this->presupuestoEsReceptor($proveedor, $presupuesto)) {
+            return $this->error(
+                'Solo la empresa destinataria puede rechazar este presupuesto en GestionPlus.',
+                null,
+                403
+            );
+        }
+
+        if ($presupuesto->estado !== Presupuesto::ESTADO_ENVIADO) {
+            return $this->error(
+                'Solo se puede rechazar un presupuesto que esté en estado enviado.',
+                ['estado_actual' => $presupuesto->estado],
+                422
+            );
+        }
+
+        $validated = $request->validate([
+            'motivo' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $fresh = PresupuestoRespuestaCliente::rechazar(
+            $presupuesto,
+            $validated['motivo'] ?? null,
+            $request->user()?->id
+        );
+        $this->marcarNotificacionesPresupuestoRecibidoLeidas($request->user(), (int) $presupuesto->id);
+
+        return $this->success(
+            new PresupuestoResource($fresh),
+            'Presupuesto rechazado.'
+        );
+    }
+
     public function update(UpdatePresupuestoRequest $request, Proveedor $proveedor, Presupuesto $presupuesto): JsonResponse
     {
         try {
@@ -618,18 +721,18 @@ class ProveedorPresupuestoController extends Controller
             }
 
             $presupuesto->load(Presupuesto::eagerLodable());
-            $presupuesto->asegurarTokenPublico();
+            if (! $presupuesto->dirigidoAProveedorPlataforma()) {
+                $presupuesto->asegurarTokenPublico();
+            }
 
             $incluirInvitacion = $validated['incluir_invitacion'] ?? false;
             // $this->despacharCorreoPresupuesto($presupuesto, $incluirInvitacion);
 
-            $appUrl = config('app.frontend_url', config('app.url'));
-            $enlacePublico = rtrim((string) $appUrl, '/') . '/public/presupuesto/' . $presupuesto->token_publico;
-
+            $enlaceVista = $presupuesto->urlVistaCliente();
             $nombreReceptor = $presupuesto->empresa_receptora_nombre ?? $presupuesto->empresa_receptora_empresa;
 
             Mail::to($validated['correo_destino'])->send(
-                new PresupuestoEnviadoMail($presupuesto, $enlacePublico, $nombreReceptor, $incluirInvitacion)
+                new PresupuestoEnviadoMail($presupuesto, $enlaceVista, $nombreReceptor, $incluirInvitacion)
             );
 
             $this->log('Presupuesto: correo al cliente enviado', ['presupuesto_id' => $presupuesto->id]);
@@ -1238,6 +1341,15 @@ class ProveedorPresupuestoController extends Controller
     private function presupuestoEsEmisor(Proveedor $proveedor, Presupuesto $presupuesto): bool
     {
         return (int) $presupuesto->proveedor_id === (int) $proveedor->id;
+    }
+
+    /**
+     * Empresa destinataria registrada en plataforma (proveedor_receptor_id).
+     */
+    private function presupuestoEsReceptor(Proveedor $proveedor, Presupuesto $presupuesto): bool
+    {
+        return (int) ($presupuesto->proveedor_receptor_id ?? 0) === (int) $proveedor->id
+            && (int) $proveedor->id > 0;
     }
 
     /**
@@ -2158,14 +2270,10 @@ class ProveedorPresupuestoController extends Controller
      */
     private function generarQrCodeParaPresupuesto(Presupuesto $presupuesto): ?string
     {
-        $presupuesto->asegurarTokenPublico();
-        $token = $presupuesto->token_publico;
-        if (! $token) {
+        $urlWeb = $presupuesto->urlVistaCliente();
+        if ($urlWeb === '') {
             return null;
         }
-
-        $appUrl = config('app.frontend_url', config('app.url'));
-        $urlWeb = rtrim((string) $appUrl, '/') . '/public/presupuesto/' . $token;
 
         try {
             $renderer = new GDLibRenderer(200);
@@ -2493,14 +2601,17 @@ class ProveedorPresupuestoController extends Controller
 
     private function despacharCorreoPresupuesto(Presupuesto $presupuesto, bool $incluirInvitacion = false): void
     {
-        $appUrl = config('app.frontend_url', config('app.url'));
-        $enlacePublico = rtrim((string) $appUrl, '/') . '/public/presupuesto/' . $presupuesto->token_publico;
+        if (! $presupuesto->dirigidoAProveedorPlataforma()) {
+            $presupuesto->asegurarTokenPublico();
+        }
+
+        $enlaceVista = $presupuesto->urlVistaCliente();
         $nombreReceptor = $presupuesto->empresa_receptora_nombre
             ?? $presupuesto->empresa_receptora_empresa
             ?? 'Cliente';
 
         Mail::to($presupuesto->empresa_receptora_correo)->send(
-            new PresupuestoEnviadoMail($presupuesto, $enlacePublico, $nombreReceptor, $incluirInvitacion)
+            new PresupuestoEnviadoMail($presupuesto, $enlaceVista, $nombreReceptor, $incluirInvitacion)
         );
     }
 

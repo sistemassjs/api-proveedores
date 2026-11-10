@@ -137,9 +137,7 @@ final class PresupuestoPdf
         $gdDisponible = extension_loaded('gd');
 
         $qrCode = self::generarQrCodeParaPresupuesto($presupuesto);
-        $qrUrl = $qrCode && $presupuesto->token_publico
-            ? rtrim(config('app.frontend_url', config('app.url')), '/') . '/public/presupuesto/' . $presupuesto->token_publico
-            : null;
+        $qrUrl = $qrCode ? $presupuesto->urlVistaCliente() : null;
 
         $proveedor = $presupuesto->proveedor;
         $df = $proveedor?->direccion_fiscal;
@@ -274,14 +272,10 @@ final class PresupuestoPdf
 
     private static function generarQrCodeParaPresupuesto(Presupuesto $presupuesto): ?string
     {
-        $presupuesto->asegurarTokenPublico();
-        $token = $presupuesto->token_publico;
-        if (! $token) {
+        $urlWeb = $presupuesto->urlVistaCliente();
+        if ($urlWeb === '') {
             return null;
         }
-
-        $appUrl = config('app.frontend_url', config('app.url'));
-        $urlWeb = rtrim($appUrl, '/') . '/public/presupuesto/' . $token;
 
         try {
             $renderer = new GDLibRenderer(200);

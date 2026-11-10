@@ -16,6 +16,7 @@
 | `PresupuestoCatalogoConcepto` | `presupuesto_catalogo_conceptos` | Biblioteca reutilizable de conceptos (Plus); básico o **compuesto** |
 | `PresupuestoCatalogoConceptoComponente` | `presupuesto_catalogo_concepto_componentes` | Matriz de P.U. del compuesto en catálogo |
 | `PresupuestoConceptoComponente` | `presupuesto_concepto_componentes` | Matriz de P.U. de una línea del documento (snapshot) |
+| `PresupuestoCuadrilla` | `presupuesto_cuadrillas` | Cuadrillas de la obra (MO reutilizable en matriz) |
 | `PresupuestoEstadoLog` | `presupuesto_estado_logs` | Histórico de cambios de estado (timeline) |
 | `ConfigEmisorReceptorPresupuesto` | `config_emisor_receptor_presupuestos` | Tarjetas emisor/receptor |
 
@@ -24,10 +25,11 @@
 - Emisor: `proveedor_id` → `Proveedor`
 - Receptor: `empresa_receptora_id` → `CarteraCliente` **o** `proveedor_receptor_id` → `Proveedor` **o** solo campos texto
 - Snapshot emisor: `config_emisor_presupuesto_id` + campos `empresa_emisora_*`
-- Hijos: `conceptos.componentes`, `anexos`, `anexosPdf`, `estadoLogs`
+- Hijos: `conceptos.componentes`, `cuadrillas`, `anexos`, `anexosPdf`, `estadoLogs`
 - Público: `token_publico`
 - Layout PDF: `ppto_config` (JSON plano key→mm; whitelist en `PresupuestoPdfDocumentConfig::PPTO_CONFIG_KEYS`)
 - Desglose costos en PDF/preview: `config_mostrar_matriz_costos` (bool, default **false**)
+- Indirectos generales: `indirecto_oficina_porcentaje`, `indirecto_campo_porcentaje`, `indirecto_financiamiento_porcentaje`, `indirecto_utilidad_porcentaje`, `indirecto_cargos_porcentaje`, `indirecto_otros_porcentaje`
 
 ## Estados
 
@@ -59,11 +61,22 @@ Tipos: `concepto` | `parrafo`. Campos libres: descripción, cantidad, unidad, pr
 
 ### Matriz de P.U. (línea)
 
-- `presupuesto_conceptos.tiene_matriz` (bool): si true, el `precio_unitario` se **calcula** desde `presupuesto_concepto_componentes`.
-- Componentes: `categoria` = tipo Opus (`material`\|`mano_obra`\|`herramienta`\|`equipo`\|`auxiliar`\|`flete`\|`trabajo`); legacy `producto`/`servicio` se coaccionan; `cantidad × precio_unitario = importe`; P.U. línea = Σ importes (redondeo 2 en la línea).
+- `presupuesto_conceptos.tiene_matriz` (bool): si true, el `precio_unitario` se **calcula** desde `presupuesto_concepto_componentes` (+ pie de indirectos si aplica).
+- `presupuesto_conceptos.mostrar_hoja_analisis` (bool, default false): si true y hay matriz, el PDF anexa hoja(s) de análisis al final. Misma columna en `presupuesto_plantilla_conceptos`.
+- Override de indirectos en la línea / catálogo / plantilla: `indirectos_modo` + columnas `indirecto_*_porcentaje` (nullable = hereda del documento).
+- Componentes: `categoria` = tipo Opus (`material`\|`mano_obra`\|`herramienta`\|`equipo`\|`auxiliar`\|`flete`\|`trabajo`); legacy `producto`/`servicio` se coaccionan.
+- Importe por renglón: `calculo = cantidad` → `cantidad × precio_unitario`; `calculo = porcentaje_mo` → `%` sobre MO del mismo nivel (`porcentaje`).
+- Anidados: JSON `componentes_anidados` (mismo shape); `indirectos` JSON opcional en el renglón anidado.
+- Cuadrilla: `presupuesto_cuadrilla_id` nullable → precio desde `presupuesto_cuadrillas.costo_unitario`.
+- `clave_snapshot` en cada componente (vacía → número dentro de esa matriz).
+- P.U. línea ≈ Σ importes (costo directo) + pie de indirectos (redondeo 2 en la línea).
 - Snapshot al guardar: puede traer `catalogo_concepto_id` (mismo proveedor) o renglón manual.
 - Párrafos: sin matriz.
 - Motor: `App\Services\Presupuesto\PresupuestoMatrizCalculoService` (mismo que catálogo compuesto).
+
+### Cuadrillas (`presupuesto_cuadrillas`)
+
+Por presupuesto: `orden`, `clave` (nullable), `nombre`, `integrantes` (nullable), `unidad` (default tip. `jor`), `costo_unitario`. Cascade al borrar el PPTO. Resource en `show` del presupuesto; CRUD anidado (ver [api.md](./api.md)).
 
 ### Catálogo de conceptos
 
@@ -85,7 +98,7 @@ Al usarlo en un presupuesto se hace **snapshot** a la línea/componente (sin FK 
 
 Traslados / viáticos: **no** hay columnas `obs_traslados` / `obs_viaticos` (drop fase 3). Fuente de verdad: `term_cond_visibilidad.incluye_traslados` / `incluye_viaticos`. La API puede exponer `obs_traslados` / `obs_viaticos` en Resources como **alias derivados** de esa visibilidad (compat front).
 
-**Matriz en captura / PDF / plantillas / tipado MVP / filtro `matriz_tipo`:** hecha. Roadmap (capítulos, totales por tipo en PDF): [matriz-costos-opus.md](./matriz-costos-opus.md).
+**Matriz en captura / PDF / plantillas / tipado / anidados / indirectos / % MO / cuadrillas / hoja análisis PDF / filtro `matriz_tipo`:** hecha. Roadmap (capítulos, explosión, totales consolidados obra): [matriz-costos-opus.md](./matriz-costos-opus.md).
 
 ## Plantillas (`presupuesto_plantillas`)
 
@@ -104,6 +117,7 @@ Tabla `presupuesto_plantilla_concepto_componentes`: misma forma que componentes 
 | `titulo_anexos_pdf` | `presupuestos` | `varchar(80)` nullable; mig. `2026_07_23_103654_…`. Vacío → **Anexos PDF** (Resource + estampado FPDI de hojas mergeadas) |
 | `config_mostrar_totales` | `presupuestos` | Si false, oculta subtotal/IVA/total/importe letra en preview y PDF |
 | `config_mostrar_matriz_costos` | `presupuestos` | Si true, preview/PDF/público muestran desglose de componentes bajo la descripción (default **false**) |
+| `indirecto_*_porcentaje` | `presupuestos` | Oficina, campo, financiamiento, utilidad, cargos, otros (decimal; default 0) |
 | `ppto_config` | `presupuestos` | JSON nullable; 8 keys mm whitelist (`margen_*`, `gap_*`, `footer_height_mm`, `espacio_tras_titulo_atentamente_mm`). Modal Ajustes + merge en `PresupuestoPdfDocumentConfig` (gap logo default **7**) |
 
 ## Histórico de estados (`presupuesto_estado_logs`)

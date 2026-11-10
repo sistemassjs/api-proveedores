@@ -1,10 +1,13 @@
 # Hito temporal — Indirectos y matriz anidada
 
-Nota de decisiones. No sustituye `docs/context/`. Sirve para no perder lo cerrado en la conversación de octubre 2026.
+Nota de decisiones. No sustituye `docs/context/`.  
+Referencia operativa actualizada: [matriz-costos-opus.md](../context/presupuestos/matriz-costos-opus.md).
 
 Referencia de comportamiento: hoja de análisis P1.6 (Estación de servicios Charay) y el Manual OPUS Presupuesto Programable, Módulo 1.
 
-## Qué entra
+**Estado:** hito base **cerrado** (oct 2026). Extensiones nov 2026 (clave ya en alcance, % MO, financiamiento/otros, cuadrillas, hoja PDF) **cerradas** en app **2.14.0** / API **1.6.0**.
+
+## Qué entra (hito base — hecho)
 
 - Captura de la matriz en **escritorio**, en una sola pantalla.
 - Elegir el renglón del catálogo **propio** de la empresa o del catálogo **global** (productos publicados, conexión NexProv).
@@ -19,7 +22,7 @@ El compuesto deja de ser un asistente de tres pasos.
 - Arriba: clave, nombre y unidad de la matriz.
 - Centro: tabla con clave, descripción, unidad, cantidad, costo e importe. Agrupada por tipo, con subtotal de grupo.
 - Agregar abre un buscador al lado: **Propio**, **Global** y **Básicos**. Básicos se ve y no se usa.
-- Al elegir, la fila se llena sola. En la fila solo se escribe la cantidad.
+- Al elegir, la fila se llena sola. En la fila solo se escribe la cantidad (o % MO / cuadrilla según el renglón).
 - Si lo elegido ya tiene matriz, una flecha lo abre en ese mismo panel.
 - Abajo, fijo: costo directo, indirectos y precio.
 
@@ -27,7 +30,16 @@ El concepto sin matriz no cambia de pantalla.
 
 ## Indirectos
 
-Sección en la información general del presupuesto. Cuatro porcentajes, en cero al empezar: oficina, campo, utilidad y cargos.
+Sección en la información general del presupuesto. Porcentajes en cero al empezar:
+
+| Campo | Notas |
+|-------|--------|
+| Oficina | Base del hito |
+| Campo | Base del hito |
+| Utilidad | Base del hito |
+| Cargos | Base del hito |
+| Financiamiento | **Añadido** nov 2026 |
+| Otros | **Añadido** nov 2026 |
 
 Dentro de la matriz, tres estados:
 
@@ -35,7 +47,7 @@ Dentro de la matriz, tres estados:
 - **Propios.** Porcentajes de esa matriz. Un cambio general no la toca.
 - **Volver al general.** Suelta los propios.
 
-Cuenta, redondeando cada importe a dos decimales. Prueba P1.6:
+Cuenta, redondeando cada importe a dos decimales. Prueba P1.6 (sin financiamiento/otros):
 
 | Paso | Cuenta | Resultado |
 |---|---|---|
@@ -51,9 +63,20 @@ Un renglón que apunta a otra matriz usa el costo directo del hijo, no su precio
 
 Los porcentajes generales viven en el presupuesto. El estado propio vive en la línea, en el compuesto del catálogo y en la línea de plantilla. Un presupuesto ya guardado conserva su copia.
 
-## Fuera de este hito
+## Extensiones cerradas (nov 2026)
 
-- **Porcentaje de mano de obra.** Espera a que la cuadrilla esté en la matriz. La base es el importe de la cuadrilla. No adelantarlo.
-- **Explosión de insumos.** Pendiente. Es la lista de compras de toda la obra y necesita recorrer las matrices de adentro.
-- **Básicos** como catálogo propio. Pendiente. El selector ya reserva el lugar.
-- **Cuadrillas y capítulos.** Pendientes.
+Antes figuraban “fuera de este hito”; ya están en producto:
+
+| Capacidad | Notas |
+|-----------|--------|
+| **Porcentaje de mano de obra** | `calculo = porcentaje_mo` + `porcentaje`; base = importe MO del **mismo nivel** (no solo cuadrilla) |
+| **Cuadrillas** | CRUD en `…/presupuestos/{id}/cuadrillas`; renglón de matriz con `presupuesto_cuadrilla_id`; UI en información general |
+| **Hoja de análisis** | Flag `mostrar_hoja_analisis` por línea; anexos al PDF tras cuerpo + anexos (`PresupuestoPdf` + blades `presupuesto-pdf-hojas-analisis`) |
+| **Clave** | Partida + `clave_snapshot` en matriz; vacía → número de renglón |
+
+## Aún fuera / pendiente
+
+- **Explosión de insumos.** Lista de compras de toda la obra; necesita recorrer matrices anidadas.
+- **Básicos** como catálogo propio. El selector ya reserva el lugar.
+- **Capítulos** en la raíz del presupuesto.
+- **Paridad preview Angular** de la hoja de análisis (hoy solo PDF).

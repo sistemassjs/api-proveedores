@@ -238,6 +238,7 @@ Clientes, tarjetas y preview **no** llevan `guideKey` en este alcance.
 - Plantillas formulario: `plantilla-datos`, `plantilla-conceptos`, `plantilla-estilo`, anexos, `plantilla-tarjeta-contacto`, `plantilla-footer` (`presupuesto-page-modals`).
 - Presupuestos listado: `ppto-card-header`, `ppto-card-body`, `ppto-card-actions` + un `data-tour` por botón (`ppto-action-edit|duplicate|plantilla|historial|delete|mail|whatsapp|link`). Card: folio + fecha (sin hora), badge de estado en esquina, `nombre_presupuesto`, receptor; total solo si `config_mostrar_totales`; acciones en **una sola fila** con ancho uniforme (sin ojito: ver = tap en card). Tutorial: un paso intro de acciones y **un paso por botón** (los que no existan en el DOM se omiten). Confirmación de eliminar con `accent: 'danger'`. Búsqueda incluye nombre.
 - Presupuestos formulario: `ppto-receptor`, `ppto-info-general`, `ppto-conceptos`, `ppto-totales`, `ppto-config-matriz-pdf`, anexos, `ppto-footer`. En modal concepto: `ppto-matriz-toggle`, `ppto-matriz-editor`.
+- Compuesto / matriz Opus: `ppto-compuesto-*` (clave, descripción, unidad, imagen, matriz toolbar/add, hoja-analisis, indirectos, totales, guardar/cerrar), `ppto-matriz-editor`.
 - Catálogo listado: `catalogo-search`, `catalogo-filtros`, `catalogo-add`.
 - Catálogo form: `catalogo-categoria`, `catalogo-clave`, `catalogo-matriz` (compuestos).
 
@@ -277,6 +278,9 @@ Regenerar el PDF tras cambios de contenido en el HTML o imágenes bajo `src/asse
 - Badge Plus en tab y acciones de catálogo. El tab Catálogo lista **empresas tipo catálogo** (`GET /catalogo/empresas`) con productos `mostrar_en_catalogo_publico`; cards muestran **nombre comercial** + **razón social** (si difieren); al elegir se hace **snapshot** (sin FK). Filtros avanzados solo dentro de una empresa: barra de chips OPUS (familia + subfamilias anidadas; sin marca). Editar/eliminar solo aplica a conceptos internos.
 - Sección **Catálogo de conceptos** en rutas propias (`…/catalogo-conceptos` + crear/editar/detalle); ActionSheet básico vs compuesto; filtro Compuestos; badge en card/detalle.
 - Captura PPTO: switch **Mostrar desglose de costos en PDF** (`config_mostrar_matriz_costos`, default off). Preview, PDF y enlace público muestran el desglose bajo la descripción.
+- **Información general:** porcentajes de indirectos (oficina, campo, financiamiento, utilidad, cargos, otros) y CRUD de **cuadrillas** (presupuesto ya persistido).
+- **Compuestos:** página `concepto-compuesto` + modal manual; matriz anidada con breadcrumb; clave; renglón por cantidad, **% MO** o **cuadrilla**; checkbox **Mostrar hoja de análisis** (`mostrar_hoja_analisis`) — efecto en PDF; tour guiado.
 - **Tipos de insumo Opus** en editor (select con buscador). Listado: segmento `matrizTipo` (1 fila). Captura: **doble clic en P. UNITARIO** convierte a matriz / abre editor.
-- Matriz / Opus: [matriz-costos-opus.md](./matriz-costos-opus.md).
+- Estilos pie Opus: `styles/presupuesto-indirectos-opus.scss`.
+- Matriz / Opus: [matriz-costos-opus.md](./matriz-costos-opus.md). Pendiente UX: paridad de hoja de análisis en preview Angular; catálogo Básicos usable.
 - El feed admin `catalogo-publico` quedó fuera del picker (deprecado / plan de apagado). Ver [../cross-domain.md](../cross-domain.md) y [../catalogo/api.md](../catalogo/api.md).

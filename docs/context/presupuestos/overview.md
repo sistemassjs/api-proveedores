@@ -23,7 +23,14 @@ Visión de producto (menú / secciones): el módulo no es solo el ciclo del docu
 | Catálogo compuestos (matriz P.U.) | **Hecho** | API + front catálogo (list/form/detail, filtro Compuestos, ActionSheet básico/compuesto) |
 | Matriz de costos en línea PPTO | **Hecho** | Captura: toggle + editor; snapshot desde catálogo; PDF/preview/público vía `config_mostrar_matriz_costos` |
 | Matriz en plantillas | **Hecho** | Persistencia + aplicar / desde-presupuesto |
+| Matriz anidada + página compuesto | **Hecho** | Breadcrumb; `componentes_anidados`; ver [matriz-costos-opus.md](./matriz-costos-opus.md) |
+| Clave de partida / renglón matriz | **Hecho** | Vacía → número de renglón; `clave_snapshot` en componentes |
+| Indirectos (oficina, campo, utilidad, cargos, financiamiento, otros) | **Hecho** | Generales del documento + override propio por matriz |
+| % sobre mano de obra (`porcentaje_mo`) | **Hecho** | Importe = % de MO del mismo nivel |
+| Cuadrillas de obra | **Hecho** | CRUD anidado al presupuesto; renglones de matriz ligados |
+| Hoja de análisis por compuesto | **Hecho** | Flag `mostrar_hoja_analisis` → anexos en PDF (preview Angular: pendiente paridad) |
 | Capítulos / raíz estilo Opus | **Roadmap** | Ver [matriz-costos-opus.md](./matriz-costos-opus.md) Fase 2 |
+| Explosión de insumos / totales obra por tipo | **Roadmap** | Fase 3 |
 | Tipos de insumo Opus (MO, etc.) | **Hecho (MVP)** | `material`\|`mano_obra`\|`herramienta`\|`equipo`\|`auxiliar`\|`flete`\|`trabajo` — ver [matriz-costos-opus.md](./matriz-costos-opus.md) |
 | Tarjetas Presentación (emisor / Atte.) | **Hecho** | API config + sección menú **Tarjetas** (list/form/detail); Perfil enlaza al listado |
 | Menú producto (Generar / Mis presupuestos / …) | **Hecho** | Ver [front.md](./front.md) |
@@ -88,7 +95,7 @@ Ajustes de documento en captura (cerrados):
 
 **Pago → finalización**: roadmap.
 
-**Matriz / Opus:** aproximación documentada en [matriz-costos-opus.md](./matriz-costos-opus.md) (Fase 0 + tipado MVP; capítulos = Fase 2).
+**Matriz / Opus:** aproximación documentada en [matriz-costos-opus.md](./matriz-costos-opus.md) (Fase 0–1 + anidados/indirectos + clave/% MO/cuadrillas/hoja PDF; capítulos = Fase 2; explosión = Fase 3). Decisiones del hito: [hito-indirectos-matriz-anidada.md](../../planning/hito-indirectos-matriz-anidada.md).
 
 **Gestión de recursos (v1 UI):** menú Generar / Mis presupuestos / **Recursos** (Clientes, Catálogo de conceptos, Tarjetas Presentación); CRUD list/form/detail por recurso (patrón SPP). Detalle en [front.md](./front.md).
 

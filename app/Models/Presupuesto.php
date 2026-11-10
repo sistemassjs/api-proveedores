@@ -1022,6 +1022,33 @@ class Presupuesto extends BaseModel
     }
 
     /**
+     * True si el destinatario es un proveedor registrado en la plataforma (no cliente de cartera / enlace público).
+     */
+    public function dirigidoAProveedorPlataforma(): bool
+    {
+        return (int) ($this->proveedor_receptor_id ?? 0) > 0;
+    }
+
+    /**
+     * URL de vista para el cliente: preview autenticado si va a empresa de la plataforma; enlace público en caso contrario.
+     */
+    public function urlVistaCliente(?string $frontendUrl = null): string
+    {
+        $base = rtrim((string) ($frontendUrl ?? config('app.frontend_url', config('app.url'))), '/');
+
+        if ($this->dirigidoAProveedorPlataforma()) {
+            return $base.'/pages/proveedor/presupuestos/preview/'.$this->id;
+        }
+
+        $this->asegurarTokenPublico();
+        $token = (string) ($this->token_publico ?? '');
+
+        return $token !== ''
+            ? $base.'/public/presupuesto/'.$token
+            : $base.'/pages/proveedor/presupuestos/preview/'.$this->id;
+    }
+
+    /**
      * Genera un token público único para compartir el presupuesto.
      */
     public function generarTokenPublico(): string

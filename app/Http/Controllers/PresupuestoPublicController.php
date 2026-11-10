@@ -4,19 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\Presupuesto\PresupuestoPublicResource;
 use App\Models\Presupuesto;
-use App\Models\User;
-use App\Notifications\Presupuesto\PresupuestoAceptadoNotification;
-use App\Notifications\Presupuesto\PresupuestoRechazadoNotification;
 use App\Support\PresupuestoPdf;
+use App\Support\PresupuestoRespuestaCliente;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Validator;
 
 class PresupuestoPublicController extends Controller
 {
     use ApiResponse;
+
+    private const MSG_SOLO_EMPRESA = 'Este presupuesto está dirigido a una empresa de la plataforma y solo puede verse o responderse por usuarios de esa empresa en GestionPlus.';
 
     /**
      * Obtiene el presupuesto por token público (sin autenticación).
@@ -32,6 +31,13 @@ class PresupuestoPublicController extends Controller
 
         if (! $presupuesto) {
             return $this->error('Presupuesto no encontrado o enlace inválido.', null, 404);
+        }
+
+        if ($presupuesto->dirigidoAProveedorPlataforma()) {
+            return $this->error(self::MSG_SOLO_EMPRESA, [
+                'requiere_autenticacion_empresa' => true,
+                'presupuesto_id' => (int) $presupuesto->id,
+            ], 403);
         }
 
         $presupuesto->load(Presupuesto::eagerLodable());
@@ -56,6 +62,13 @@ class PresupuestoPublicController extends Controller
             return $this->error('Presupuesto no encontrado o enlace inválido.', null, 404);
         }
 
+        if ($presupuesto->dirigidoAProveedorPlataforma()) {
+            return $this->error(self::MSG_SOLO_EMPRESA, [
+                'requiere_autenticacion_empresa' => true,
+                'presupuesto_id' => (int) $presupuesto->id,
+            ], 403);
+        }
+
         try {
             return PresupuestoPdf::generarPdf($presupuesto);
         } catch (\Throwable $e) {
@@ -77,6 +90,13 @@ class PresupuestoPublicController extends Controller
             return $this->error('Presupuesto no encontrado o enlace inválido.', null, 404);
         }
 
+        if ($presupuesto->dirigidoAProveedorPlataforma()) {
+            return $this->error(self::MSG_SOLO_EMPRESA, [
+                'requiere_autenticacion_empresa' => true,
+                'presupuesto_id' => (int) $presupuesto->id,
+            ], 403);
+        }
+
         if ($presupuesto->estado !== Presupuesto::ESTADO_ENVIADO) {
             return $this->error(
                 'Solo se puede aceptar un presupuesto que esté en estado enviado.',
@@ -85,15 +105,10 @@ class PresupuestoPublicController extends Controller
             );
         }
 
-        $estadoAnterior = $presupuesto->estado;
-        $presupuesto->estado = Presupuesto::ESTADO_ACEPTADO;
-        $presupuesto->save();
-        $presupuesto->registrarCambioEstado($estadoAnterior, auth()->id());
-
-        $this->notificarCreadorUnaSolaVez($presupuesto, new PresupuestoAceptadoNotification($presupuesto), PresupuestoAceptadoNotification::class);
+        $fresh = PresupuestoRespuestaCliente::aceptar($presupuesto, auth()->id());
 
         return $this->success(
-            new PresupuestoPublicResource($presupuesto->fresh(Presupuesto::eagerLodable())),
+            new PresupuestoPublicResource($fresh),
             'Presupuesto aceptado correctamente.'
         );
     }
@@ -112,6 +127,13 @@ class PresupuestoPublicController extends Controller
             return $this->error('Presupuesto no encontrado o enlace inválido.', null, 404);
         }
 
+        if ($presupuesto->dirigidoAProveedorPlataforma()) {
+            return $this->error(self::MSG_SOLO_EMPRESA, [
+                'requiere_autenticacion_empresa' => true,
+                'presupuesto_id' => (int) $presupuesto->id,
+            ], 403);
+        }
+
         if ($presupuesto->estado !== Presupuesto::ESTADO_ENVIADO) {
             return $this->error(
                 'Solo se puede rechazar un presupuesto que esté en estado enviado.',
@@ -128,85 +150,15 @@ class PresupuestoPublicController extends Controller
             return $this->error('Datos inválidos.', $validator->errors()->all(), 422);
         }
 
-        $motivo = $request->input('motivo');
-        $motivoTrim = is_string($motivo) ? trim($motivo) : '';
-        $estadoAnterior = $presupuesto->estado;
-        $presupuesto->estado = $motivoTrim !== ''
-            ? Presupuesto::ESTADO_RECHAZADO_CON_OBSERVACION
-            : Presupuesto::ESTADO_RECHAZADO;
-        if ($motivoTrim !== '') {
-            $presupuesto->motivo_rechazo = $motivoTrim;
-        }
-        $presupuesto->save();
-        $presupuesto->registrarCambioEstado(
-            $estadoAnterior,
-            $request->user()?->id,
-            null,
-            $motivoTrim !== '' ? $motivoTrim : null
+        $fresh = PresupuestoRespuestaCliente::rechazar(
+            $presupuesto,
+            $request->input('motivo'),
+            $request->user()?->id
         );
-
-        $this->notificarCreadorUnaSolaVez($presupuesto, new PresupuestoRechazadoNotification($presupuesto, $motivo), PresupuestoRechazadoNotification::class);
 
         return $this->success(
-            new PresupuestoPublicResource($presupuesto->fresh(Presupuesto::eagerLodable())),
+            new PresupuestoPublicResource($fresh),
             'Presupuesto rechazado.'
         );
-    }
-
-    private function notificarCreadorUnaSolaVez(Presupuesto $presupuesto, Notification $notification, string $notificationClass): void
-    {
-        $destinatario = $this->resolverUsuarioNotificarEmisorPresupuesto($presupuesto);
-        if (! $destinatario) {
-            return;
-        }
-
-        $yaExiste = $destinatario->notifications()
-            ->where('type', $notificationClass)
-            ->where('data->presupuesto_id', (int) $presupuesto->id)
-            ->where('created_at', '>=', now()->subMinutes(5))
-            ->exists();
-
-        if ($yaExiste) {
-            return;
-        }
-
-        $destinatario->notify($notification);
-
-        $notif = $destinatario->notifications()
-            ->where('type', $notificationClass)
-            ->where('data->presupuesto_id', (int) $presupuesto->id)
-            ->latest()
-            ->first();
-
-        $presupuesto->addNotification($notif?->id);
-    }
-
-    /**
-     * Usuario al que notificar en el proveedor emisor: creador del presupuesto si aplica;
-     * si no hay user_id (registros viejos), un único usuario activo con acceso al proveedor.
-     */
-    private function resolverUsuarioNotificarEmisorPresupuesto(Presupuesto $presupuesto): ?User
-    {
-        $presupuesto->loadMissing(['user', 'proveedor']);
-
-        $creador = $presupuesto->user;
-        if (
-            $creador
-            && method_exists($creador, 'tieneAccesoAProveedor')
-            && $creador->tieneAccesoAProveedor((int) $presupuesto->proveedor_id)
-        ) {
-            return $creador;
-        }
-
-        $proveedor = $presupuesto->proveedor;
-        if (! $proveedor) {
-            return null;
-        }
-
-        return $proveedor->usuariosActivos()->get()->unique('id')->first(function ($u) use ($presupuesto) {
-            return $u instanceof User
-                && method_exists($u, 'tieneAccesoAProveedor')
-                && $u->tieneAccesoAProveedor((int) $presupuesto->proveedor_id);
-        });
     }
 }

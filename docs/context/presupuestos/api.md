@@ -26,22 +26,25 @@ Repo: `api-proveedores`. Prefijo gerente: `proveedores/{proveedor}/…` + `prove
 | | `…/plantillas/{plantilla}/anexos-pdf` | Anexos PDF de plantilla |
 | Anexos | `{proveedor}/presupuestos/{presupuesto}/anexos` (+ `/bulk`) | `ProveedorPresupuestoAnexoController` |
 | Anexos PDF | `…/anexos-pdf` | `ProveedorPresupuestoAnexoPdfController` |
+| Cuadrillas | `{proveedor}/presupuestos/{presupuesto}/cuadrillas` | `ProveedorPresupuestoCuadrillaController` |
+| | `GET/POST /`, `GET/PUT/PATCH/DELETE /{cuadrilla}` | CRUD; al actualizar costo propaga P.U. en matrices que la usan |
 | Config | `{proveedor}/config-emisor-receptor-presupuestos` | `ProveedorPresupuestoConfigController` |
 
-`show` carga `estadoLogs.user` y `conceptos.componentes`. Payload incluye `estado_logs`, fechas derivadas, `ppto_config`, `config_mostrar_matriz_costos`, `conceptos[].tiene_matriz` + `componentes[]`.
+`show` carga `estadoLogs.user`, `conceptos.componentes` y `cuadrillas`. Payload incluye `estado_logs`, fechas derivadas, `ppto_config`, `config_mostrar_matriz_costos`, `indirecto_*_porcentaje`, `cuadrillas[]`, `conceptos[].tiene_matriz` + `mostrar_hoja_analisis` + `componentes[]` (con anidados / `calculo` / `porcentaje` / `presupuesto_cuadrilla_id` / `clave_snapshot`).
 
 ## Matriz de P.U. (API)
 
 | Superficie | Contrato |
 |------------|----------|
-| Catálogo store/update | `es_compuesto`, `clave`, `componentes[]` (`categoria` tipada Opus: material\|mano_obra\|herramienta\|equipo\|auxiliar\|flete\|trabajo; legacy producto\|servicio aceptado y coaccionado). Compuesto: P.U. recalculado (`PresupuestoMatrizCalculoService`). |
+| Catálogo store/update | `es_compuesto`, `clave`, `componentes[]` (`categoria` tipada Opus: material\|mano_obra\|herramienta\|equipo\|auxiliar\|flete\|trabajo; legacy producto\|servicio aceptado y coaccionado; anidados, `calculo`/`porcentaje`, indirectos propios). Compuesto: P.U. recalculado (`PresupuestoMatrizCalculoService`). |
 | Catálogo index | Filtro `es_compuesto`; `withCount` → `componentes_count`. Show carga `componentes`. |
 | Presupuesto index | Filtro opcional `matriz_tipo` (PPTOs con ≥1 componente de ese tipo). |
-| Presupuesto store/update | `config_mostrar_matriz_costos` (bool, default false). Por línea: `tiene_matriz` + `componentes[]` (o componentes sin flag ⇒ matriz). Sin matriz: `precio_unitario` obligatorio. |
-| Duplicar | Copia `config_mostrar_matriz_costos` y componentes de línea (snapshot). |
-| Plantillas store/update / aplicar / desde-presupuesto | Persisten y restauran `tiene_matriz` + componentes de línea (`sincronizarComponentesPlantillaLinea` / `sincronizarComponentesLinea`). |
-| Motor | `App\Services\Presupuesto\PresupuestoMatrizCalculoService` — `importe = cant × precio`; anti-ciclo en catálogo. |
-| PDF | `PresupuestoPdf` incluye `config_mostrar_matriz_costos` + `componentes[]` por línea; Blade `presupuesto-pdf-fila-concepto` pinta desglose si el flag está activo. |
+| Presupuesto store/update | `config_mostrar_matriz_costos` (bool, default false); `indirecto_*_porcentaje`. Por línea: `tiene_matriz`, `mostrar_hoja_analisis`, `clave`, override indirectos, `componentes[]` (o componentes sin flag ⇒ matriz). Sin matriz: `precio_unitario` obligatorio. |
+| Cuadrillas | Nested resource; body: `clave`, `nombre`, `integrantes`, `unidad`, `costo_unitario`, `orden`. |
+| Duplicar | Copia `config_mostrar_matriz_costos`, indirectos, componentes de línea (snapshot) y remapea IDs de cuadrillas. |
+| Plantillas store/update / aplicar / desde-presupuesto | Persisten y restauran `tiene_matriz` + `mostrar_hoja_analisis` + componentes (`sincronizarComponentesPlantillaLinea` / `sincronizarComponentesLinea`). |
+| Motor | `App\Services\Presupuesto\PresupuestoMatrizCalculoService` — cantidad×precio o `porcentaje_mo`; anidados; cuadrillas; pie de indirectos; anti-ciclo. |
+| PDF | `PresupuestoPdf` incluye desglose si `config_mostrar_matriz_costos`; hojas de análisis (`mostrar_hoja_analisis`) tras cuerpo + anexos (`presupuesto-pdf-hojas-analisis`). Orden: cuerpo → anexos PDF → hojas análisis. |
 
 Detalle y roadmap Opus: [matriz-costos-opus.md](./matriz-costos-opus.md).
 
@@ -103,9 +106,9 @@ Flujo de disparo, casos receptor registrado/no registrado y formato de título/m
 - `titulo_anexos`: `nullable|string|max:80` en `StorePresupuestoRequest` / `UpdatePresupuestoRequest`. Resources y Blade (sección imágenes) normalizan vacío → **Anexos**.
 - `titulo_anexos_pdf`: `nullable|string|max:80`. Resources normalizan vacío → **Anexos PDF**. En el PDF generado: título principal del **estampado** de cada hoja mergeada (`PresupuestoPdfAnexoEstampado`). Si el anexo PDF tiene `titulo` propio distinto, se muestra como subtítulo.
 - Duplicar: body opcional (bool, default `true`): `mantener_cliente`, `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`. Si `false`, el borrador nuevo omite receptor, anexos imagen/PDF (copia de archivos propios) o tarjeta emisor según el flag. No copia columnas legacy droppeadas (`obs_traslados`, `obs_viaticos`, `term_cond_anticipo_porcentaje`). Copia `titulo_anexos` / `titulo_anexos_pdf`, términos vía `term_cond_*` / `term_cond_visibilidad`, `pdf_theme` / `ppto_config`, `config_mostrar_matriz_costos`, y matrices de línea. Resetea `motivo_rechazo`, `item_visto`, folio y `fecha_emision`. Front: modal de confirmación en Mis presupuestos con switches.
-- Matriz P.U.: ver sección **Matriz de P.U. (API)** arriba. Categorías de componente solo `producto` \| `servicio`.
-- Plantillas: CRUD en `…/plantillas`. Contenido de la receta: **conceptos** (incl. matriz), **anexos imagen/PDF**, **tema**, **tarjeta**. **Sin** descripción general del documento (`concepto_general` nullable/legacy; captura y aplicar/desde-presupuesto no lo usan). `POST …/aplicar` → borrador nuevo vía `PresupuestoPlantillaAplicarService::aplicar`. `POST …/aplicar-sobre/{presupuesto}` → `aplicarSobre` sobre el PPTO actual (reemplaza conceptos/anexos y copia layout; no toca receptor/fecha/descripción/nombre). `POST …/desde-presupuesto/{presupuesto}` → `PresupuestoPlantillaDesdePresupuestoService` (body opcional bool default `true`: `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`, `mantener_tema`; **sin** receptor ni descripción general). Anexos en tablas hijas + endpoints anidados. Matriz: ver [matriz-costos-opus.md](./matriz-costos-opus.md).
-- PDF tabla de conceptos: columna `#` centrada (`td:first-child`) en concepto y párrafo. El número de la fila es la posición. Concepto y compuesto pintan su `clave` bajo ese número. Si llega vacía, el guardado la completa con el número de renglón. `conceptos.*.clave` es `nullable|string|max:40` en store/update de presupuesto y plantilla. Los párrafos se guardan con `clave` null.
+- Matriz P.U.: ver sección **Matriz de P.U. (API)** arriba. Categorías de **insumo** en componente: tipos Opus (no `producto`/`servicio` comerciales; legacy se coacciona).
+- Plantillas: CRUD en `…/plantillas`. Contenido de la receta: **conceptos** (incl. matriz / hoja análisis), **anexos imagen/PDF**, **tema**, **tarjeta**. **Sin** descripción general del documento (`concepto_general` nullable/legacy; captura y aplicar/desde-presupuesto no lo usan). `POST …/aplicar` → borrador nuevo vía `PresupuestoPlantillaAplicarService::aplicar`. `POST …/aplicar-sobre/{presupuesto}` → `aplicarSobre` sobre el PPTO actual (reemplaza conceptos/anexos y copia layout; no toca receptor/fecha/descripción/nombre). `POST …/desde-presupuesto/{presupuesto}` → `PresupuestoPlantillaDesdePresupuestoService` (body opcional bool default `true`: `mantener_anexos_imagen`, `mantener_anexos_pdf`, `mantener_tarjeta`, `mantener_tema`; **sin** receptor ni descripción general). Anexos en tablas hijas + endpoints anidados. Matriz: ver [matriz-costos-opus.md](./matriz-costos-opus.md).
+- PDF tabla de conceptos: columna `#` centrada (`td:first-child`) en concepto y párrafo. El número de la fila es la posición. Concepto y compuesto pintan su `clave` bajo ese número. Si llega vacía, el guardado la completa con el número de renglón. `conceptos.*.clave` es `nullable|string|max:40` en store/update de presupuesto y plantilla. Los párrafos se guardan con `clave` null. `conceptos.*.mostrar_hoja_analisis` bool (solo tiene efecto con matriz).
 - Anexos imagen: **sin** límite de cantidad en API (el tope de 4 es solo front).
 - No hay endpoints de cobro PayPal/Stripe ni de “finalizar por pago” en presupuestos (roadmap).
 - Cuentas bancarias: rutas de `{proveedor}/cuentas-bancarias` (perfil / soporte); no son el flujo SP.

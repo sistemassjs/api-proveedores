@@ -15,7 +15,11 @@ final class PresupuestoPdfLayout
      *     salto_pagina_antes: bool,
      *     pagina_atentamente: int,
      *     reserva_pie_html_mm: float,
-     *     firma_en_flujo: bool
+     *     firma_en_flujo: bool,
+     *     altura_util_mm?: float,
+     *     altura_atentamente_mm?: float,
+     *     altura_terminos_mm?: float,
+     *     resto_antes_terminos_mm?: float
      * }
      */
     public static function calcularCierreAtentamente(array $payload, PresupuestoPdfDocumentConfig $pdf): array
@@ -32,25 +36,26 @@ final class PresupuestoPdfLayout
         }
 
         $alturaAtentamente = self::alturaAtentamentePintadaMm($payload, $pdf);
-        // El flujo real empieza en el padding superior y puede bajar hasta
-        // donde arranca la firma. El alto útil anterior restaba márgenes de más
-        // y cortaba la hoja aunque todavía cupieran los términos.
-        $firmaDesdeFondo = $pdf->footerBottomMm()
-            + $pdf->footerHeightMm()
-            + $pdf->gapAtentamenteFooterMm()
-            + $alturaAtentamente;
-        $origenFlujo = $pdf->margenSuperiorContenidoMm();
-        $topeFirma = max(40.0, $pdf->alturaHojaMm() - $firmaDesdeFondo - $origenFlujo - 3.0);
+        // Capacidad = área HTML útil de DomPDF (caja @page − paddings del body).
+        // La firma se pinta en el padding inferior; el HTML no entra ahí.
+        $alturaUtil = $pdf->alturaUtilContenidoHtmlMm();
+        $alturaTerminos = self::alturaTotalTerminosMm($payload, $pdf->layoutVariantKey());
 
         $variant = $pdf->layoutVariantKey();
-        $flujo = self::simularFlujoHastaFinTerminos($payload, $pdf, $variant, $topeFirma);
+        $flujo = self::simularFlujoHastaFinTerminos($payload, $pdf, $variant, $alturaUtil);
         $pageFin = max(1, (int) $flujo['page']);
         $yFin = (float) $flujo['y'];
         $pageAntes = max(1, (int) ($flujo['page_antes_terminos'] ?? $pageFin));
         $yAntes = (float) ($flujo['y_antes_terminos'] ?? $yFin);
-        $terminosCruzanFirma = $pageFin > $pageAntes
-            || ($pageFin === 1 && $yFin > $topeFirma && $yAntes <= $topeFirma + 0.5);
-        $salto = $terminosCruzanFirma;
+        $restoEnPaginaAntes = max(0.0, $alturaUtil - $yAntes);
+
+        // Solo forzar hoja nueva si los términos no caben enteros en el resto
+        // real de la página actual (evita dejar hueco bajo totales).
+        $terminosNoCabenEnResto = $pageAntes === $pageFin
+            && $alturaTerminos > 0.05
+            && $alturaTerminos > ($restoEnPaginaAntes + 0.8);
+        $terminosYaPartidos = $pageFin > $pageAntes;
+        $salto = $terminosYaPartidos || $terminosNoCabenEnResto;
         $paginaAtentamente = $salto ? $pageAntes + 1 : $pageFin;
         $reservaPieMm = 0.0;
 
@@ -60,6 +65,11 @@ final class PresupuestoPdfLayout
             'pagina_atentamente' => $paginaAtentamente,
             'reserva_pie_html_mm' => $salto ? 0.0 : round($reservaPieMm, 2),
             'firma_en_flujo' => false,
+            // Diagnóstico interno (no usado por Blade hoy).
+            'altura_util_mm' => round($alturaUtil, 2),
+            'altura_atentamente_mm' => round($alturaAtentamente, 2),
+            'altura_terminos_mm' => round($alturaTerminos, 2),
+            'resto_antes_terminos_mm' => round($restoEnPaginaAntes, 2),
         ];
     }
 
@@ -138,9 +148,10 @@ final class PresupuestoPdfLayout
             $consumir($variant === 'tailwind' ? 1.0 : 3.0);
             $consumir((float) $secciones['descripcion_general']);
         }
-        $consumir(4.0);
+        $consumir($variant === 'tailwind' ? 2.0 : 4.0);
         $consumir((float) ($secciones['titulo_presupuesto'] ?? 0));
-        $consumir($variant === 'tailwind' ? 8.0 : 3.0);
+        // margin-bottom de la tabla (~6 mm tailwind) + aire previo.
+        $consumir($variant === 'tailwind' ? 6.0 : 3.0);
 
         $conceptos = $payload['conceptos'] ?? [];
         $lineaTabla = $pdf->lineaTablaMm();
@@ -156,7 +167,8 @@ final class PresupuestoPdfLayout
             }
         }
 
-        $consumir($variant === 'tailwind' ? 6.0 : 3.0);
+        // after-table-space--compact ≈ 3 mm.
+        $consumir($variant === 'tailwind' ? 3.0 : 3.0);
         if (($payload['config_mostrar_totales'] ?? true) && ($secciones['totales'] ?? 0) > 0) {
             $consumir((float) $secciones['totales'], true);
         }
@@ -188,7 +200,8 @@ final class PresupuestoPdfLayout
         $terminos = $payload['terminos_enunciados'] ?? [];
         $validaciones = $payload['validaciones_enunciados'] ?? [];
         $observaciones = $payload['observaciones_enunciados'] ?? [];
-        $lineaTermino = 4.2;
+        // Tipografía real ~6.2pt con line-height compacto.
+        $lineaTermino = 3.4;
         $fragmentos = [];
 
         $hayAlguno = count($terminos) > 0 || count($validaciones) > 0 || count($observaciones) > 0;
@@ -196,41 +209,50 @@ final class PresupuestoPdfLayout
             return $fragmentos;
         }
 
-        $fragmentos[] = ['altura_mm' => 4.0, 'evitar_corte' => true];
+        $fragmentos[] = ['altura_mm' => $variant === 'tailwind' ? 2.0 : 3.0, 'evitar_corte' => false];
 
         if (count($terminos) > 0) {
-            $fragmentos[] = ['altura_mm' => 6.5, 'evitar_corte' => true];
+            $fragmentos[] = ['altura_mm' => 4.5, 'evitar_corte' => true];
             foreach ($terminos as $texto) {
                 $fragmentos[] = [
-                    'altura_mm' => self::alturaTextoMm((string) $texto, 95, $lineaTermino) + 0.6,
+                    'altura_mm' => self::alturaTextoMm((string) $texto, 100, $lineaTermino) + 0.4,
                     'evitar_corte' => true,
                 ];
             }
         }
         if (count($validaciones) > 0) {
-            $fragmentos[] = ['altura_mm' => 5.0, 'evitar_corte' => true];
+            $fragmentos[] = ['altura_mm' => 4.0, 'evitar_corte' => true];
             foreach ($validaciones as $item) {
                 $fragmentos[] = [
-                    'altura_mm' => self::alturaTextoMm((string) $item, 95, $lineaTermino) + 0.6,
+                    'altura_mm' => self::alturaTextoMm((string) $item, 100, $lineaTermino) + 0.4,
                     'evitar_corte' => true,
                 ];
             }
         }
         if (count($observaciones) > 0) {
-            $fragmentos[] = ['altura_mm' => 5.0, 'evitar_corte' => true];
+            $fragmentos[] = ['altura_mm' => 4.0, 'evitar_corte' => true];
             foreach ($observaciones as $obs) {
                 $fragmentos[] = [
-                    'altura_mm' => self::alturaTextoMm((string) $obs, 95, $lineaTermino) + 0.6,
+                    'altura_mm' => self::alturaTextoMm((string) $obs, 100, $lineaTermino) + 0.4,
                     'evitar_corte' => true,
                 ];
             }
         }
 
-        if ($variant === 'tailwind' && count($fragmentos) > 1) {
-            $fragmentos[0]['altura_mm'] = 3.0;
+        return $fragmentos;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function alturaTotalTerminosMm(array $payload, string $variant): float
+    {
+        $total = 0.0;
+        foreach (self::fragmentosVerticalesTerminosMm($payload, $variant) as $fragmento) {
+            $total += (float) ($fragmento['altura_mm'] ?? 0);
         }
 
-        return $fragmentos;
+        return $total;
     }
 
     private static function capacidadPaginaMm(int $pageNum, float $alturaUtil, PresupuestoPdfDocumentConfig $pdf): float
@@ -260,8 +282,9 @@ final class PresupuestoPdfLayout
 
         $altura = $lineaTabla;
         $imagen = $concepto['imagen_base64'] ?? '';
+        // CSS real: tr.linea-con-imagen { height: 18mm }
         if (is_string($imagen) && $imagen !== '') {
-            $altura = max($altura, 23.0);
+            $altura = max($altura, 18.0);
         }
 
         $mostrarMatriz = (bool) ($payload['config_mostrar_matriz_costos'] ?? false);
@@ -335,12 +358,8 @@ final class PresupuestoPdfLayout
     public static function estimarSeccionesMm(array $payload, string $variant = 'default'): array
     {
         $conceptos = $payload['conceptos'] ?? [];
-        $terminos = $payload['terminos_enunciados'] ?? [];
-        $validaciones = $payload['validaciones_enunciados'] ?? [];
-        $observaciones = $payload['observaciones_enunciados'] ?? [];
 
         $lineaTabla = $variant === 'tailwind' ? 6.8 : 5.5;
-        $lineaTermino = 4.2;
 
         $tablaMm = 6.0;
         foreach ($conceptos as $concepto) {
@@ -353,25 +372,7 @@ final class PresupuestoPdfLayout
             $tablaMm += 10.0;
         }
 
-        $terminosMm = 0.0;
-        if (count($terminos) > 0 || count($validaciones) > 0 || count($observaciones) > 0) {
-            $terminosMm += 4.0;
-        }
-        if (count($terminos) > 0) {
-            $terminosMm += 6.5;
-            foreach ($terminos as $texto) {
-                $terminosMm += self::alturaTextoMm((string) $texto, 95, $lineaTermino);
-            }
-        }
-        if (count($validaciones) > 0) {
-            $terminosMm += 5.0 + count($validaciones) * $lineaTermino;
-        }
-        if (count($observaciones) > 0) {
-            $terminosMm += 5.0;
-            foreach ($observaciones as $obs) {
-                $terminosMm += self::alturaTextoMm((string) $obs, 95, $lineaTermino);
-            }
-        }
+        $terminosMm = self::alturaTotalTerminosMm($payload, $variant);
 
         $receptorLineas = $payload['receptor_lineas'] ?? [];
         $receptorMm = 5.0 + max(1, count($receptorLineas)) * 4.2;
@@ -385,11 +386,21 @@ final class PresupuestoPdfLayout
         if ($payload['config_mostrar_totales'] ?? true) {
             $filasIndirectos = count(app(\App\Services\Presupuesto\PresupuestoMatrizCalculoService::class)
                 ->filasIndirectosDocumento($payload));
-            $totalesMm = 32.0 + ($filasIndirectos * 5.0) + ($filasIndirectos > 0 ? 2.0 : 0.0);
+            // Subtotal + total + importe con letra (~22 mm) + IVA/descuento opcionales.
+            $filasBase = 3; // subtotal, total, importe letra
+            if (! empty($payload['con_iva'])) {
+                $filasBase++;
+            }
+            $tieneDescuento = ((int) ($payload['porcentaje_descuento'] ?? 0) >= 1)
+                || ((float) ($payload['cantidad_descuento'] ?? 0) > 0);
+            if ($tieneDescuento) {
+                $filasBase++;
+            }
+            $totalesMm = 10.0 + ($filasBase * 5.2) + ($filasIndirectos * 5.0) + ($filasIndirectos > 0 ? 2.0 : 0.0);
         }
 
         return [
-            'encabezado' => $variant === 'tailwind' ? 37.0 : 38.0,
+            'encabezado' => $variant === 'tailwind' ? 34.0 : 36.0,
             'receptor' => $receptorMm,
             'descripcion_general' => $descripcionMm,
             'titulo_presupuesto' => $variant === 'tailwind' ? 4.0 : 11.0,

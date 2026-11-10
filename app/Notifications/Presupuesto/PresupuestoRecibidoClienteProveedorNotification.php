@@ -101,10 +101,7 @@ class PresupuestoRecibidoClienteProveedorNotification extends Notification imple
             $evento = 'solicitud_autorizacion';
         }
 
-        $frontendUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-        $urlPublica = $this->presupuesto->token_publico
-            ? $frontendUrl.'/public/presupuesto/'.$this->presupuesto->token_publico
-            : $frontendUrl.'/public/presupuesto/'.$this->presupuesto->id;
+        $urlVista = $this->presupuesto->urlVistaCliente();
 
         return array_merge([
             'tipo' => 'presupuesto',
@@ -112,7 +109,7 @@ class PresupuestoRecibidoClienteProveedorNotification extends Notification imple
             'titulo' => PresupuestoNotificationContent::tituloBandeja($this->presupuesto, $eventoTitulo),
             'mensaje' => PresupuestoNotificationContent::mensajeConHechos($mensajeBase, $this->presupuesto),
             'action_url' => '/pages/proveedor/presupuestos/preview/'.$this->presupuesto->id,
-            'url_publica' => $urlPublica,
+            'url_publica' => $urlVista,
             'presupuesto_id' => $this->presupuesto->id,
             'proveedor_emisor_id' => $this->presupuesto->proveedor_id,
             'proveedor_receptor_id' => $this->presupuesto->proveedor_receptor_id,
