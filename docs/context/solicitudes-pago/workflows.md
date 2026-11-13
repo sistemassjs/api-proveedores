@@ -2,11 +2,21 @@
 
 ## Ciclo SP (resumen)
 
-1. **Alta** — con factura o `sin-factura` (estado pendiente).
+### Canal Construcc
+
+1. **Alta** — con factura o `sin-factura` (estado pendiente) + `empresa_construcc_id`.
 2. **Autorización** — roles Construcc (flags por rol) → autorizada o rechazada.
 3. **Factura** — si faltaba, subir PDF/XML.
 4. **Pago** — completo o parcial (`PagoSPP` + pivot, `origen=spp`) → pagado.
 5. **Comprobantes** — fuente de verdad en el **pago**; espejo en la SPP para listados/descarga por SP.
+
+### Canal GestionPlus (empresa → empresa)
+
+1. **Alta** — cobradora crea con `empresa_gestionplus_id` (sin InterAPI / sin folio Construcc).
+2. **Recepción** — pagadora ve en `solicitudes-pago-recibidas`; notificación in-app.
+3. **Autorización / rechazo** — un paso (GERENTE/SUPERVISOR vía membresía); rechazo con motivo.
+4. **Pago** — `POST …/recibidas/{id}/pagar` con comprobante; abonos permitidos; tras abono parcial permanece `autorizada`.
+5. **Comprobantes** — mismo modelo (`pagos_spp` + espejo en SPP).
 
 ## Comprobante de pago (importante)
 

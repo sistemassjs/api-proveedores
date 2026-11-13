@@ -3,6 +3,7 @@
 namespace App\Http\Requests\SolicitudPago;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class CrearSolicitudPagoRequest extends FormRequest
 {
@@ -20,6 +21,7 @@ class CrearSolicitudPagoRequest extends FormRequest
             'cotizacion' => 'nullable|file|mimes:pdf,jpg,jpeg,png,bmp,gif,webp,doc,docx,xls,xlsx|max:10240',
             'proveedor_id' => 'required|exists:proveedores,id',
             'empresa_construcc_id' => 'nullable|exists:empresa_construcc,id',
+            'empresa_gestionplus_id' => 'nullable|exists:proveedores,id',
             'empresa' => 'nullable|string|max:255',
 
             // Datos del usuario Construcc que genera la SP
@@ -68,6 +70,7 @@ class CrearSolicitudPagoRequest extends FormRequest
             'proveedor_id.required' => 'Debe seleccionar un proveedor',
             'proveedor_id.exists' => 'El proveedor seleccionado no existe',
             'empresa_construcc_id.exists' => 'La empresa de construcción seleccionada no existe',
+            'empresa_gestionplus_id.exists' => 'La empresa GestionPlus seleccionada no existe',
             'empresa.required' => 'El nombre de la empresa es obligatorio',
             'empresa.max' => 'El nombre de la empresa no debe exceder 255 caracteres',
 
@@ -90,5 +93,30 @@ class CrearSolicitudPagoRequest extends FormRequest
             'cuentas_bancarias.*.cuenta_bancaria_id.exists' => 'La cuenta bancaria seleccionada no existe',
             'cuentas_bancarias.*.datos_especificos.array' => 'Los datos específicos deben ser un array válido',
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $hasConstrucc = filled($this->input('empresa_construcc_id'));
+            $hasGestionPlus = filled($this->input('empresa_gestionplus_id'));
+
+            if ($hasConstrucc === $hasGestionPlus) {
+                $validator->errors()->add(
+                    'empresa_gestionplus_id',
+                    'Debe indicar exactamente un pagador: empresa_construcc_id o empresa_gestionplus_id.'
+                );
+            }
+
+            if (
+                $hasGestionPlus
+                && (int) $this->input('empresa_gestionplus_id') === (int) $this->input('proveedor_id')
+            ) {
+                $validator->errors()->add(
+                    'empresa_gestionplus_id',
+                    'La empresa pagadora no puede ser la misma que la cobradora.'
+                );
+            }
+        });
     }
 }

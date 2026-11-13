@@ -6,6 +6,15 @@ Dominio **aislado**: cobranza del proveedor hacia empresas constructoras (SP / S
 
 Crear y dar seguimiento a solicitudes de pago; subir facturas PDF/XML; recibir comprobantes; pagos parciales/completos; **pagos directos** (sin SPP ni aprobación); convertir OC a SP; gestionar empresas constructoras vinculadas.
 
+**Canales de pagador (XOR):**
+
+| Canal | Campo | Quién paga |
+|-------|--------|------------|
+| Construcc (legado) | `empresa_construcc_id` | Empresa constructora vía API Construcc |
+| GestionPlus | `empresa_gestionplus_id` → `proveedores.id` | Otra empresa de la misma plataforma |
+
+El canal Construcc no cambia de contrato. El canal GestionPlus usa rutas `{proveedor}/solicitudes-pago-recibidas` (autorizar / rechazar / pagar) sin roles DG/DT ni InterAPI.
+
 ## Límites (qué entra)
 
 - Solicitud de pago y estados / verificación / autorizaciones por rol

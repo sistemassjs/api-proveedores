@@ -55,6 +55,20 @@ class SolicitudPagoResource extends JsonResource
                 ];
             }),
 
+            'empresa_gestionplus' => $this->whenLoaded('empresaGestionPlus', function () {
+                return [
+                    'id' => $this->empresaGestionPlus->id,
+                    'nombre' => $this->empresaGestionPlus->nombre_comercial
+                        ?: $this->empresaGestionPlus->razon_social,
+                    'razon_social' => $this->empresaGestionPlus->razon_social,
+                    'nombre_comercial' => $this->empresaGestionPlus->nombre_comercial,
+                    'rfc' => $this->empresaGestionPlus->rfc,
+                ];
+            }),
+
+            'empresa_gestionplus_id' => $this->empresa_gestionplus_id,
+            'canal' => $this->canal(),
+
             // Usuario Construcc que generó la SP
             'usuario_id' => $this->usuario_id,
             'usuario_nombre' => $this->usuario_nombre,

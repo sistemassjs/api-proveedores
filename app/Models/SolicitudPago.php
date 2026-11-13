@@ -43,6 +43,7 @@ class SolicitudPago extends BaseModel
         'proveedor_id',
         // Datos del usuario que registra la SP en  
         'empresa_construcc_id',
+        'empresa_gestionplus_id', // Pagadora en plataforma (canal GestionPlus)
         'usuario_id',
         'usuario_nombre',
         'cuenta_bancaria_empresa_construcc_id',
@@ -161,6 +162,7 @@ class SolicitudPago extends BaseModel
         'estado_solicitud' => 'EstadoSolicitud',
         'proveedor_id' => 'ProveedorId',
         'empresa_construcc_id' => 'EmpresaConstruccId',
+        'empresa_gestionplus_id' => 'EmpresaGestionplusId',
         'usuario_id' => 'UsuarioId',
         'usuario_nombre' => 'UsuarioNombre',
         'cotizacion_id' => 'CotizacionId',
@@ -275,6 +277,7 @@ class SolicitudPago extends BaseModel
             'proveedor',
             'sucursal',
             'empresaConstrucc',
+            'empresaGestionPlus',
             'cotizacion',
             'cuentasBancarias',
             'ordenCompra',
@@ -305,6 +308,29 @@ class SolicitudPago extends BaseModel
     public function empresaConstrucc(): BelongsTo
     {
         return $this->belongsTo(EmpresaConstrucc::class, 'empresa_construcc_id');
+    }
+
+    /**
+     * Empresa pagadora en canal GestionPlus (otra empresa de la plataforma).
+     */
+    public function empresaGestionPlus(): BelongsTo
+    {
+        return $this->belongsTo(Proveedor::class, 'empresa_gestionplus_id');
+    }
+
+    public function esCanalConstrucc(): bool
+    {
+        return (int) ($this->empresa_construcc_id ?? 0) > 0;
+    }
+
+    public function esCanalGestionPlus(): bool
+    {
+        return (int) ($this->empresa_gestionplus_id ?? 0) > 0;
+    }
+
+    public function canal(): string
+    {
+        return $this->esCanalGestionPlus() ? 'gestionplus' : 'construcc';
     }
 
     public function cotizacion(): BelongsTo
@@ -519,6 +545,20 @@ class SolicitudPago extends BaseModel
         return $query->whereIn('empresa_construcc_id', $ids);
     }
 
+    public function filterByEmpresaGestionplusId($query, $value)
+    {
+        $ids = array_filter(
+            is_array($value) ? $value : explode(',', (string) $value),
+            fn ($id) => trim((string) $id) !== ''
+        );
+
+        if (empty($ids)) {
+            return $query;
+        }
+
+        return $query->whereIn('empresa_gestionplus_id', $ids);
+    }
+
     public function filterByUsuarioId($query, $value)
     {
         // Evitar aplicar el filtro cuando el valor viene vacío (",", null, espacios, etc.)
@@ -720,7 +760,14 @@ class SolicitudPago extends BaseModel
 
     public function filterByTieneFactura($query, $value)
     {
-        return $query->where('tiene_factura', (bool) $value);
+        // Query params llegan como string: "0"/"1"/"true"/"false".
+        // (bool) "false" === true en PHP → rompía el listado sin factura.
+        $tieneFactura = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($tieneFactura === null) {
+            $tieneFactura = in_array((string) $value, ['1', 'true', 'TRUE', 'on', 'yes'], true);
+        }
+
+        return $query->where('tiene_factura', $tieneFactura);
     }
 
     public function filterBySPVista($query, $value)

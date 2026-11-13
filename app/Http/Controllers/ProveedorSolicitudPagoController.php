@@ -13,8 +13,10 @@ use App\Models\Presupuesto;
 use App\Models\Proveedor;
 use App\Models\SolicitudPago;
 use App\Notifications\Presupuesto\PresupuestoRecibidoClienteProveedorNotification;
+use App\Notifications\SolicitudPago\SolicitudPagoRecibidaGestionPlusNotification;
 use App\Services\InterApiService;
 use App\Support\PrivateFileDownload;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -218,10 +220,69 @@ class ProveedorSolicitudPagoController extends Controller
             }
 
             $numeroFolio = SolicitudPago::generarNumeroFolio($proveedor);
+            $empresaGestionPlusId = $validated['empresa_gestionplus_id'] ?? null;
             $empresaConstructId = $validated['empresa_construcc_id'] ?? null;
-
-            // Datos del usuario de Construcc que genera la SP
             $usuarioId = $validated['usuario_id'] ?? $validated['usuario_construcc_id'] ?? null;
+            $usuarioNombre = $validated['usuario_nombre'] ?? $validated['residente'] ?? null;
+            $cotizacion_id = $validated['cotizacion_id'] ?? null;
+            $montoTotal = $validated['monto_total'];
+
+            // Canal GestionPlus: empresa → empresa en la misma plataforma
+            if ($empresaGestionPlusId) {
+                $empresaPagadora = Proveedor::query()->findOrFail($empresaGestionPlusId);
+
+                $solicitud = SolicitudPago::create([
+                    'proveedor_id' => $proveedor->id,
+                    'usuario_creador_id' => $request->user()->id ?? null,
+                    'numero_folio_solicitud' => $numeroFolio,
+                    'folio_factura' => $folioFactura,
+                    'datos_factura_xml' => $datosXml,
+                    'descripcion_concepto' => $validated['descripcion_concepto'] ?? '',
+                    'observaciones' => $validated['observaciones'] ?? null,
+                    'ruta_archivo_factura_pdf' => $rutaPdf,
+                    'ruta_archivo_factura_xml' => $rutaXml,
+                    'ruta_archivo_cotizacion' => $rutaCotizacion,
+                    'folio_sp_consecutivo' => null,
+                    'empresa_construcc_id' => null,
+                    'empresa_gestionplus_id' => $empresaPagadora->id,
+                    'usuario_id' => $usuarioId,
+                    'usuario_nombre' => $usuarioNombre,
+                    'cotizacion_id' => $cotizacion_id,
+                    'estado_solicitud' => 'pendiente',
+                    'fecha_registro_pendiente' => now(),
+                    'monto_total' => $montoTotal,
+                    'saldo_pendiente' => $montoTotal,
+                    'monto_abonado' => 0,
+                    'pago_completo' => false,
+                    'tiene_factura' => true,
+                ]);
+
+                if (array_key_exists('cuentas_bancarias', $validated) && is_array($validated['cuentas_bancarias'])) {
+                    $solicitud->sincronizarCuentasBancarias($validated['cuentas_bancarias']);
+                }
+
+                try {
+                    $this->notificarPagadoraGestionPlus($solicitud, $proveedor, $empresaPagadora);
+                } catch (\Throwable $e) {
+                    Log::error('SPP GestionPlus: fallo al notificar pagadora (store)', [
+                        'sp_id' => $solicitud->id,
+                        'empresa_gestionplus_id' => $empresaPagadora->id,
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+
+                Log::info('SPP store: creada canal GestionPlus', [
+                    'sp_id' => $solicitud->id,
+                    'proveedor_id' => $proveedor->id,
+                    'empresa_gestionplus_id' => $empresaPagadora->id,
+                ]);
+
+                return $this->success(
+                    new SolicitudPagoResource($solicitud->load(['proveedor', 'empresaGestionPlus', 'cuentasBancarias'])),
+                    'Solicitud de pago creada correctamente.',
+                    201
+                );
+            }
 
             Log::info('SPP store: resolviendo empresa construcc', [
                 'proveedor_id' => $proveedor->id,
@@ -233,10 +294,6 @@ class ProveedorSolicitudPagoController extends Controller
 
             $empresaConstrucc = $proveedor->empresasConstrucc()->where('empresa_construcc.id', $empresaConstructId)->firstOrFail();
             $folio_consecutivo_construcc = $empresaConstrucc->obtenerFolioSiguienteSP();
-
-            $usuarioNombre = $validated['usuario_nombre'] ?? $validated['residente'] ?? null;
-            $cotizacion_id = $validated['cotizacion_id'] ?? null;
-            $montoTotal = $validated['monto_total'];
 
             $solicitud = SolicitudPago::create([
                 'proveedor_id' => $proveedor->id,
@@ -252,6 +309,7 @@ class ProveedorSolicitudPagoController extends Controller
                 // 
                 'folio_sp_consecutivo' => $folio_consecutivo_construcc,
                 'empresa_construcc_id' => $empresaConstructId,
+                'empresa_gestionplus_id' => null,
                 'usuario_id' => $usuarioId,
                 'usuario_nombre' => $usuarioNombre,
                 'cotizacion_id' => $cotizacion_id,
@@ -316,16 +374,64 @@ class ProveedorSolicitudPagoController extends Controller
         $rutaCotizacion = $cotizacionFile->store('cotizaciones', 'private');
 
         $numeroFolio = SolicitudPago::generarNumeroFolio($proveedor);
+        $empresaGestionPlusId = $validated['empresa_gestionplus_id'] ?? null;
         $empresaConstructId = $validated['empresa_construcc_id'] ?? null;
-
-        // Datos del usuario de Construcc que genera la SP
         $usuarioId = $validated['usuario_id'] ?? $validated['usuario_construcc_id'] ?? null;
-        $empresaConstrucc = $proveedor->empresasConstrucc()->where('empresa_construcc.id', $empresaConstructId)->firstOrFail();
-        $folio_consecutivo_construcc = $empresaConstrucc->obtenerFolioSiguienteSP();
-
         $usuarioNombre = $validated['usuario_nombre'] ?? $validated['residente'] ?? null;
         $cotizacion_id = $validated['cotizacion_id'] ?? null;
         $montoTotal = $validated['monto_total'];
+
+        if ($empresaGestionPlusId) {
+            $empresaPagadora = Proveedor::query()->findOrFail($empresaGestionPlusId);
+
+            $solicitud = SolicitudPago::create([
+                'proveedor_id' => $proveedor->id,
+                'usuario_creador_id' => $request->user()->id ?? null,
+                'numero_folio_solicitud' => $numeroFolio,
+                'folio_factura' => '',
+                'descripcion_concepto' => $validated['descripcion_concepto'] ?? '',
+                'observaciones' => $validated['observaciones'] ?? null,
+                'ruta_archivo_factura_pdf' => null,
+                'ruta_archivo_factura_xml' => null,
+                'ruta_archivo_cotizacion' => $rutaCotizacion,
+                'folio_sp_consecutivo' => null,
+                'empresa_construcc_id' => null,
+                'empresa_gestionplus_id' => $empresaPagadora->id,
+                'usuario_id' => $usuarioId,
+                'usuario_nombre' => $usuarioNombre,
+                'cotizacion_id' => $cotizacion_id,
+                'estado_solicitud' => 'pendiente',
+                'fecha_registro_pendiente' => now(),
+                'monto_total' => $montoTotal,
+                'saldo_pendiente' => $montoTotal,
+                'monto_abonado' => 0,
+                'pago_completo' => false,
+                'tiene_factura' => false,
+            ]);
+
+            if (array_key_exists('cuentas_bancarias', $validated) && is_array($validated['cuentas_bancarias'])) {
+                $solicitud->sincronizarCuentasBancarias($validated['cuentas_bancarias']);
+            }
+
+            try {
+                $this->notificarPagadoraGestionPlus($solicitud, $proveedor, $empresaPagadora);
+            } catch (\Throwable $e) {
+                Log::error('SPP GestionPlus: fallo al notificar pagadora (sin-factura)', [
+                    'sp_id' => $solicitud->id,
+                    'empresa_gestionplus_id' => $empresaPagadora->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
+            return $this->success(
+                new SolicitudPagoResource($solicitud->load(['proveedor', 'empresaGestionPlus', 'cuentasBancarias'])),
+                'Solicitud de pago sin factura creada correctamente.',
+                201
+            );
+        }
+
+        $empresaConstrucc = $proveedor->empresasConstrucc()->where('empresa_construcc.id', $empresaConstructId)->firstOrFail();
+        $folio_consecutivo_construcc = $empresaConstrucc->obtenerFolioSiguienteSP();
 
         $solicitud = SolicitudPago::create([
             'proveedor_id' => $proveedor->id,
@@ -340,6 +446,7 @@ class ProveedorSolicitudPagoController extends Controller
             // 
             'folio_sp_consecutivo' => $folio_consecutivo_construcc,
             'empresa_construcc_id' => $empresaConstructId,
+            'empresa_gestionplus_id' => null,
             'usuario_id' => $usuarioId,
             'usuario_nombre' => $usuarioNombre,
             'cotizacion_id' => $cotizacion_id,
@@ -998,6 +1105,87 @@ class ProveedorSolicitudPagoController extends Controller
                 ];
             })
         );
+    }
+
+    /**
+     * Empresas de la plataforma (pagadoras GestionPlus) para selector de SPP.
+     * Todas las empresas activas (scope solo_activos), sin filtro tipo_alta.
+     * Sin limit por defecto (el tope 50 cortaba el listado). Solo aplica limit si
+     * el cliente lo envía explícitamente.
+     */
+    public function empresasGestionPlus(Request $request, Proveedor $proveedor): JsonResponse
+    {
+        $search = trim((string) $request->input('search', ''));
+
+        $query = Proveedor::query()
+            ->where('id', '!=', $proveedor->id);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('razon_social', 'LIKE', "%{$search}%")
+                    ->orWhere('nombre_comercial', 'LIKE', "%{$search}%")
+                    ->orWhere('rfc', 'LIKE', "%{$search}%")
+                    ->orWhere('nombre_propietario', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $query->orderByRaw('COALESCE(NULLIF(nombre_comercial, ""), NULLIF(razon_social, ""), nombre_propietario)')
+            ->orderBy('id');
+
+        // Solo limitar si el cliente lo pide; nunca default 50.
+        if ($request->filled('limit')) {
+            $limit = min(max(1, (int) $request->input('limit')), 2000);
+            $query->limit($limit);
+        }
+
+        $empresas = $query->get([
+            'id',
+            'razon_social',
+            'nombre_comercial',
+            'rfc',
+            'nombre_propietario',
+            'logo',
+        ]);
+
+        return $this->success(
+            $empresas->map(function (Proveedor $empresa) {
+                $nombre = $empresa->nombre_comercial
+                    ?: $empresa->razon_social
+                    ?: $empresa->nombre_propietario
+                    ?: ('Empresa #' . $empresa->id);
+
+                return [
+                    'id' => $empresa->id,
+                    'nombre' => $nombre,
+                    'razon_social' => $empresa->razon_social,
+                    'nombre_comercial' => $empresa->nombre_comercial,
+                    'rfc' => $empresa->rfc,
+                    'nombre_propietario' => $empresa->nombre_propietario,
+                    'logo' => PublicStorageUrl::make($empresa->logo),
+                ];
+            })
+        );
+    }
+
+    private function notificarPagadoraGestionPlus(
+        SolicitudPago $solicitud,
+        Proveedor $cobradora,
+        Proveedor $pagadora
+    ): void {
+        $nombreCobradora = $cobradora->razon_social
+            ?: $cobradora->nombre_comercial
+            ?: 'Una empresa';
+
+        foreach ($pagadora->usuariosActivos()->get()->unique('id') as $user) {
+            $user->notify(new SolicitudPagoRecibidaGestionPlusNotification(
+                (string) $solicitud->numero_folio_solicitud,
+                (int) $solicitud->id,
+                (int) $cobradora->id,
+                (int) $pagadora->id,
+                (string) $nombreCobradora,
+                (float) $solicitud->monto_total
+            ));
+        }
     }
 
     /**

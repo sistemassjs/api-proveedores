@@ -6,8 +6,10 @@ Repo: `api-proveedores`.
 
 | Prefijo | Controller | Rol |
 |---------|------------|-----|
-| `{proveedor}/solicitudes-pago` | `ProveedorSolicitudPagoController` | CRUD, métricas, facturas, comprobantes, confirmar |
-| `{proveedor}/pagos-spp/{pago}/descargar-comprobante` | idem | Comprobante pago parcial |
+| `{proveedor}/solicitudes-pago` | `ProveedorSolicitudPagoController` | CRUD, métricas, facturas, comprobantes, confirmar. Alta acepta `empresa_construcc_id` **o** `empresa_gestionplus_id` |
+| `{proveedor}/solicitudes-pago/empresas-gestionplus` | idem | Búsqueda de empresas plataforma (pagadoras) |
+| `{proveedor}/solicitudes-pago-recibidas` | `ProveedorSolicitudPagoRecibidasController` | Canal GestionPlus: listado/detalle/autorizar/rechazar/pagar (pagadora = `{proveedor}`) |
+| `{proveedor}/pagos-spp/{pago}/descargar-comprobante` | `ProveedorSolicitudPagoController` | Comprobante pago parcial |
 | `{proveedor}/ordenes-compra/consultar…` | `ProveedorOrdenCompraController` | Solo consulta OC (proxy Construcciones) |
 | `{proveedor}/ordenes-compra-sp` | `OrdenCompraSolicitudPagoController` | Convertir OC→SP, validate, preview, unlink |
 | `{proveedor}/empresas-constructoras` | `EmpresaConstruccController` | CRUD / search empresas |

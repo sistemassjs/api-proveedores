@@ -4,8 +4,8 @@
 
 | Model | Tabla | Rol |
 |-------|-------|-----|
-| `SolicitudPago` | `solicitudes_pago` | Núcleo SP (montos, facturas, comprobante espejo, roles, OC) |
-| `PagoSPP` | `pagos_spp` | Pago a una o varias SP **o** pago directo (`origen`); **comprobante fuente de verdad** |
+| `SolicitudPago` | `solicitudes_pago` | Núcleo SP (montos, facturas, comprobante espejo, roles, OC). Pagador: `empresa_construcc_id` **o** `empresa_gestionplus_id` (XOR) |
+| `PagoSPP` | `pagos_spp` | Pago a una o varias SP **o** pago directo (`origen`); **comprobante fuente de verdad**. Mismo XOR de pagador |
 | `PagoSolicitudPago` | `pago_solicitud_pago` | Pivot monto aplicado (solo `origen=spp`) |
 | `PagoFactura` | `pago_facturas` | N facturas ligadas a un pago (flujo directo; PDF/XML opcionales) |
 | `PagoComplemento` | `pago_complementos` | Complementos CFDI tipo P por factura (PPD) |

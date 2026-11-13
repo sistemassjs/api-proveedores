@@ -100,6 +100,13 @@ trait NotificationStyleTrait
                     'style_class' => 'primary-notification',
                     'is_payment' => false,
                 ],
+                'recibida_gestionplus' => [
+                    'color' => 'primary',
+                    'icon' => 'wallet-outline',
+                    'style_class' => 'primary-notification',
+                    'is_payment' => false,
+                    'requires_action' => true,
+                ],
                 'autorizada' => [
                     'color' => 'success',
                     'icon' => 'checkmark-circle-outline',

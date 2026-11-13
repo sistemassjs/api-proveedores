@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\ProveedorSolicitudPagoController;
+use App\Http\Controllers\ProveedorSolicitudPagoRecibidasController;
 use App\Http\Controllers\ProveedorCotizacionController;
 use App\Http\Controllers\Cotizacion\ProveedorSolicitudCotizacionController;
 use App\Http\Controllers\ProveedorMarcaController;
@@ -421,6 +422,8 @@ Route::prefix('proveedores')
 
             // Empresas de construcción para búsqueda
             Route::get('/empresas-constructoras', [ProveedorSolicitudPagoController::class, 'empresasConstructoras'])->middleware(['audit']);
+            // Empresas de plataforma (pagadoras GestionPlus)
+            Route::get('/empresas-gestionplus', [ProveedorSolicitudPagoController::class, 'empresasGestionPlus'])->middleware(['audit']);
 
             // Crear solicitud
             Route::post('/', [ProveedorSolicitudPagoController::class, 'store'])->middleware(['audit']);
@@ -463,6 +466,19 @@ Route::prefix('proveedores')
         Route::get('{proveedor}/pagos-spp/{pago}/descargar-comprobante', [ProveedorSolicitudPagoController::class, 'descargarComprobantePagoParcial'])
             ->middleware(['proveedor.access'])
             ->name('proveedores.pagos-spp.descargar-comprobante');
+
+        /**
+         * SPP recibidas (canal GestionPlus): esta empresa es la pagadora.
+         */
+        Route::prefix('{proveedor}/solicitudes-pago-recibidas')
+            ->middleware(['proveedor.access'])
+            ->group(function () {
+                Route::get('/', [ProveedorSolicitudPagoRecibidasController::class, 'index'])->middleware(['audit']);
+                Route::get('/{solicitudPago}', [ProveedorSolicitudPagoRecibidasController::class, 'show'])->middleware(['audit']);
+                Route::post('/{solicitudPago}/autorizar', [ProveedorSolicitudPagoRecibidasController::class, 'autorizar'])->middleware(['audit']);
+                Route::post('/{solicitudPago}/rechazar', [ProveedorSolicitudPagoRecibidasController::class, 'rechazar'])->middleware(['audit']);
+                Route::post('/{solicitudPago}/pagar', [ProveedorSolicitudPagoRecibidasController::class, 'pagar'])->middleware(['audit']);
+            });
 
         /**
          * GESTIÓN DE ÓRDENES DE COMPRA

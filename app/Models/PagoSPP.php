@@ -41,6 +41,7 @@ class PagoSPP extends BaseModel
 
         // datos basicos de pago
         'empresa_construcc_id',
+        'empresa_gestionplus_id',
         'proveedor_id',
         'usuario_registro_id',
         'usuario_registro_nombre',
@@ -88,6 +89,7 @@ class PagoSPP extends BaseModel
         'banco_pago' => 'BancoPago',
         'banco_destino' => 'BancoDestino',
         'empresa_construcc_id' => 'EmpresaConstruccId',
+        'empresa_gestionplus_id' => 'EmpresaGestionplusId',
         'usuario_registro_id' => 'UsuarioRegistroId',
         'monto_min' => 'MontoMin',
         'monto_max' => 'MontoMax',
@@ -100,6 +102,7 @@ class PagoSPP extends BaseModel
         return [
             'solicitudesPago',
             'empresaConstrucc',
+            'empresaGestionPlus',
             'facturas.complementos',
         ];
     }
@@ -136,6 +139,14 @@ class PagoSPP extends BaseModel
     public function empresaConstrucc(): BelongsTo
     {
         return $this->belongsTo(EmpresaConstrucc::class, 'empresa_construcc_id');
+    }
+
+    /**
+     * Empresa pagadora en canal GestionPlus.
+     */
+    public function empresaGestionPlus(): BelongsTo
+    {
+        return $this->belongsTo(Proveedor::class, 'empresa_gestionplus_id');
     }
 
     /**
@@ -298,6 +309,20 @@ class PagoSPP extends BaseModel
         }
 
         return $query->whereIn('empresa_construcc_id', $ids);
+    }
+
+    public function filterByEmpresaGestionplusId($query, $value)
+    {
+        $ids = array_filter(
+            is_array($value) ? $value : explode(',', (string) $value),
+            fn ($id) => trim((string) $id) !== ''
+        );
+
+        if (empty($ids)) {
+            return $query;
+        }
+
+        return $query->whereIn('empresa_gestionplus_id', $ids);
     }
 
     public function filterByUsuarioRegistroId($query, $value)
