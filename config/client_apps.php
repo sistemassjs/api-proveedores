@@ -125,5 +125,20 @@ return [
                 'link' => '#93c5fd',
             ],
         ],
+        'heventec' => [
+            'name' => 'HevenTec',
+            'frontend_url' => env('HEVENTEC_FRONTEND_URL', 'https://heventec.com'),
+            'logo' => 'assets/logos/logo-heventec.png',
+            'mail' => [
+                'header' => '#2563eb',
+                'header_end' => '#1e40af',
+                'cta' => '#2563eb',
+                'cta_end' => '#3b82f6',
+                'cta_text' => '#ffffff',
+                'cta_shadow' => 'rgba(37, 99, 235, 0.35)',
+                'accent' => '#2563eb',
+                'link' => '#93c5fd',
+            ],
+        ],
     ],
 ];
