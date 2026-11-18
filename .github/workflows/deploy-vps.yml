@@ -20,7 +20,7 @@ permissions:
 jobs:
   deploy:
     name: Publicar en VPS
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Desplegar por SSH
         uses: appleboy/ssh-action@v1.2.5
