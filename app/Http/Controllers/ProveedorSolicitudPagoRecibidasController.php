@@ -6,6 +6,7 @@ use App\Enums\EstadoSP;
 use App\Http\Requests\SolicitudPago\AutorizarSolicitudPagoGestionPlusRequest;
 use App\Http\Requests\SolicitudPago\PagarSolicitudPagoGestionPlusRequest;
 use App\Http\Requests\SolicitudPago\RechazarSolicitudPagoGestionPlusRequest;
+use App\Http\Resources\Proveedor\ProveedorPagoResource;
 use App\Http\Resources\SolicitudPago\SolicitudPagoResource;
 use App\Models\CuentaBancaria;
 use App\Models\PagoSolicitudPago;
@@ -77,14 +78,27 @@ class ProveedorSolicitudPagoRecibidasController extends Controller
             return $this->error('La solicitud no pertenece a esta empresa como pagadora.', null, 403);
         }
 
-        $solicitudPago->load(array_merge(SolicitudPago::eagerLodable(), ['empresaGestionPlus']));
+        $solicitudPago->load([
+            ...SolicitudPago::eagerLodable(),
+            'empresaGestionPlus',
+            'pagos' => function ($query) {
+                $query->with([
+                    'empresaConstrucc',
+                    'empresaGestionPlus',
+                    'proveedor',
+                ])->orderByPivot('fecha_aplicacion', 'desc');
+            },
+        ]);
 
         if ($requestUser = auth()->user()) {
             $solicitudPago->markRead($requestUser);
         }
 
+        $solicitudPagoData = (new SolicitudPagoResource($solicitudPago))->resolve();
+        $solicitudPagoData['pagos'] = ProveedorPagoResource::collection($solicitudPago->pagos)->resolve();
+
         return $this->success(
-            new SolicitudPagoResource($solicitudPago),
+            $solicitudPagoData,
             'Detalle de solicitud recibida.'
         );
     }

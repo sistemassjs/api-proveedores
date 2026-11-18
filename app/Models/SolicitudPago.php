@@ -1202,15 +1202,24 @@ class SolicitudPago extends BaseModel
         ?string $rutaFacturaXml = null,
         string $diskArchivos = 'private'
     ): void {
+        $this->loadMissing('empresaConstrucc');
+
+        if (! $this->empresaConstrucc) {
+            Log::info('SPP: omitir correo factura — sin empresa Construcc', [
+                'solicitud_id' => $this->id,
+                'empresa_gestionplus_id' => $this->empresa_gestionplus_id,
+            ]);
+
+            return;
+        }
+
         Log::info('🟢 ENVIAR CORREO FACTURA A EMPRESA CONSTRUCC: ', [
             'rutaFacturaPdf' => $rutaFacturaPdf,
             'rutaFacturaXml' => $rutaFacturaXml,
             'diskArchivos' => $diskArchivos,
             'empresaConstrucc' => $this->empresaConstrucc->razon_social,
-            'empresaConstrucc' => $this->empresaConstrucc->email,
+            'email' => $this->empresaConstrucc->email,
         ]);
-
-        $this->loadMissing('empresaConstrucc');
 
         $emailEmpresa = $this->empresaConstrucc?->email;
         if (! $emailEmpresa || ! filter_var($emailEmpresa, FILTER_VALIDATE_EMAIL)) {

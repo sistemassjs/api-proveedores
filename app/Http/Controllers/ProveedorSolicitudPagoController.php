@@ -13,6 +13,7 @@ use App\Models\Presupuesto;
 use App\Models\Proveedor;
 use App\Models\SolicitudPago;
 use App\Notifications\Presupuesto\PresupuestoRecibidoClienteProveedorNotification;
+use App\Notifications\SolicitudPago\SolicitudPagoFacturaSubidaGestionPlusNotification;
 use App\Notifications\SolicitudPago\SolicitudPagoRecibidaGestionPlusNotification;
 use App\Services\InterApiService;
 use App\Support\PrivateFileDownload;
@@ -784,7 +785,11 @@ class ProveedorSolicitudPagoController extends Controller
      */
     public function descargarComprobantePagoParcial(Proveedor $proveedor, PagoSPP $pago)
     {
-        if ($pago->proveedor_id !== $proveedor->id) {
+        // Cobrador (proveedor_id) o pagadora GestionPlus (empresa_gestionplus_id)
+        $esCobrador = (int) $pago->proveedor_id === (int) $proveedor->id;
+        $esPagadora = (int) ($pago->empresa_gestionplus_id ?? 0) === (int) $proveedor->id;
+
+        if (! $esCobrador && ! $esPagadora) {
             return $this->error('El pago no pertenece a la empresa en GestionPlus', 403);
         }
 
@@ -1414,21 +1419,25 @@ class ProveedorSolicitudPagoController extends Controller
         $folio = $datosXml['folio'] ?? '';
         $folioFactura = trim($serie . ($serie && $folio ? '-' : '') . $folio) ?: null;
 
+        $antesCompleta = $this->facturaEstabaCompleta($solicitudPago);
+
         $solicitudPago->update([
             'folio_factura' => $folioFactura,
             'datos_factura_xml' => $datosXml,
             'ruta_archivo_factura_pdf' => $rutaPdf,
             'ruta_archivo_factura_xml' => $rutaXml,
-            'tiene_factura' => true,
         ]);
 
-        $solicitudPago->enviarCorreoFacturaAEmpresaConstrucc($rutaPdf, $rutaXml);
+        $solicitudActualizada = $solicitudPago->fresh();
+        $completa = $this->sincronizarYNotificarFacturaCompleta($solicitudActualizada, $antesCompleta);
 
         return $this->success(
             new SolicitudPagoResource(
-                $solicitudPago->load(SolicitudPago::eagerLodable())
+                $solicitudActualizada->load(SolicitudPago::eagerLodable())
             ),
-            'Factura cargada correctamente.',
+            $completa
+                ? 'Factura PDF y XML cargadas. La solicitud ya tiene factura.'
+                : 'Factura cargada correctamente.',
             201
         );
     }
@@ -1446,24 +1455,22 @@ class ProveedorSolicitudPagoController extends Controller
         $facturaPdf = $request->file('factura_pdf');
 
         $rutaPdf = $facturaPdf->store('facturas/pdf', 'private');
+        $antesCompleta = $this->facturaEstabaCompleta($solicitudPago);
 
         $solicitudPago->update([
             'ruta_archivo_factura_pdf' => $rutaPdf,
-            'tiene_factura' => true,
         ]);
 
-        /**
-         * TODO: aqio se dispara la ntofiocacion  
-         *  event(new FacturaAsociadaASolicitudPago($solicitudPago, 'xml'));
-         */
-        $this->solicitudTieneFacturaCompleta($solicitudPago);
-
+        $solicitudActualizada = $solicitudPago->fresh();
+        $completa = $this->sincronizarYNotificarFacturaCompleta($solicitudActualizada, $antesCompleta);
 
         return $this->success(
             new SolicitudPagoResource(
-                $solicitudPago->load(SolicitudPago::eagerLodable())
+                $solicitudActualizada->load(SolicitudPago::eagerLodable())
             ),
-            'Factura PDF cargada correctamente.',
+            $completa
+                ? 'Factura completa (PDF y XML). La solicitud ya tiene factura.'
+                : 'Factura PDF cargada. Falta subir el XML para marcar la solicitud con factura.',
             201
         );
     }
@@ -1597,6 +1604,7 @@ class ProveedorSolicitudPagoController extends Controller
         $folio = $datosXml['folio'] ?? '';
         $folioFactura = trim($serie . ($serie && $folio ? '-' : '') . $folio) ?: null;
         $rutaXml = $facturaXml->store('facturas/xml', 'private');
+        $antesCompleta = $this->facturaEstabaCompleta($solicitudPago);
 
         $solicitudPago->update([
             'folio_factura'           => $folioFactura,
@@ -1604,13 +1612,16 @@ class ProveedorSolicitudPagoController extends Controller
             'ruta_archivo_factura_xml' => $rutaXml,
         ]);
 
-        $this->solicitudTieneFacturaCompleta($solicitudPago);
+        $solicitudActualizada = $solicitudPago->fresh();
+        $completa = $this->sincronizarYNotificarFacturaCompleta($solicitudActualizada, $antesCompleta);
 
         return $this->success(
             new SolicitudPagoResource(
-                $solicitudPago->load(SolicitudPago::eagerLodable())
+                $solicitudActualizada->load(SolicitudPago::eagerLodable())
             ),
-            'Factura XML cargada correctamente.',
+            $completa
+                ? 'Factura completa (PDF y XML). La solicitud ya tiene factura.'
+                : 'Factura XML cargada. Falta subir el PDF para marcar la solicitud con factura.',
             201
         );
     }
@@ -1618,22 +1629,117 @@ class ProveedorSolicitudPagoController extends Controller
 
 
     /**
-     * Verifica si la Solicitud de Pago ya tiene PDF y XML
-     * y envía la notificación SOLO una vez.
+     * Tiene factura SOLO si existen PDF y XML.
+     * Sincroniza el flag y notifica al completar por primera vez.
      */
-    private function solicitudTieneFacturaCompleta(SolicitudPago $solicitudPago): bool
-    {
-        $tienePdf = !empty($solicitudPago->ruta_archivo_factura_pdf);
-        $tieneXml = !empty($solicitudPago->ruta_archivo_factura_xml);
+    private function sincronizarYNotificarFacturaCompleta(
+        SolicitudPago $solicitudPago,
+        bool $antesCompleta = false
+    ): bool {
+        $completa = $this->facturaEstabaCompleta($solicitudPago);
 
-        if (! $tienePdf || ! $tieneXml) {
-            return false;
+        if ((bool) $solicitudPago->tiene_factura !== $completa) {
+            $solicitudPago->update(['tiene_factura' => $completa]);
+            $solicitudPago->tiene_factura = $completa;
         }
 
-        $solicitudPago->enviarCorreoFacturaAEmpresaConstrucc($solicitudPago->ruta_archivo_factura_pdf, $solicitudPago->ruta_archivo_factura_xml);
+        if ($completa) {
+            $this->notificarFacturaCompletaSiAplica($solicitudPago, $antesCompleta);
+        }
 
-        $solicitudPago->update(['tiene_factura' => true,]);
+        return $completa;
+    }
 
-        return true;
+    private function facturaEstabaCompleta(SolicitudPago $solicitudPago): bool
+    {
+        return ! empty($solicitudPago->ruta_archivo_factura_pdf)
+            && ! empty($solicitudPago->ruta_archivo_factura_xml);
+    }
+
+    /**
+     * Al completar PDF+XML:
+     * - Construcc → correo a empresa constructora
+     * - GestionPlus con pago registrado → notifica usuarios de la pagadora
+     */
+    private function notificarFacturaCompletaSiAplica(
+        SolicitudPago $solicitudPago,
+        bool $antesCompleta
+    ): void {
+        if ($antesCompleta) {
+            return;
+        }
+
+        $tienePdf = ! empty($solicitudPago->ruta_archivo_factura_pdf);
+        $tieneXml = ! empty($solicitudPago->ruta_archivo_factura_xml);
+
+        if (! $tienePdf || ! $tieneXml) {
+            return;
+        }
+
+        if ($solicitudPago->esCanalGestionPlus()) {
+            $this->notificarFacturaSubidaPagadoraGestionPlus($solicitudPago);
+
+            return;
+        }
+
+        $solicitudPago->enviarCorreoFacturaAEmpresaConstrucc(
+            $solicitudPago->ruta_archivo_factura_pdf,
+            $solicitudPago->ruta_archivo_factura_xml
+        );
+    }
+
+    /**
+     * Notifica factura subida a la empresa pagadora (destino de la SPP)
+     * solo si ya hay pago registrado.
+     */
+    private function notificarFacturaSubidaPagadoraGestionPlus(SolicitudPago $solicitudPago): void
+    {
+        $solicitudPago->loadMissing(['proveedor', 'empresaGestionPlus', 'pagos']);
+
+        $pagadora = $solicitudPago->empresaGestionPlus;
+        if (! $pagadora) {
+            Log::warning('SPP GestionPlus: factura completa sin empresa pagadora', [
+                'solicitud_id' => $solicitudPago->id,
+            ]);
+
+            return;
+        }
+
+        $tienePagoRegistrado = $solicitudPago->estado_solicitud === EstadoSP::PAGADO->value
+            || $solicitudPago->pagos->isNotEmpty();
+
+        if (! $tienePagoRegistrado) {
+            Log::info('SPP GestionPlus: factura completa sin pago; no se notifica a pagadora', [
+                'solicitud_id' => $solicitudPago->id,
+                'estado' => $solicitudPago->estado_solicitud,
+            ]);
+
+            return;
+        }
+
+        $cobradora = $solicitudPago->proveedor;
+        $nombreCobradora = $cobradora?->razon_social
+            ?: $cobradora?->nombre_comercial
+            ?: 'Una empresa';
+
+        try {
+            foreach ($pagadora->usuariosActivos()->get()->unique('id') as $user) {
+                $user->notify(new SolicitudPagoFacturaSubidaGestionPlusNotification(
+                    (string) $solicitudPago->numero_folio_solicitud,
+                    (int) $solicitudPago->id,
+                    (int) $solicitudPago->proveedor_id,
+                    (int) $pagadora->id,
+                    (string) $nombreCobradora,
+                    $solicitudPago->ruta_archivo_factura_pdf,
+                    $solicitudPago->ruta_archivo_factura_xml,
+                ));
+            }
+        } catch (\Throwable $e) {
+            Log::error('SPP GestionPlus: fallo al notificar factura subida a pagadora', [
+                'solicitud_id' => $solicitudPago->id,
+                'empresa_gestionplus_id' => $pagadora->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 }
